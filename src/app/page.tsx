@@ -27,16 +27,14 @@ export default function Home() {
             <span className="font-serif text-[28px] font-bold tracking-[2px]">TRIMORA</span>
           </Link>
           
-          <div className="hidden md:flex gap-8">
-            <Link href="#" className="text-[#ccc] text-sm font-normal hover:text-sterling transition-colors">Home</Link>
-            <Link href="#" className="text-[#ccc] text-sm font-normal hover:text-sterling transition-colors">Características</Link>
-            <Link href="#" className="text-[#ccc] text-sm font-normal hover:text-sterling transition-colors">Contact us</Link>
-            <Link href="#" className="text-[#ccc] text-sm font-normal hover:text-sterling transition-colors">Blog</Link>
-          </div>
-
-          <Link href="/register" className="bg-cognac hover:bg-cognac-hover text-sterling px-7 py-3 rounded-full text-[13px] font-semibold tracking-[0.5px] transition-all duration-300 hover:scale-105 shadow-lg">
-            PRUEBA GRATIS 14 DÍAS
-          </Link>
+          <nav className="hidden md:flex items-center gap-8 text-sm tracking-wide">
+            <Link href="#features" className="hover:text-cognac transition-colors duration-300">CARACTERÍSTICAS</Link>
+            <Link href="#pricing" className="hover:text-cognac transition-colors duration-300">PRECIOS</Link>
+            <Link href="/login" className="hover:text-cognac font-semibold transition-colors duration-300">INICIAR SESIÓN</Link>
+            <Link href="/register" className="px-5 py-2.5 bg-cognac hover:bg-cognac-hover text-white rounded-full transition-all duration-300 shadow-[0_0_15px_rgba(139,69,19,0.3)] hover:shadow-[0_0_20px_rgba(139,69,19,0.5)]">
+              PRUEBA GRATIS
+            </Link>
+          </nav>
         </nav>
 
         {/* Hero */}
