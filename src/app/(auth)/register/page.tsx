@@ -1,7 +1,7 @@
-import { login } from "@/modules/auth/actions";
+import { register } from "@/modules/auth/actions";
 import Link from "next/link";
 
-export default async function LoginPage(props: { searchParams: Promise<{ message?: string }> }) {
+export default async function RegisterPage(props: { searchParams: Promise<{ message?: string }> }) {
   const searchParams = await props.searchParams;
   
   return (
@@ -10,10 +10,10 @@ export default async function LoginPage(props: { searchParams: Promise<{ message
         <div className="p-8">
           
           <div className="text-center mb-8">
-            <h1 className="text-4xl font-bold tracking-tight bg-gradient-to-r from-[#ddb8ff] to-[#9333ea] bg-clip-text text-transparent">
-              Trimora
+            <h1 className="text-3xl font-bold tracking-tight text-white">
+              Crea tu cuenta
             </h1>
-            <p className="text-[#cfc2d7] mt-2 text-sm">Gestiona tu barbería como un profesional</p>
+            <p className="text-[#cfc2d7] mt-2 text-sm">Únete a Trimora y lleva tu barbería al siguiente nivel</p>
           </div>
           
           {searchParams?.message && (
@@ -22,7 +22,7 @@ export default async function LoginPage(props: { searchParams: Promise<{ message
             </div>
           )}
           
-          <form action={login} className="space-y-6">
+          <form action={register} className="space-y-6">
             <div>
               <label className="block text-sm font-medium text-[#cfc2d7] mb-1">Correo Electrónico</label>
               <input 
@@ -35,16 +35,14 @@ export default async function LoginPage(props: { searchParams: Promise<{ message
             </div>
             
             <div>
-              <div className="flex justify-between items-center mb-1">
-                <label className="block text-sm font-medium text-[#cfc2d7]">Contraseña</label>
-                <a href="#" className="text-xs text-[#ddb8ff] hover:text-[#f0dbff] transition-colors">¿Olvidaste tu contraseña?</a>
-              </div>
+              <label className="block text-sm font-medium text-[#cfc2d7] mb-1">Contraseña</label>
               <input 
                 name="password"
                 type="password" 
                 required
+                minLength={6}
                 className="w-full px-4 py-3 bg-[#1f1924] border border-[#39323e] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#9333ea] text-white transition-all shadow-inner"
-                placeholder="••••••••"
+                placeholder="Mínimo 6 caracteres"
               />
             </div>
             
@@ -53,13 +51,13 @@ export default async function LoginPage(props: { searchParams: Promise<{ message
                 type="submit"
                 className="w-full py-3.5 px-4 bg-gradient-to-r from-[#9333ea] to-[#5c3286] hover:from-[#861fdd] hover:to-[#44186d] text-white font-medium rounded-xl shadow-[0_0_15px_rgba(147,51,234,0.3)] transform transition-all active:scale-95 flex justify-center items-center"
               >
-                Iniciar Sesión
+                Crear Cuenta
               </button>
               
               <div className="text-center text-sm text-[#cfc2d7]">
-                ¿No tienes cuenta?{" "}
-                <Link href="/register" className="text-[#ddb8ff] hover:text-[#f0dbff] font-medium transition-colors">
-                  Regístrate aquí
+                ¿Ya tienes cuenta?{" "}
+                <Link href="/login" className="text-[#ddb8ff] hover:text-[#f0dbff] font-medium transition-colors">
+                  Inicia sesión
                 </Link>
               </div>
             </div>

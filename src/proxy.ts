@@ -31,15 +31,15 @@ export async function proxy(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
-  // Proteger rutas (si no hay usuario y no está en login)
-  if (!user && !request.nextUrl.pathname.startsWith('/login')) {
+  // Proteger rutas (si no hay usuario y no está en login o register)
+  if (!user && !request.nextUrl.pathname.startsWith('/login') && !request.nextUrl.pathname.startsWith('/register')) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)
   }
 
-  // Si ya hay usuario y quiere ir al login, redirigir al dashboard
-  if (user && request.nextUrl.pathname.startsWith('/login')) {
+  // Si ya hay usuario y quiere ir al login o register, redirigir al dashboard
+  if (user && (request.nextUrl.pathname.startsWith('/login') || request.nextUrl.pathname.startsWith('/register'))) {
     const url = request.nextUrl.clone()
     url.pathname = '/dashboard'
     return NextResponse.redirect(url)
