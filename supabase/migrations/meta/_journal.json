@@ -8,6 +8,13 @@
       "when": 1783728396356,
       "tag": "0000_yellow_amphibian",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1783734669795,
+      "tag": "0001_fixed_otto_octavius",
+      "breakpoints": true
     }
   ]
 }
