@@ -21,9 +21,8 @@ export default async function DashboardPage() {
     redirect("/login");
   }
 
-  // 1. Obtener la Organización del usuario
-  const member = await db.select().from(organizationMembers).where(eq(organizationMembers.userId, user.id)).limit(1);
-  const orgId = member[0]?.organizationId;
+  // 1. Obtener la Organización del usuario desde la metadata de Auth
+  const orgId = user.user_metadata?.organization_id;
 
   if (!orgId) {
     return <div className="p-10 text-white">No tienes una organización asignada. Por favor, contacta al administrador.</div>;

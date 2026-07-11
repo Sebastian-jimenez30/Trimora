@@ -11,27 +11,28 @@ async function getOrganizationId() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("No autenticado");
 
-  const member = await db.select().from(organizationMembers).where(eq(organizationMembers.userId, user.id)).limit(1);
-  if (!member[0]) throw new Error("No tienes organización");
+  const orgId = user.user_metadata?.organization_id;
+  if (!orgId) throw new Error("No tienes organización");
 
-  return member[0].organizationId;
+  return orgId;
 }
 
 export async function createCustomer(formData: FormData) {
   try {
     const orgId = await getOrganizationId();
     
-    await db.insert(clients).values({
+    const [newClient] = await db.insert(clients).values({
       organizationId: orgId,
       firstName: formData.get("firstName") as string,
       lastName: formData.get("lastName") as string,
       email: formData.get("email") as string,
       phone: formData.get("phone") as string,
       notes: formData.get("notes") as string,
-    });
+    }).returning();
 
     revalidatePath("/clientes");
-    return { success: true };
+    revalidatePath("/agenda"); // Update agenda so it fetches the new client
+    return { success: true, clientId: newClient.id };
   } catch (error: any) {
     return { success: false, error: error.message };
   }
