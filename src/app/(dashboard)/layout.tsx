@@ -51,7 +51,7 @@ export default async function DashboardLayout({
             </Link>
           </li>
           <li>
-            <Link href="#" className="flex items-center gap-3 px-4 py-3 text-charcoal hover:text-sterling hover:bg-white/5 rounded-lg text-sm font-medium transition-all">
+            <Link href="/pos" className="flex items-center gap-3 px-4 py-3 text-charcoal hover:text-sterling hover:bg-white/5 rounded-lg text-sm font-medium transition-all">
               Punto de Venta (POS)
             </Link>
           </li>

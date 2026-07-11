@@ -87,6 +87,7 @@ export const transactions = pgTable('transactions', {
   organizationId: uuid('organization_id').references(() => organizations.id).notNull(),
   clientId: uuid('client_id').references(() => clients.id),
   staffId: uuid('staff_id').references(() => organizationMembers.id), // Quién cobró/atendió
+  type: text('type').default('INCOME').notNull(), // INCOME, EXPENSE
   totalAmount: numeric('total_amount', { precision: 10, scale: 2 }).notNull(),
   paymentMethod: text('payment_method'), // CASH, CARD, TRANSFER
   status: text('status').default('COMPLETED').notNull(), // PENDING, COMPLETED, REFUNDED

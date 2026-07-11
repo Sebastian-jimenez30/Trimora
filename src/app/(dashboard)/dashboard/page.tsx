@@ -34,17 +34,43 @@ export default async function DashboardPage() {
   const tomorrow = new Date(today);
   tomorrow.setDate(tomorrow.getDate() + 1);
 
-  // 2. Obtener KPIs Diarios (del seed)
-  const [summary] = await db.select().from(dailySummaries).where(
-    and(
-      eq(dailySummaries.organizationId, orgId),
-      gte(dailySummaries.date, today)
-    )
-  ).limit(1);
+  // 2. Obtener KPIs Diarios (Dinámicos)
+  // Ingresos del día
+  const todaysTransactions = await db.select({ totalAmount: transactions.totalAmount })
+    .from(transactions)
+    .where(
+      and(
+        eq(transactions.organizationId, orgId),
+        eq(transactions.type, 'INCOME'),
+        gte(transactions.createdAt, today)
+      )
+    );
+  
+  const ingresosDia = todaysTransactions.reduce((acc, curr) => acc + parseFloat(curr.totalAmount), 0).toFixed(2);
 
-  const ingresosDia = summary?.totalRevenue || "0.00";
-  const citasAgendadas = summary?.appointmentsCount || 0;
-  const clientesNuevos = summary?.newClientsCount || 0;
+  // Citas agendadas hoy
+  const todaysAppointmentsQuery = await db.select({ count: sql<number>`count(*)` })
+    .from(appointments)
+    .where(
+      and(
+        eq(appointments.organizationId, orgId),
+        gte(appointments.createdAt, today)
+      )
+    );
+  
+  const citasAgendadas = todaysAppointmentsQuery[0]?.count || 0;
+
+  // Clientes nuevos hoy
+  const newClientsQuery = await db.select({ count: sql<number>`count(*)` })
+    .from(clients)
+    .where(
+      and(
+        eq(clients.organizationId, orgId),
+        gte(clients.createdAt, today)
+      )
+    );
+  
+  const clientesNuevos = newClientsQuery[0]?.count || 0;
 
   // 3. Obtener Servicio más popular (Top 1)
   const popularServiceQuery = await db.select({
