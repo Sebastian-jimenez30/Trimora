@@ -215,20 +215,22 @@ export default function AgendaManager({
       {/* Main Agenda Area */}
       <div className="flex-1 overflow-y-auto relative bg-[#0f0f0f] p-6">
         
-        <div className="bg-pitch border border-white/10 rounded-xl overflow-hidden min-h-[720px] relative">
-          
-          {/* Header Row */}
-          <div className="grid grid-cols-[80px_1fr] bg-pitch border-b border-white/10 sticky top-0 z-20">
-            <div className="p-4 border-r border-white/10 text-center text-xs font-semibold text-charcoal">Hora</div>
-            <div className="p-4 text-center text-sm font-semibold text-sterling">Agenda General</div>
+        <div className="flex-1 bg-[#141414] border border-white/10 rounded-2xl flex flex-col overflow-hidden">
+        
+        {/* Header de la Agenda */}
+        <div className="h-[60px] border-b border-white/10 flex items-center px-4 bg-white/5 shrink-0">
+          <div className="w-[50px] md:w-[80px] shrink-0 font-serif text-sm text-sterling">Hora</div>
+          <div className="flex-1 text-center font-serif text-lg text-sterling border-l border-white/10 pl-4">
+            Agenda General
           </div>
+        </div>
 
-          {/* Time Grid Content */}
-          <div className="grid grid-cols-[80px_1fr] relative">
-            
-            {/* Time Labels Column */}
-            <div className="flex flex-col border-r border-white/10">
-              {hours.map(h => (
+        {/* Scrollable Grid */}
+        <div className="grid grid-cols-[50px_1fr] md:grid-cols-[80px_1fr] flex-1 overflow-y-auto relative" id="agenda-scroll-container">
+          
+          {/* Columna de Horas */}
+          <div className="w-[50px] md:w-[80px] border-r border-white/10 shrink-0 sticky left-0 bg-[#141414] z-10">
+            {hours.map(h => (
                 <div key={h} className="h-[60px] flex items-start justify-center text-xs text-[#888] pt-2 relative">
                   <span className="relative -top-4 bg-pitch px-1">{h.toString().padStart(2, '0')}:00</span>
                 </div>
@@ -291,8 +293,8 @@ export default function AgendaManager({
 
       {/* Modal CRUD */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-[#141414] border border-white/10 w-full max-w-lg rounded-xl shadow-2xl p-7 animate-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm animate-in fade-in duration-200 p-4">
+          <div className="bg-[#141414] border border-white/10 w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-xl shadow-2xl p-5 md:p-7 animate-in zoom-in-95 duration-200">
             <div className="flex justify-between items-center mb-6 pb-4 border-b border-white/10">
               <h3 className="text-xl font-serif text-sterling">
                 {editingAppointment ? "Detalles de la Cita" : "Nueva Cita"}
@@ -416,8 +418,8 @@ export default function AgendaManager({
 
       {/* Modal Crear Cliente */}
       {isClientModalOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-[#141414] border border-white/10 w-full max-w-md rounded-xl shadow-2xl p-7 animate-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-[#141414] border border-white/10 w-full max-w-md max-h-[90vh] overflow-y-auto rounded-xl shadow-2xl p-5 md:p-7 animate-in zoom-in-95 duration-200">
             <div className="flex justify-between items-center mb-6 pb-4 border-b border-white/10">
               <h3 className="text-lg font-serif text-sterling">Crear Nuevo Cliente</h3>
               <button type="button" onClick={() => setIsClientModalOpen(false)} className="text-charcoal hover:text-white transition-colors bg-white/5 w-8 h-8 rounded-full flex items-center justify-center">

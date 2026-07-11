@@ -112,8 +112,8 @@ export default function POSManager({ services, products, clients, staff, history
   return (
     <div className="flex flex-col h-full bg-[#0f0f0f] relative">
       {/* Topbar */}
-      <header className="h-[70px] border-b border-white/10 flex items-center justify-between px-8 bg-pitch shrink-0">
-        <div className="flex gap-6">
+      <header className="border-b border-white/10 flex flex-col sm:flex-row items-start sm:items-center justify-between px-4 sm:px-8 bg-pitch shrink-0 gap-4 sm:gap-0 pt-4 sm:pt-0 min-h-[70px]">
+        <div className="flex gap-6 overflow-x-auto whitespace-nowrap w-full sm:w-auto scrollbar-hide pb-0 sm:pb-0">
           {(["SERVICES", "PRODUCTS", "HISTORY", "EXPENSES"] as const).map(tab => (
             <button
               key={tab}
@@ -129,14 +129,14 @@ export default function POSManager({ services, products, clients, staff, history
           ))}
         </div>
 
-        <div className="flex items-center gap-5">
+        <div className="flex items-center gap-5 w-full sm:w-auto pb-4 sm:pb-0">
           {(activeTab === "SERVICES" || activeTab === "PRODUCTS") && (
             <input 
               type="text" 
               placeholder="Buscar..." 
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="bg-[#141414] border border-white/10 text-sterling px-4 py-2 rounded-full text-sm w-[250px] focus:outline-none focus:border-[#888]"
+              className="bg-[#141414] border border-white/10 text-sterling px-4 py-2 rounded-full text-sm w-full sm:w-[250px] focus:outline-none focus:border-[#888]"
             />
           )}
         </div>
@@ -276,20 +276,21 @@ export default function POSManager({ services, products, clients, staff, history
       {(activeTab === "SERVICES" || activeTab === "PRODUCTS") && cart.length > 0 && (
         <button 
           onClick={() => setIsCartModalOpen(true)}
-          className="absolute bottom-8 right-8 bg-[#8B4513] hover:brightness-110 text-white rounded-full px-6 py-4 shadow-[0_10px_25px_rgba(139,69,19,0.4)] flex items-center gap-3 transition-transform hover:scale-105 z-40"
+          className="absolute bottom-4 right-4 sm:bottom-8 sm:right-8 bg-[#8B4513] hover:brightness-110 text-white rounded-full px-5 py-3 sm:px-6 sm:py-4 shadow-[0_10px_25px_rgba(139,69,19,0.4)] flex items-center gap-2 sm:gap-3 transition-transform hover:scale-105 z-40"
         >
           <div className="bg-white/20 text-white text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center">
             {cartCount}
           </div>
-          <span className="font-semibold">Ver Cuenta / Cobrar</span>
-          <span className="font-bold border-l border-white/30 pl-3 ml-1">${cartTotal.toFixed(2)}</span>
+          <span className="font-semibold hidden sm:inline">Ver Cuenta / Cobrar</span>
+          <span className="font-semibold sm:hidden">Cobrar</span>
+          <span className="font-bold border-l border-white/30 pl-2 sm:pl-3 ml-0 sm:ml-1">${cartTotal.toFixed(2)}</span>
         </button>
       )}
 
       {/* Modal Factura / Checkout */}
       {isCartModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-[#0f0f0f] border border-white/10 w-full max-w-2xl h-[85vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-200 sm:p-4">
+          <div className="bg-[#0f0f0f] sm:border border-white/10 w-full max-w-2xl h-full sm:h-[85vh] sm:rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
             
             {/* Cabecera Ticket */}
             <div className="p-6 border-b border-white/10 bg-[#141414] flex justify-between items-center">
@@ -381,15 +382,15 @@ export default function POSManager({ services, products, clients, staff, history
             </div>
 
             {/* Total y Confirmación */}
-            <div className="p-6 border-t border-white/10 bg-[#141414] flex justify-between items-center">
-              <div>
+            <div className="p-4 sm:p-6 border-t border-white/10 bg-[#141414] flex flex-col sm:flex-row justify-between items-center gap-4">
+              <div className="w-full sm:w-auto text-center sm:text-left">
                 <p className="text-sm text-[#888]">Total a Cobrar</p>
                 <p className="text-4xl font-serif font-bold text-[#8B4513]">${cartTotal.toFixed(2)}</p>
               </div>
               <button 
                 onClick={handleCheckout} 
                 disabled={isPending}
-                className="bg-[#8B4513] hover:brightness-110 text-white px-10 py-4 rounded-xl font-bold text-lg transition-transform hover:scale-105 disabled:opacity-50 disabled:hover:scale-100"
+                className="w-full sm:w-auto bg-[#8B4513] hover:brightness-110 text-white px-10 py-4 rounded-xl font-bold text-lg transition-transform hover:scale-105 disabled:opacity-50 disabled:hover:scale-100"
               >
                 {isPending ? "Procesando..." : "Completar Venta"}
               </button>

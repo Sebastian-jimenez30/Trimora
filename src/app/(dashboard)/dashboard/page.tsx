@@ -134,7 +134,7 @@ export default async function DashboardPage() {
     .limit(5);
 
   return (
-    <div className="p-[30px] flex flex-col gap-6">
+    <div className="p-4 md:p-[30px] flex flex-col gap-4 md:gap-6">
       
       {/* KPIs */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
@@ -180,13 +180,13 @@ export default async function DashboardPage() {
       </div>
 
       {/* Main Dashboard Grid */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 md:gap-6">
         
         {/* Columna Izquierda (Ancha) */}
-        <div className="xl:col-span-2 flex flex-col gap-6">
+        <div className="xl:col-span-2 flex flex-col gap-4 md:gap-6">
           
           {/* Próximas Citas */}
-          <div className="bg-[#141414] border border-white/10 rounded-xl p-6 overflow-x-auto">
+          <div className="bg-[#141414] border border-white/10 rounded-xl p-4 md:p-6 overflow-x-auto">
             <div className="flex justify-between items-center mb-5 min-w-[500px]">
               <h3 className="font-serif text-lg text-sterling">Próximas Citas Hoy</h3>
             </div>
@@ -235,10 +235,10 @@ export default async function DashboardPage() {
         </div>
 
         {/* Columna Derecha (Estrecha) */}
-        <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-4 md:gap-6">
           
           {/* Alertas de Inventario */}
-          <div className="bg-[#141414] border border-white/10 rounded-xl p-6">
+          <div className="bg-[#141414] border border-white/10 rounded-xl p-4 md:p-6">
             <h3 className="font-serif text-lg text-sterling mb-5">Alertas de Inventario</h3>
             {inventoryAlerts.length === 0 ? (
               <div className="py-6 text-center text-charcoal text-sm">
@@ -260,7 +260,7 @@ export default async function DashboardPage() {
           </div>
 
           {/* Actividad Reciente POS */}
-          <div className="bg-[#141414] border border-white/10 rounded-xl p-6">
+          <div className="bg-[#141414] border border-white/10 rounded-xl p-4 md:p-6">
             <h3 className="font-serif text-lg text-sterling mb-5">Últimas Ventas (POS)</h3>
             {recentSales.length === 0 ? (
               <div className="py-6 text-center text-charcoal text-sm">

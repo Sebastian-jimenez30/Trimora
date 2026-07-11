@@ -74,29 +74,29 @@ export default function ClientManager({ initialClients }: { initialClients: Clie
 
   return (
     <div className="flex flex-col gap-6 flex-1 h-full">
-      {/* Barra superior con Buscador y Botón */}
-      <div className="flex justify-between items-center bg-[#141414] p-4 rounded-xl border border-white/10">
-        <div className="relative flex items-center">
-          <svg className="w-4 h-4 absolute left-3 text-charcoal" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+      {/* Header Actions */}
+      <div className="flex flex-col sm:flex-row justify-between items-center gap-4 bg-[#141414] border border-white/10 rounded-xl p-4 shrink-0">
+        <div className="relative w-full sm:w-auto">
+          <svg className="w-4 h-4 absolute left-3 top-3 text-charcoal" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
           <input 
             type="text" 
             placeholder="Buscar por nombre, teléfono o email..." 
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="bg-pitch border border-white/10 text-sterling pl-10 pr-4 py-2 rounded-lg text-sm w-[350px] focus:outline-none focus:border-cognac transition-colors"
+            className="bg-pitch border border-white/10 text-sterling pl-10 pr-4 py-2 rounded-lg text-sm w-full sm:w-[350px] focus:outline-none focus:border-cognac transition-colors"
           />
         </div>
         <button 
           onClick={openCreateModal}
-          className="bg-cognac hover:brightness-110 text-white px-5 py-2 rounded-lg text-sm font-medium transition-all"
+          className="w-full sm:w-auto bg-cognac hover:brightness-110 text-white px-5 py-2 rounded-lg text-sm font-medium transition-all"
         >
           + Nuevo Cliente
         </button>
       </div>
 
       {/* Tabla de Clientes */}
-      <div className="bg-[#141414] border border-white/10 rounded-xl overflow-hidden flex-1 overflow-y-auto">
-        <table className="w-full text-left border-collapse">
+      <div className="bg-[#141414] border border-white/10 rounded-xl flex-1 overflow-auto">
+        <table className="w-full text-left border-collapse min-w-[600px]">
           <thead className="sticky top-0 bg-[#141414] shadow-sm z-10">
             <tr className="border-b border-white/10 bg-white/5">
               <th className="py-4 px-6 text-xs text-charcoal font-medium uppercase tracking-wider">Cliente</th>
@@ -152,8 +152,8 @@ export default function ClientManager({ initialClients }: { initialClients: Clie
 
       {/* Modal CRUD */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-[#141414] border border-white/10 w-full max-w-lg rounded-xl shadow-2xl p-7 animate-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm animate-in fade-in duration-200 p-4">
+          <div className="bg-[#141414] border border-white/10 w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-xl shadow-2xl p-5 md:p-7 animate-in zoom-in-95 duration-200">
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-xl font-serif text-sterling">
                 {editingClient ? "Editar Cliente" : "Nuevo Cliente"}
