@@ -5,15 +5,8 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1783728396356,
-      "tag": "0000_yellow_amphibian",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1783734669795,
-      "tag": "0001_fixed_otto_octavius",
+      "when": 1783735722915,
+      "tag": "0000_unusual_garia",
       "breakpoints": true
     }
   ]
