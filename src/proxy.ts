@@ -31,8 +31,15 @@ export async function proxy(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
-  // Proteger rutas (si no hay usuario y no está en login, register o auth/callback)
-  if (!user && !request.nextUrl.pathname.startsWith('/login') && !request.nextUrl.pathname.startsWith('/register') && !request.nextUrl.pathname.startsWith('/auth/callback')) {
+  // Rutas públicas que no requieren autenticación
+  const isPublicRoute = 
+    request.nextUrl.pathname === '/' || 
+    request.nextUrl.pathname.startsWith('/login') || 
+    request.nextUrl.pathname.startsWith('/register') || 
+    request.nextUrl.pathname.startsWith('/auth/callback');
+
+  // Proteger todas las demás rutas (si no hay usuario y no es ruta pública)
+  if (!user && !isPublicRoute) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)
