@@ -5,15 +5,22 @@ export default async function RegisterPage(props: { searchParams: Promise<{ mess
   const searchParams = await props.searchParams;
   
   return (
-    <div className="min-h-screen w-full bg-[#17111b] flex items-center justify-center p-4 font-sans text-white">
-      <div className="max-w-md w-full bg-[#231d28]/80 rounded-2xl shadow-2xl overflow-hidden border border-[#39323e] backdrop-blur-xl">
-        <div className="p-8">
+    <div 
+      className="min-h-screen w-full bg-pitch flex items-center justify-center p-4 font-sans text-sterling relative"
+      style={{
+        backgroundImage: `linear-gradient(rgba(10,10,10,0.85), rgba(10,10,10,0.95)), url('https://images.unsplash.com/photo-1503951914875-452162b0f3f1?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80')`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+      }}
+    >
+      <div className="max-w-md w-full bg-midnight/90 rounded-2xl shadow-2xl overflow-hidden border border-white/10 backdrop-blur-xl">
+        <div className="p-10">
           
           <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold tracking-tight text-white">
+            <h1 className="text-3xl font-bold tracking-wide font-serif text-white">
               Crea tu cuenta
             </h1>
-            <p className="text-[#cfc2d7] mt-2 text-sm">Únete a Trimora y lleva tu barbería al siguiente nivel</p>
+            <p className="text-[#a0a0a0] mt-2 text-sm font-light">Únete a Trimora y lleva tu barbería al siguiente nivel</p>
           </div>
           
           {searchParams?.message && (
@@ -24,39 +31,39 @@ export default async function RegisterPage(props: { searchParams: Promise<{ mess
           
           <form action={register} className="space-y-6">
             <div>
-              <label className="block text-sm font-medium text-[#cfc2d7] mb-1">Correo Electrónico</label>
+              <label className="block text-sm font-medium text-sterling mb-2">Correo Electrónico</label>
               <input 
                 name="email"
                 type="email" 
                 required
-                className="w-full px-4 py-3 bg-[#1f1924] border border-[#39323e] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#9333ea] text-white transition-all shadow-inner"
+                className="w-full px-4 py-3 bg-pitch/80 border border-charcoal/30 rounded-xl focus:outline-none focus:border-cognac focus:ring-1 focus:ring-cognac text-white transition-all shadow-inner"
                 placeholder="tu@correo.com"
               />
             </div>
             
             <div>
-              <label className="block text-sm font-medium text-[#cfc2d7] mb-1">Contraseña</label>
+              <label className="block text-sm font-medium text-sterling mb-2">Contraseña</label>
               <input 
                 name="password"
                 type="password" 
                 required
                 minLength={6}
-                className="w-full px-4 py-3 bg-[#1f1924] border border-[#39323e] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#9333ea] text-white transition-all shadow-inner"
+                className="w-full px-4 py-3 bg-pitch/80 border border-charcoal/30 rounded-xl focus:outline-none focus:border-cognac focus:ring-1 focus:ring-cognac text-white transition-all shadow-inner"
                 placeholder="Mínimo 6 caracteres"
               />
             </div>
             
-            <div className="pt-2 flex flex-col gap-4">
+            <div className="pt-4 flex flex-col gap-4">
               <button 
                 type="submit"
-                className="w-full py-3.5 px-4 bg-gradient-to-r from-[#9333ea] to-[#5c3286] hover:from-[#861fdd] hover:to-[#44186d] text-white font-medium rounded-xl shadow-[0_0_15px_rgba(147,51,234,0.3)] transform transition-all active:scale-95 flex justify-center items-center"
+                className="w-full py-3.5 px-4 bg-cognac hover:bg-cognac-hover text-white font-semibold tracking-wide rounded-full shadow-[0_4px_15px_rgba(139,69,19,0.3)] transform transition-all active:scale-95 flex justify-center items-center"
               >
-                Crear Cuenta
+                Registrarme Ahora
               </button>
               
-              <div className="text-center text-sm text-[#cfc2d7]">
+              <div className="text-center text-sm text-charcoal mt-2">
                 ¿Ya tienes cuenta?{" "}
-                <Link href="/login" className="text-[#ddb8ff] hover:text-[#f0dbff] font-medium transition-colors">
+                <Link href="/login" className="text-cognac hover:text-cognac-hover font-bold transition-colors">
                   Inicia sesión
                 </Link>
               </div>
