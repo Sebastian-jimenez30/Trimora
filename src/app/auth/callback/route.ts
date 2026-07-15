@@ -25,7 +25,7 @@ export async function GET(request: Request) {
           // Crear organización
           await db.insert(organizations).values({
             id: organizationId,
-            name: user.user_metadata?.full_name ? \`Barbería de \${user.user_metadata.full_name}\` : 'Mi Barbería'
+            name: user.user_metadata?.full_name ? `Barbería de ${user.user_metadata.full_name}` : 'Mi Barbería'
           });
 
           // Asignar al usuario como ADMIN
@@ -57,7 +57,7 @@ export async function GET(request: Request) {
         }
       }
       
-      return NextResponse.redirect(\`\${origin}\${next}\`)
+      return NextResponse.redirect(`${origin}${next}`)
     }
   }
 
