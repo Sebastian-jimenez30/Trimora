@@ -31,6 +31,17 @@ export default async function RegisterPage(props: { searchParams: Promise<{ mess
           
           <form action={register} className="space-y-6">
             <div>
+              <label className="block text-sm font-medium text-sterling mb-2">Nombre de la Barbería</label>
+              <input 
+                name="name"
+                type="text" 
+                required
+                className="w-full px-4 py-3 bg-pitch/80 border border-charcoal/30 rounded-xl focus:outline-none focus:border-cognac focus:ring-1 focus:ring-cognac text-white transition-all shadow-inner"
+                placeholder="Ej. Trimora Barbershop"
+              />
+            </div>
+
+            <div>
               <label className="block text-sm font-medium text-sterling mb-2">Correo Electrónico</label>
               <input 
                 name="email"

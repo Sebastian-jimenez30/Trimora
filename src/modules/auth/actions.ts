@@ -25,19 +25,49 @@ export async function register(formData: FormData) {
   const supabase = await createClient()
   const email = formData.get('email') as string;
   const password = formData.get('password') as string;
+  const name = formData.get('name') as string || 'Mi Barbería';
   
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
   
-  const { error } = await supabase.auth.signUp({ 
+  // 1. Generar ID de la organización
+  const organizationId = crypto.randomUUID();
+  
+  // 2. Crear usuario en Supabase con metadata
+  const { data, error } = await supabase.auth.signUp({ 
     email, 
     password,
     options: {
-      emailRedirectTo: `${siteUrl}/auth/callback`
+      emailRedirectTo: `${siteUrl}/auth/callback`,
+      data: {
+        organization_id: organizationId
+      }
     }
   })
   
   if (error) {
     redirect('/login?message=Error al registrar: ' + error.message)
+  }
+
+  // 3. Si el registro fue exitoso (usuario creado), guardar la organización en la base de datos
+  if (data?.user?.id) {
+    try {
+      // Usar db de drizzle importado arriba. Wait, necesito asegurarme de importar db, organizations y organizationMembers
+      const { db } = await import('@/core/database/db');
+      const { organizations, organizationMembers } = await import('@/core/database/schema');
+      
+      await db.insert(organizations).values({
+        id: organizationId,
+        name: name
+      });
+
+      await db.insert(organizationMembers).values({
+        organizationId: organizationId,
+        userId: data.user.id,
+        role: 'ADMIN' // El creador es ADMIN por defecto
+      });
+    } catch (dbError) {
+      console.error("Error creando la organización en la BD:", dbError);
+    }
   }
 
   // Se redirige a login porque el usuario debe confirmar el correo
