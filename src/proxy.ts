@@ -35,9 +35,9 @@ export async function proxy(request: NextRequest) {
   const isPublicRoute = 
     request.nextUrl.pathname === '/' || 
     request.nextUrl.pathname.startsWith('/login') || 
-    request.nextUrl.pathname.startsWith('/register') || 
     request.nextUrl.pathname.startsWith('/auth/callback') ||
-    request.nextUrl.pathname.startsWith('/verify-email');
+    request.nextUrl.pathname.startsWith('/verify-email') ||
+    request.nextUrl.pathname.startsWith('/invite');
 
   // Proteger todas las demás rutas (si no hay usuario y no es ruta pública)
   if (!user && !isPublicRoute) {
@@ -46,8 +46,29 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  // Si ya hay usuario y quiere ir al login o register, redirigir al dashboard
-  if (user && (request.nextUrl.pathname.startsWith('/login') || request.nextUrl.pathname.startsWith('/register'))) {
+  // Lógica Super Admin
+  const isSuperAdmin = user?.email === 'trimoraerp@gmail.com';
+
+  if (isSuperAdmin) {
+    const isLoginOrRoot = request.nextUrl.pathname === '/' || request.nextUrl.pathname.startsWith('/login');
+    const isNormalApp = request.nextUrl.pathname.startsWith('/dashboard') || request.nextUrl.pathname.startsWith('/pos') || request.nextUrl.pathname.startsWith('/agenda') || request.nextUrl.pathname.startsWith('/clientes') || request.nextUrl.pathname.startsWith('/inventario');
+    
+    if (isLoginOrRoot || isNormalApp) {
+      const url = request.nextUrl.clone();
+      url.pathname = '/superadmin';
+      return NextResponse.redirect(url);
+    }
+  }
+
+  // Si NO es superadmin pero intenta entrar a /superadmin, bloquear
+  if (user && !isSuperAdmin && request.nextUrl.pathname.startsWith('/superadmin')) {
+    const url = request.nextUrl.clone();
+    url.pathname = '/dashboard';
+    return NextResponse.redirect(url);
+  }
+
+  // Si ya hay usuario y quiere ir al login, redirigir al dashboard
+  if (user && !isSuperAdmin && request.nextUrl.pathname.startsWith('/login')) {
     const url = request.nextUrl.clone()
     url.pathname = '/dashboard'
     return NextResponse.redirect(url)

@@ -18,6 +18,12 @@ export async function login(formData: FormData) {
     redirect('/login?message=Credenciales incorrectas o usuario no encontrado')
   }
   revalidatePath('/', 'layout')
+  
+  const inviteToken = formData.get('invite_token') as string;
+  if (inviteToken) {
+    redirect(`/invite?token=${inviteToken}`);
+  }
+  
   redirect('/dashboard')
 }
 
@@ -51,25 +57,36 @@ export async function register(formData: FormData) {
   // 3. Si el registro fue exitoso (usuario creado), guardar la organización en la base de datos
   if (data?.user?.id) {
     try {
-      // Usar db de drizzle importado arriba. Wait, necesito asegurarme de importar db, organizations y organizationMembers
       const { db } = await import('@/core/database/db');
       const { organizations, organizationMembers } = await import('@/core/database/schema');
       
-      await db.insert(organizations).values({
-        id: organizationId,
-        name: name
-      });
-
-      await db.insert(organizationMembers).values({
-        organizationId: organizationId,
-        userId: data.user.id,
-        role: 'ADMIN' // El creador es ADMIN por defecto
-      });
+      const inviteToken = formData.get('invite_token') as string;
+      
+      if (!inviteToken) {
+        // Solo crear organización por defecto si NO es un invitado
+        await db.insert(organizations).values({
+          id: organizationId,
+          name: name
+        });
+        
+        await db.insert(organizationMembers).values({
+          organizationId: organizationId,
+          userId: data.user.id,
+          role: 'ADMIN'
+        });
+      }
     } catch (dbError) {
-      console.error("Error creando la organización en la BD:", dbError);
+      console.error("Error setting up new user/org:", dbError);
     }
   }
 
+  revalidatePath('/', 'layout')
+  
+  const inviteToken = formData.get('invite_token') as string;
+  if (inviteToken) {
+    redirect(`/invite?token=${inviteToken}`);
+  }
+  
   // Se redirige a la pantalla de verificación
   redirect('/verify-email')
 }
@@ -105,12 +122,22 @@ export async function updatePassword(formData: FormData) {
   redirect('/dashboard');
 }
 
-export async function loginWithGoogle() {
+export async function loginWithGoogle(formData?: FormData) {
   const supabase = await createClient()
+  
+  let redirectUrl = `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/auth/callback`;
+  
+  if (formData) {
+    const inviteToken = formData.get('invite_token') as string;
+    if (inviteToken) {
+      redirectUrl += `?next=/invite?token=${inviteToken}`;
+    }
+  }
+
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: {
-      redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/auth/callback`,
+      redirectTo: redirectUrl,
     },
   })
   
@@ -123,4 +150,10 @@ export async function logout() {
   const supabase = await createClient()
   await supabase.auth.signOut()
   redirect('/login')
+}
+
+export async function logoutIdle() {
+  const supabase = await createClient()
+  await supabase.auth.signOut()
+  redirect('/login?message=Sesión cerrada por inactividad')
 }

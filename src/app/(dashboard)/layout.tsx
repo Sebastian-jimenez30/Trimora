@@ -4,6 +4,8 @@ import DashboardNavigation from "@/components/layout/DashboardNavigation";
 
 import { getPendingAppointmentsForToday } from "@/modules/agenda/actions";
 
+import SessionTimeout from "@/components/layout/SessionTimeout";
+
 export default async function DashboardLayout({
   children,
 }: {
@@ -25,8 +27,11 @@ export default async function DashboardLayout({
   const pendingAppointments = res.success ? res.data : [];
 
   return (
-    <DashboardNavigation username={capitalizedUsername} pendingAppointments={pendingAppointments}>
-      {children}
-    </DashboardNavigation>
+    <>
+      <SessionTimeout />
+      <DashboardNavigation username={capitalizedUsername} pendingAppointments={pendingAppointments}>
+        {children}
+      </DashboardNavigation>
+    </>
   );
 }

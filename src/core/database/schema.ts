@@ -17,6 +17,16 @@ export const organizationMembers = pgTable('organization_members', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
 
+export const invitations = pgTable('invitations', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  organizationId: uuid('organization_id').references(() => organizations.id).notNull(),
+  email: text('email').notNull(),
+  role: text('role').notNull().default('BARBER'),
+  token: uuid('token').defaultRandom().notNull(),
+  status: text('status').notNull().default('PENDING'), // PENDING, ACCEPTED
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
 // ----------------------------------------------------------------------
 // 2. CATÁLOGO E INTELIGENCIA DE INVENTARIO
 // ----------------------------------------------------------------------

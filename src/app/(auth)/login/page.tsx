@@ -1,9 +1,8 @@
 import { login, loginWithGoogle } from "@/modules/auth/actions";
 import Link from "next/link";
 
-export default async function LoginPage(props: { searchParams: Promise<{ message?: string }> }) {
+export default async function LoginPage(props: { searchParams: Promise<{ message?: string, invite_token?: string }> }) {
   const searchParams = await props.searchParams;
-  
   return (
     <div 
       className="min-h-screen w-full bg-pitch flex items-center justify-center p-4 font-sans text-sterling relative"
@@ -40,6 +39,7 @@ export default async function LoginPage(props: { searchParams: Promise<{ message
           )}
           
           <form action={login} className="space-y-6">
+            <input type="hidden" name="invite_token" value={searchParams?.invite_token || ''} />
             <div>
               <label className="block text-sm font-medium text-sterling mb-2">Correo Electrónico</label>
               <input 
@@ -75,11 +75,10 @@ export default async function LoginPage(props: { searchParams: Promise<{ message
                 Iniciar Sesión
               </button>
               
-              <div className="text-center text-sm text-charcoal mt-2">
-                ¿No tienes cuenta?{" "}
-                <Link href="/register" className="text-cognac hover:text-cognac-hover font-bold transition-colors">
-                  Regístrate aquí
-                </Link>
+              <div className="mt-8 text-center border-t border-gray-800 pt-6">
+                <p className="text-sterling/70 text-sm">
+                  Solo puedes unirte si fuiste invitado.
+                </p>
               </div>
             </div>
           </form>
@@ -91,6 +90,7 @@ export default async function LoginPage(props: { searchParams: Promise<{ message
           </div>
 
           <form action={loginWithGoogle} className="mt-6">
+            <input type="hidden" name="invite_token" value={searchParams?.invite_token || ''} />
             <button 
               type="submit"
               className="w-full py-3.5 px-4 bg-[#1a1a1a] hover:bg-[#222] border border-charcoal/30 text-white font-medium rounded-full shadow-inner transform transition-all active:scale-95 flex justify-center items-center gap-3"
