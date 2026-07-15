@@ -8,13 +8,15 @@ import { updateAppointmentStatus } from "@/modules/agenda/actions";
 
 type Props = {
   username: string;
+  avatarUrl?: string;
   pendingAppointments?: any[];
   children: React.ReactNode;
 };
 
-export default function DashboardNavigation({ username, pendingAppointments, children }: Props) {
+export default function DashboardNavigation({ username, avatarUrl, pendingAppointments, children }: Props) {
   const [isOpen, setIsOpen] = useState(false);
   const [isPendingsOpen, setIsPendingsOpen] = useState(false);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const pathname = usePathname();
 
@@ -171,9 +173,46 @@ export default function DashboardNavigation({ username, pendingAppointments, chi
                 </div>
               )}
             </div>
+            <div className="relative">
+              <button 
+                onClick={() => setIsProfileOpen(!isProfileOpen)}
+                className="w-[35px] h-[35px] md:w-[40px] md:h-[40px] rounded-full bg-midnight border border-white/10 flex items-center justify-center text-sterling font-serif font-bold text-sm md:text-base overflow-hidden hover:border-cognac transition-colors"
+              >
+                {avatarUrl ? (
+                  <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+                ) : (
+                  username.charAt(0).toUpperCase()
+                )}
+              </button>
 
-            <div className="w-[35px] h-[35px] md:w-[40px] md:h-[40px] rounded-full bg-midnight border border-white/10 flex items-center justify-center text-sterling font-serif font-bold text-sm md:text-base">
-              {username.charAt(0).toUpperCase()}
+              {/* Profile Dropdown */}
+              {isProfileOpen && (
+                <div className="absolute right-0 mt-2 w-48 bg-[#141414] border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50">
+                  <div className="p-4 border-b border-white/10 bg-[#1a1a1a]">
+                    <h3 className="font-serif text-sm text-white truncate">{username}</h3>
+                    <p className="text-xs text-sterling mt-1">Ajustes</p>
+                  </div>
+                  <div className="flex flex-col py-2">
+                    <Link 
+                      href="/perfil" 
+                      onClick={() => setIsProfileOpen(false)}
+                      className="px-4 py-2 text-sm text-sterling hover:bg-white/5 hover:text-white transition-colors text-left flex items-center gap-2"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                      Mi Perfil
+                    </Link>
+                    <form action={logout} className="w-full">
+                      <button 
+                        type="submit" 
+                        className="w-full px-4 py-2 text-sm text-red-400 hover:bg-red-500/10 hover:text-red-300 transition-colors text-left flex items-center gap-2"
+                      >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+                        Cerrar Sesión
+                      </button>
+                    </form>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </header>

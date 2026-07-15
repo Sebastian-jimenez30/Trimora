@@ -18,9 +18,13 @@ export default async function DashboardLayout({
     redirect("/login");
   }
 
-  // Obtenemos el nombre de usuario del email (todo antes del @)
-  const username = user.email?.split("@")[0] || "Administrador";
-  const capitalizedUsername = username.charAt(0).toUpperCase() + username.slice(1);
+  // Obtenemos los datos del metadata, con fallback al email
+  const metadataName = user.user_metadata?.full_name;
+  const emailName = user.email?.split("@")[0] || "Administrador";
+  
+  const rawUsername = metadataName || emailName;
+  const capitalizedUsername = rawUsername.charAt(0).toUpperCase() + rawUsername.slice(1);
+  const avatarUrl = user.user_metadata?.avatar_url;
 
   // Traer citas pendientes del día
   const res = await getPendingAppointmentsForToday();
@@ -29,7 +33,7 @@ export default async function DashboardLayout({
   return (
     <>
       <SessionTimeout />
-      <DashboardNavigation username={capitalizedUsername} pendingAppointments={pendingAppointments}>
+      <DashboardNavigation username={capitalizedUsername} avatarUrl={avatarUrl} pendingAppointments={pendingAppointments}>
         {children}
       </DashboardNavigation>
     </>
