@@ -37,6 +37,7 @@ export default function DashboardNavigation({ username, avatarUrl, pendingAppoin
 
   if (isAdmin) {
     navLinks.push({ href: "/equipo", label: "Equipo" });
+    navLinks.push({ href: "/servicios", label: "Servicios" });
   }
 
   const closeMenu = () => setIsOpen(false);
