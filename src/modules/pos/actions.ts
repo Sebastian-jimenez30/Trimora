@@ -65,9 +65,11 @@ export async function processSale(cart: CartItem[], clientId: string | null, pay
           await db.insert(inventoryMovements).values({
             organizationId: orgId,
             productId: item.id,
-            quantityChange: (-item.quantity).toString(),
-            movementType: 'SALE',
-            transactionId: transaction.id
+            type: 'OUT',
+            quantity: item.quantity,
+            previousStock: Math.round(parseFloat(productData.currentStock)),
+            newStock: Math.round(newStock),
+            notes: `SALE transaction ${transaction.id}`
           });
         }
       } else if (item.type === "SERVICE") {
@@ -85,9 +87,11 @@ export async function processSale(cart: CartItem[], clientId: string | null, pay
             await db.insert(inventoryMovements).values({
               organizationId: orgId,
               productId: mat.productId,
-              quantityChange: (-qtyUsed).toString(),
-              movementType: 'USAGE',
-              transactionId: transaction.id
+              type: 'OUT',
+              quantity: Math.round(qtyUsed),
+              previousStock: Math.round(parseFloat(productData.currentStock)),
+              newStock: Math.round(newStock),
+              notes: `USAGE transaction ${transaction.id}`
             });
           }
         }
