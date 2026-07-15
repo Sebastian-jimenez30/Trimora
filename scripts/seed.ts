@@ -147,7 +147,7 @@ async function seed() {
   // 11. Create Inventory Movements
   console.log('11. Creando Movimientos de Inventario Históricos...');
   await db.insert(inventoryMovements).values([
-    { organizationId: org.id, productId: cera.id, quantityChange: '-1', movementType: 'SALE', transactionId: tx1.id },
+    { organizationId: org.id, productId: cera.id, type: 'OUT', quantity: 1, previousStock: 21, newStock: 20, notes: 'Venta registrada' },
   ]);
 
   // 12. Create Daily Summary
