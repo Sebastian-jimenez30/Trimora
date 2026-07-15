@@ -70,8 +70,8 @@ export async function register(formData: FormData) {
     }
   }
 
-  // Se redirige a login porque el usuario debe confirmar el correo
-  redirect('/login?message=Registro exitoso. Revisa tu correo electrónico para verificar tu cuenta y poder ingresar.')
+  // Se redirige a la pantalla de verificación
+  redirect('/verify-email')
 }
 
 export async function sendPasswordReset(formData: FormData) {
