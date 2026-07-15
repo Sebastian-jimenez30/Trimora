@@ -1,7 +1,7 @@
 "use server"
 
 import { db } from "@/core/database/db";
-import { organizationMembers, invitations } from "@/core/database/schema";
+import { organizationMembers, invitations, organizations } from "@/core/database/schema";
 import { createClient } from "@/core/database/server";
 import { eq, and } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -56,8 +56,11 @@ export async function inviteCollaborator(formData: FormData) {
       status: 'PENDING'
     }).returning();
 
+    const [org] = await db.select().from(organizations).where(eq(organizations.id, organizationId));
+    const orgName = org?.name || "Nuestra Organización";
+
     // Enviar correo de invitación usando SendGrid
-    await sendInvitationEmail(email, invitation.token);
+    await sendInvitationEmail(email, orgName, role, invitation.token);
 
     revalidatePath('/equipo');
     return { success: true };

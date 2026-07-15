@@ -12,7 +12,7 @@ type Product = {
 type Material = {
   productId: string;
   quantityUsed: string | number;
-  productName?: string;
+  productName?: string | null;
 };
 
 type Service = {
