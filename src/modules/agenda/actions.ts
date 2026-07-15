@@ -1,9 +1,9 @@
 "use server"
 
 import { db } from "@/core/database/db";
-import { appointments } from "@/core/database/schema";
+import { appointments, clients, services } from "@/core/database/schema";
 import { createClient } from "@/core/database/server";
-import { eq, and } from "drizzle-orm";
+import { eq, and, lt, gte, lte, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
 // Función auxiliar para verificar la autenticación
@@ -122,6 +122,50 @@ export async function deleteAppointment(id: string) {
     return { success: true };
   } catch (error: any) {
     console.error("Error deleting appointment:", error);
+    return { success: false, error: error.message };
+  }
+}
+
+export async function getPendingAppointmentsForToday() {
+  try {
+    const { organizationId } = await requireAuth();
+
+    const now = new Date();
+    const startOfDay = new Date(now);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(now);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    const pendingAppointments = await db.select({
+      id: appointments.id,
+      startTime: appointments.startTime,
+      endTime: appointments.endTime,
+      status: appointments.status,
+      clientId: appointments.clientId,
+      clientName: clients.firstName,
+      clientLastName: clients.lastName,
+      serviceId: appointments.serviceId,
+      serviceName: services.name,
+      servicePrice: services.price,
+      staffId: appointments.staffId
+    })
+    .from(appointments)
+    .leftJoin(clients, eq(appointments.clientId, clients.id))
+    .leftJoin(services, eq(appointments.serviceId, services.id))
+    .where(
+      and(
+        eq(appointments.organizationId, organizationId),
+        inArray(appointments.status, ["PENDING", "CONFIRMED"]),
+        lt(appointments.startTime, now), // Mostrar desde que INICIA la cita, no esperar a que termine
+        gte(appointments.startTime, startOfDay),
+        lte(appointments.startTime, endOfDay)
+      )
+    )
+    .orderBy(appointments.startTime);
+
+    return { success: true, data: pendingAppointments };
+  } catch (error: any) {
+    console.error("Error getting pending appointments:", error);
     return { success: false, error: error.message };
   }
 }

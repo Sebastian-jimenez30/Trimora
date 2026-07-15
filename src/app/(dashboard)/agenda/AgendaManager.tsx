@@ -3,6 +3,24 @@
 import { useState, useTransition } from "react";
 import { createAppointment, updateAppointment, updateAppointmentStatus, deleteAppointment } from "@/modules/agenda/actions";
 import { createCustomer } from "@/modules/clients/actions";
+import { formatInTimeZone, toDate } from "date-fns-tz";
+import { 
+  addDays, 
+  subDays, 
+  addWeeks, 
+  subWeeks, 
+  addMonths, 
+  subMonths, 
+  startOfWeek, 
+  endOfWeek, 
+  startOfMonth, 
+  endOfMonth, 
+  isSameDay, 
+  isSameMonth,
+  eachDayOfInterval
+} from "date-fns";
+
+const TIMEZONE = 'America/Bogota';
 
 type Appointment = {
   id: string;
@@ -19,6 +37,12 @@ type Client = { id: string; firstName: string; lastName: string | null; phone: s
 type Service = { id: string; name: string; durationMinutes: number; price: string };
 type Staff = { id: string; name: string; role: string };
 
+function getBogotaToday() {
+  const now = new Date();
+  const bogotaDateStr = formatInTimeZone(now, TIMEZONE, 'yyyy-MM-dd');
+  return toDate(`${bogotaDateStr}T00:00:00.000`, { timeZone: TIMEZONE });
+}
+
 export default function AgendaManager({ 
   initialAppointments, 
   clients, 
@@ -30,7 +54,8 @@ export default function AgendaManager({
   services: Service[];
   staff: Staff[];
 }) {
-  const [currentDate, setCurrentDate] = useState(new Date("2026-07-10T12:00:00")); // Fecha base temporal para desarrollo
+  const [currentDate, setCurrentDate] = useState(getBogotaToday()); 
+  const [view, setView] = useState<'day' | 'week' | 'month'>('day');
   const [searchTerm, setSearchTerm] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
@@ -38,28 +63,36 @@ export default function AgendaManager({
   
   // Default values for creating new appointments by clicking grid
   const [defaultTime, setDefaultTime] = useState("09:00");
+  const [selectedDateForNew, setSelectedDateForNew] = useState<Date | null>(null);
   const [selectedClientId, setSelectedClientId] = useState<string>("");
   
   const [isPending, startTransition] = useTransition();
 
-  const changeDate = (days: number) => {
-    const newDate = new Date(currentDate);
-    newDate.setDate(newDate.getDate() + days);
-    setCurrentDate(newDate);
+  const changeDate = (amount: number) => {
+    if (view === 'day') {
+      setCurrentDate(prev => amount > 0 ? addDays(prev, 1) : subDays(prev, 1));
+    } else if (view === 'week') {
+      setCurrentDate(prev => amount > 0 ? addWeeks(prev, 1) : subWeeks(prev, 1));
+    } else {
+      setCurrentDate(prev => amount > 0 ? addMonths(prev, 1) : subMonths(prev, 1));
+    }
   };
 
-  const getDayAppointments = () => {
+  const setToday = () => {
+    setCurrentDate(getBogotaToday());
+  };
+
+  const getAppointmentsForDate = (date: Date) => {
     return initialAppointments.filter(app => {
-      const d = new Date(app.startTime);
-      return d.getDate() === currentDate.getDate() && 
-             d.getMonth() === currentDate.getMonth() && 
-             d.getFullYear() === currentDate.getFullYear();
+      const d = toDate(app.startTime, { timeZone: TIMEZONE });
+      return isSameDay(d, date);
     });
   };
 
-  const openCreateModal = (time?: string) => {
+  const openCreateModal = (timeStr?: string, date?: Date) => {
     setEditingAppointment(null);
-    setDefaultTime(time || "09:00");
+    setDefaultTime(timeStr || "09:00");
+    setSelectedDateForNew(date || currentDate);
     setSelectedClientId("");
     setIsModalOpen(true);
   };
@@ -79,7 +112,6 @@ export default function AgendaManager({
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     
-    // Convert time to ISO combining with currentDate
     const timeStr = formData.get("timeStr") as string;
     const serviceId = formData.get("serviceId") as string;
     
@@ -88,7 +120,8 @@ export default function AgendaManager({
 
     const [hours, minutes] = timeStr.split(":").map(Number);
     
-    const start = new Date(currentDate);
+    const baseDate = editingAppointment ? toDate(editingAppointment.startTime, { timeZone: TIMEZONE }) : (selectedDateForNew || currentDate);
+    const start = new Date(baseDate);
     start.setHours(hours, minutes, 0, 0);
 
     const end = new Date(start);
@@ -122,14 +155,6 @@ export default function AgendaManager({
     });
   };
 
-  const handleStatusChange = (id: string, status: string) => {
-    startTransition(async () => {
-      const result = await updateAppointmentStatus(id, status);
-      if (!result.success) alert(result.error);
-      else closeModal();
-    });
-  };
-
   const handleCreateClientSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
@@ -144,145 +169,68 @@ export default function AgendaManager({
     });
   };
 
-  // Helper para posicionar la cita en la grilla. 09:00 = 0px, 1 hora = 60px.
+  // 09:00 = 0px, 1 hora = 60px.
   const getAppointmentStyle = (app: Appointment) => {
-    const start = new Date(app.startTime);
-    const end = new Date(app.endTime);
+    const start = toDate(app.startTime, { timeZone: TIMEZONE });
+    const end = toDate(app.endTime, { timeZone: TIMEZONE });
     
     const startMins = (start.getHours() * 60) + start.getMinutes();
     const endMins = (end.getHours() * 60) + end.getMinutes();
     
-    // Grid starts at 00:00 (0 * 60 = 0)
     const offset = startMins;
     const height = endMins - startMins;
 
-    let bgClass = "bg-[#2a1f18] border-l-[4px] border-[#8B4513]"; // Pending
+    let bgClass = "bg-[#2a1f18] border-l-[4px] border-[#8B4513]"; 
     if (app.status === "CONFIRMED") bgClass = "bg-[#2C2C2C] border-l-[4px] border-white";
     if (app.status === "COMPLETED") bgClass = "bg-[#1a1a1a] border-l-[4px] border-[#888] opacity-70";
 
-    // Si la cita empieza antes de las 9am o después de las 8pm se ajustará o no se verá bien, 
-    // asumimos por el scope que es 09 a 20.
     return {
       top: `${offset}px`,
       height: `${height}px`,
-      className: `absolute left-[5%] w-[90%] rounded-md px-3 py-2 cursor-pointer shadow-lg transition-transform hover:scale-[1.01] z-10 ${bgClass}`
+      className: `absolute w-[95%] left-[2.5%] rounded-md px-2 py-1 cursor-pointer shadow-lg transition-transform hover:scale-[1.02] z-10 overflow-hidden ${bgClass}`
     };
   };
 
-  const dayAppointments = getDayAppointments();
-  
-  // Hours array from 00:00 to 23:00
   const hours = Array.from({ length: 24 }, (_, i) => i);
+  const weekStart = startOfWeek(currentDate, { weekStartsOn: 1 });
+  const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 
-  return (
-    <div className="flex flex-col h-full bg-[#0f0f0f]">
-      {/* Topbar */}
-      <header className="h-[70px] border-b border-white/10 flex items-center justify-between px-8 bg-pitch shrink-0">
-        <div className="flex items-center gap-4">
-          <button onClick={() => setCurrentDate(new Date())} className="border border-white/10 text-sterling px-4 py-1.5 rounded-md text-sm hover:bg-white/5 transition-colors">
-            Hoy
-          </button>
-          <button onClick={() => changeDate(-1)} className="border border-white/10 text-sterling w-8 h-8 rounded-md flex items-center justify-center hover:bg-white/5 transition-colors">
-            &lt;
-          </button>
-          <h2 className="text-lg font-semibold text-sterling min-w-[220px] text-center">
-            {currentDate.toLocaleDateString("es-ES", { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-          </h2>
-          <button onClick={() => changeDate(1)} className="border border-white/10 text-sterling w-8 h-8 rounded-md flex items-center justify-center hover:bg-white/5 transition-colors">
-            &gt;
-          </button>
-        </div>
-
-        <div className="flex items-center gap-5">
-          <div className="relative">
-            <input 
-              type="text" 
-              placeholder="Buscar cita..." 
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="bg-[#141414] border border-white/10 text-sterling pl-4 pr-4 py-2 rounded-full text-sm w-[250px] focus:outline-none focus:border-[#888]"
-            />
-          </div>
-          <button 
-            onClick={() => openCreateModal()}
-            className="bg-[#8B4513] hover:brightness-110 text-white px-5 py-2 rounded-lg text-sm font-medium transition-all"
-          >
-            + Nueva Cita
-          </button>
-        </div>
-      </header>
-
-      {/* Main Agenda Area */}
+  // Render Día
+  const renderDayView = () => {
+    const dayApps = getAppointmentsForDate(currentDate);
+    return (
       <div className="flex-1 overflow-y-auto relative bg-[#0f0f0f] p-6">
-        
-        <div className="flex-1 bg-[#141414] border border-white/10 rounded-2xl flex flex-col overflow-hidden">
-        
-        {/* Header de la Agenda */}
-        <div className="h-[60px] border-b border-white/10 flex items-center px-4 bg-white/5 shrink-0">
-          <div className="w-[50px] md:w-[80px] shrink-0 font-serif text-sm text-sterling">Hora</div>
-          <div className="flex-1 text-center font-serif text-lg text-sterling border-l border-white/10 pl-4">
-            Agenda General
+        <div className="flex-1 bg-[#141414] border border-white/10 rounded-2xl flex flex-col overflow-hidden max-w-4xl mx-auto w-full">
+          <div className="h-[60px] border-b border-white/10 flex items-center px-4 bg-white/5 shrink-0">
+            <div className="w-[50px] md:w-[80px] shrink-0 font-serif text-sm text-sterling">Hora</div>
+            <div className="flex-1 text-center font-serif text-lg text-sterling border-l border-white/10 pl-4">
+              Agenda del Día
+            </div>
           </div>
-        </div>
-
-        {/* Scrollable Grid */}
-        <div className="grid grid-cols-[50px_1fr] md:grid-cols-[80px_1fr] flex-1 overflow-y-auto relative" id="agenda-scroll-container">
-          
-          {/* Columna de Horas */}
-          <div className="w-[50px] md:w-[80px] border-r border-white/10 shrink-0 sticky left-0 bg-[#141414] z-10">
-            {hours.map(h => (
+          <div className="grid grid-cols-[50px_1fr] md:grid-cols-[80px_1fr] flex-1 overflow-y-auto relative">
+            <div className="w-[50px] md:w-[80px] border-r border-white/10 shrink-0 sticky left-0 bg-[#141414] z-10">
+              {hours.map(h => (
                 <div key={h} className="h-[60px] flex items-start justify-center text-xs text-[#888] pt-2 relative">
                   <span className="relative -top-4 bg-pitch px-1">{h.toString().padStart(2, '0')}:00</span>
                 </div>
               ))}
             </div>
-
-            {/* General Agenda Column */}
             <div className="relative" style={{ backgroundImage: 'linear-gradient(to bottom, rgba(255,255,255,0.05) 1px, transparent 1px)', backgroundSize: '100% 60px' }}>
-              
-              {/* Clicks en espacios vacíos para crear cita en esa hora */}
               {hours.map((h, i) => (
-                <div 
-                  key={`slot-${h}`} 
-                  onClick={() => openCreateModal(`${h.toString().padStart(2, '0')}:00`)}
-                  className="absolute w-full h-[60px] cursor-pointer hover:bg-white/[0.02] transition-colors"
-                  style={{ top: `${i * 60}px` }}
-                />
+                <div key={`slot-${h}`} onClick={() => openCreateModal(`${h.toString().padStart(2, '0')}:00`, currentDate)} className="absolute w-full h-[60px] cursor-pointer hover:bg-white/[0.02] transition-colors" style={{ top: `${i * 60}px` }} />
               ))}
-
-              {/* Render Appointments */}
-              {dayAppointments.filter(app => {
+              {dayApps.filter(app => {
                 const client = clients.find(c => c.id === app.clientId);
-                if (searchTerm && client) {
-                  return client.firstName.toLowerCase().includes(searchTerm.toLowerCase());
-                }
-                return true;
+                return searchTerm && client ? client.firstName.toLowerCase().includes(searchTerm.toLowerCase()) : true;
               }).map(app => {
                 const style = getAppointmentStyle(app);
                 const client = clients.find(c => c.id === app.clientId);
                 const service = services.find(s => s.id === app.serviceId);
-                const staffMember = staff.find(s => s.id === app.staffId);
-                
-                const start = new Date(app.startTime);
-                const end = new Date(app.endTime);
-                const timeLabel = `${start.getHours().toString().padStart(2, '0')}:${start.getMinutes().toString().padStart(2, '0')} - ${end.getHours().toString().padStart(2, '0')}:${end.getMinutes().toString().padStart(2, '0')}`;
-
+                const start = toDate(app.startTime, { timeZone: TIMEZONE });
                 return (
-                  <div 
-                    key={app.id}
-                    className={style.className}
-                    style={{ top: style.top, height: style.height }}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      openEditModal(app);
-                    }}
-                  >
-                    <div className="flex justify-between items-start">
-                      <div className="font-bold text-white text-sm truncate">{client?.firstName} {client?.lastName}</div>
-                      <div className="text-[10px] bg-black/40 px-1.5 rounded truncate max-w-[80px]">{staffMember?.name}</div>
-                    </div>
-                    <div className="text-xs text-[#ccc] truncate mt-0.5">{service?.name}</div>
-                    <div className="text-[10px] text-[#888] mt-1">{timeLabel}</div>
+                  <div key={app.id} className={style.className} style={{ top: style.top, height: style.height }} onClick={(e) => { e.stopPropagation(); openEditModal(app); }}>
+                    <div className="font-bold text-white text-[11px] truncate">{client?.firstName} {client?.lastName}</div>
+                    <div className="text-[10px] text-[#ccc] truncate">{service?.name} ({start.getHours()}:{start.getMinutes().toString().padStart(2, '0')})</div>
                   </div>
                 );
               })}
@@ -290,6 +238,172 @@ export default function AgendaManager({
           </div>
         </div>
       </div>
+    );
+  };
+
+  // Render Semana
+  const renderWeekView = () => {
+    return (
+      <div className="flex-1 overflow-y-auto relative bg-[#0f0f0f] p-4">
+        <div className="flex-1 bg-[#141414] border border-white/10 rounded-2xl flex flex-col overflow-hidden w-full min-w-[800px]">
+          <div className="grid grid-cols-[60px_1fr_1fr_1fr_1fr_1fr_1fr_1fr] border-b border-white/10 shrink-0 bg-white/5">
+            <div className="border-r border-white/10 flex items-center justify-center text-xs text-[#888]">Hora</div>
+            {weekDays.map(d => (
+              <div key={d.toString()} className={`py-3 text-center border-r border-white/10 last:border-0 ${isSameDay(d, getBogotaToday()) ? 'bg-cognac/20' : ''}`}>
+                <div className="text-xs text-[#888] uppercase">{d.toLocaleDateString("es-ES", { weekday: 'short' })}</div>
+                <div className={`text-lg font-bold ${isSameDay(d, getBogotaToday()) ? 'text-cognac' : 'text-sterling'}`}>{d.getDate()}</div>
+              </div>
+            ))}
+          </div>
+          <div className="grid grid-cols-[60px_1fr_1fr_1fr_1fr_1fr_1fr_1fr] flex-1 overflow-y-auto relative h-[800px]">
+            <div className="border-r border-white/10 shrink-0 sticky left-0 bg-[#141414] z-20">
+              {hours.map(h => (
+                <div key={h} className="h-[60px] flex items-start justify-center text-[10px] text-[#888] pt-2 relative">
+                  <span className="relative -top-3 bg-[#141414] px-1">{h.toString().padStart(2, '0')}:00</span>
+                </div>
+              ))}
+            </div>
+            {weekDays.map(d => {
+              const apps = getAppointmentsForDate(d);
+              return (
+                <div key={`col-${d.toString()}`} className={`relative border-r border-white/10 last:border-0 ${isSameDay(d, getBogotaToday()) ? 'bg-cognac/5' : ''}`} style={{ backgroundImage: 'linear-gradient(to bottom, rgba(255,255,255,0.05) 1px, transparent 1px)', backgroundSize: '100% 60px' }}>
+                  {hours.map((h, i) => (
+                    <div key={`slot-${h}`} onClick={() => openCreateModal(`${h.toString().padStart(2, '0')}:00`, d)} className="absolute w-full h-[60px] cursor-pointer hover:bg-white/[0.05] transition-colors" style={{ top: `${i * 60}px` }} />
+                  ))}
+                  {apps.map(app => {
+                    const style = getAppointmentStyle(app);
+                    const client = clients.find(c => c.id === app.clientId);
+                    return (
+                      <div key={app.id} className={`${style.className} !px-1.5`} style={{ top: style.top, height: style.height }} onClick={(e) => { e.stopPropagation(); openEditModal(app); }}>
+                        <div className="font-bold text-white text-[9px] truncate">{client?.firstName}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Render Mes
+  const renderMonthView = () => {
+    const monthStart = startOfMonth(currentDate);
+    const monthEnd = endOfMonth(currentDate);
+    const startDate = startOfWeek(monthStart, { weekStartsOn: 1 });
+    const endDate = endOfWeek(monthEnd, { weekStartsOn: 1 });
+    const days = eachDayOfInterval({ start: startDate, end: endDate });
+
+    const weekDayNames = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+
+    return (
+      <div className="flex-1 relative bg-[#0f0f0f] p-6 flex flex-col">
+        <div className="bg-[#141414] border border-white/10 rounded-2xl flex flex-col flex-1 overflow-hidden">
+          <div className="grid grid-cols-7 border-b border-white/10 shrink-0 bg-white/5">
+            {weekDayNames.map(d => (
+              <div key={d} className="py-3 text-center text-xs font-bold text-sterling border-r border-white/10 last:border-0 uppercase tracking-wider">
+                {d}
+              </div>
+            ))}
+          </div>
+          <div className="grid grid-cols-7 grid-rows-5 flex-1 bg-white/[0.02]">
+            {days.map(d => {
+              const isCurrentMonth = isSameMonth(d, currentDate);
+              const isToday = isSameDay(d, getBogotaToday());
+              const apps = getAppointmentsForDate(d);
+              
+              return (
+                <div 
+                  key={d.toString()} 
+                  className={`border-r border-b border-white/10 last:border-r-0 p-2 flex flex-col cursor-pointer transition-colors hover:bg-white/5 ${isCurrentMonth ? '' : 'opacity-40 bg-black/20'} ${isToday ? 'bg-cognac/10' : ''}`}
+                  onClick={() => {
+                    setCurrentDate(d);
+                    setView('day');
+                  }}
+                >
+                  <div className={`text-right text-sm mb-1 ${isToday ? 'text-cognac font-bold' : 'text-sterling'}`}>
+                    {isToday ? <span className="bg-cognac text-white w-6 h-6 inline-flex items-center justify-center rounded-full">{d.getDate()}</span> : d.getDate()}
+                  </div>
+                  <div className="flex-1 overflow-y-auto space-y-1">
+                    {apps.slice(0, 4).map(app => {
+                      const client = clients.find(c => c.id === app.clientId);
+                      const start = toDate(app.startTime, { timeZone: TIMEZONE });
+                      return (
+                        <div key={app.id} className="text-[9px] bg-[#2a1f18] text-[#dcdcdc] rounded px-1.5 py-0.5 truncate border-l-2 border-[#8B4513]">
+                          {start.getHours()}:{start.getMinutes().toString().padStart(2, '0')} - {client?.firstName}
+                        </div>
+                      )
+                    })}
+                    {apps.length > 4 && (
+                      <div className="text-[9px] text-[#888] pl-1 font-bold">+{apps.length - 4} más...</div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="flex flex-col h-full bg-[#0f0f0f]">
+      {/* Topbar */}
+      <header className="h-[70px] border-b border-white/10 flex items-center justify-between px-8 bg-pitch shrink-0">
+        <div className="flex items-center gap-4">
+          <button onClick={setToday} className="border border-white/10 text-sterling px-4 py-1.5 rounded-md text-sm hover:bg-white/5 transition-colors">
+            Hoy
+          </button>
+          <div className="flex items-center">
+            <button onClick={() => changeDate(-1)} className="border border-white/10 text-sterling w-8 h-8 rounded-l-md flex items-center justify-center hover:bg-white/5 transition-colors">&lt;</button>
+            <button onClick={() => changeDate(1)} className="border-y border-r border-white/10 text-sterling w-8 h-8 rounded-r-md flex items-center justify-center hover:bg-white/5 transition-colors">&gt;</button>
+          </div>
+          <h2 className="text-lg font-semibold text-sterling min-w-[220px] text-center capitalize">
+            {view === 'month' 
+              ? currentDate.toLocaleDateString("es-ES", { month: 'long', year: 'numeric' })
+              : view === 'week'
+              ? `${weekStart.getDate()} ${weekStart.toLocaleDateString("es-ES", { month: 'short' })} - ${addDays(weekStart, 6).getDate()} ${addDays(weekStart, 6).toLocaleDateString("es-ES", { month: 'short', year: 'numeric' })}`
+              : currentDate.toLocaleDateString("es-ES", { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+            }
+          </h2>
+        </div>
+
+        <div className="flex items-center gap-4">
+          {/* View Toggle */}
+          <div className="flex bg-[#141414] rounded-lg p-1 border border-white/10">
+            <button onClick={() => setView('day')} className={`px-3 py-1 text-xs rounded-md font-medium transition-colors ${view === 'day' ? 'bg-cognac text-white' : 'text-charcoal hover:text-white'}`}>Día</button>
+            <button onClick={() => setView('week')} className={`px-3 py-1 text-xs rounded-md font-medium transition-colors ${view === 'week' ? 'bg-cognac text-white' : 'text-charcoal hover:text-white'}`}>Semana</button>
+            <button onClick={() => setView('month')} className={`px-3 py-1 text-xs rounded-md font-medium transition-colors ${view === 'month' ? 'bg-cognac text-white' : 'text-charcoal hover:text-white'}`}>Mes</button>
+          </div>
+
+          {view === 'day' && (
+            <div className="relative">
+              <input 
+                type="text" 
+                placeholder="Buscar cita..." 
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="bg-[#141414] border border-white/10 text-sterling pl-4 pr-4 py-1.5 rounded-full text-xs w-[200px] focus:outline-none focus:border-[#888]"
+              />
+            </div>
+          )}
+
+          <button 
+            onClick={() => openCreateModal()}
+            className="bg-[#8B4513] hover:brightness-110 text-white px-5 py-2 rounded-lg text-sm font-medium transition-all shadow-[0_0_10px_rgba(139,69,19,0.3)]"
+          >
+            + Nueva Cita
+          </button>
+        </div>
+      </header>
+
+      {/* Main Agenda Area */}
+      {view === 'day' && renderDayView()}
+      {view === 'week' && renderWeekView()}
+      {view === 'month' && renderMonthView()}
 
       {/* Modal CRUD */}
       {isModalOpen && (

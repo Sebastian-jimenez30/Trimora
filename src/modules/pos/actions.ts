@@ -26,7 +26,7 @@ export type CartItem = {
   staffId?: string; // Solo para servicios
 };
 
-export async function processSale(cart: CartItem[], clientId: string | null, paymentMethod: string) {
+export async function processSale(cart: CartItem[], clientId: string | null, paymentMethod: string, appointmentId?: string) {
   try {
     const orgId = await getOrganizationId();
     if (cart.length === 0) return { success: false, error: "El carrito está vacío." };
@@ -94,9 +94,18 @@ export async function processSale(cart: CartItem[], clientId: string | null, pay
       }
     }
 
+    // 3. Completar la cita si viene ligada
+    if (appointmentId) {
+      const { appointments } = await import("@/core/database/schema");
+      await db.update(appointments)
+        .set({ status: 'COMPLETED' })
+        .where(eq(appointments.id, appointmentId));
+    }
+
     revalidatePath("/pos");
     revalidatePath("/inventario");
     revalidatePath("/dashboard");
+    revalidatePath("/agenda"); // Revalidar la agenda porque se completó la cita
     return { success: true, transactionId: transaction.id };
   } catch (error: any) {
     console.error("Error processSale:", error);

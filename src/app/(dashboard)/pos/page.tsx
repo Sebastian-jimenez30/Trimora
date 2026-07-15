@@ -72,6 +72,9 @@ export default async function POSPage() {
     };
   }));
 
+  const pendingRes = await import("@/modules/agenda/actions").then(m => m.getPendingAppointmentsForToday());
+  const pendingAppointments = pendingRes.success ? pendingRes.data : [];
+
   return (
     <div className="flex flex-col h-full bg-[#0f0f0f]">
       <POSManager 
@@ -80,6 +83,7 @@ export default async function POSPage() {
         clients={orgClients} 
         staff={staffFormatted} 
         history={history}
+        pendingAppointments={pendingAppointments}
       />
     </div>
   );

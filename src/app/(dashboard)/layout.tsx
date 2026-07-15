@@ -2,6 +2,8 @@ import { createClient } from "@/core/database/server";
 import { redirect } from "next/navigation";
 import DashboardNavigation from "@/components/layout/DashboardNavigation";
 
+import { getPendingAppointmentsForToday } from "@/modules/agenda/actions";
+
 export default async function DashboardLayout({
   children,
 }: {
@@ -18,8 +20,12 @@ export default async function DashboardLayout({
   const username = user.email?.split("@")[0] || "Administrador";
   const capitalizedUsername = username.charAt(0).toUpperCase() + username.slice(1);
 
+  // Traer citas pendientes del día
+  const res = await getPendingAppointmentsForToday();
+  const pendingAppointments = res.success ? res.data : [];
+
   return (
-    <DashboardNavigation username={capitalizedUsername}>
+    <DashboardNavigation username={capitalizedUsername} pendingAppointments={pendingAppointments}>
       {children}
     </DashboardNavigation>
   );

@@ -13,6 +13,8 @@ import { eq, and, gte, lt, desc, asc, lte, sql } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 
+import { formatInTimeZone, toDate } from 'date-fns-tz';
+
 export default async function DashboardPage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -28,11 +30,12 @@ export default async function DashboardPage() {
     return <div className="p-10 text-white">No tienes una organización asignada. Por favor, contacta al administrador.</div>;
   }
 
-  // Fechas base
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const tomorrow = new Date(today);
-  tomorrow.setDate(tomorrow.getDate() + 1);
+  // Fechas base (Zona Horaria Bogotá)
+  const TIMEZONE = 'America/Bogota';
+  const now = new Date();
+  const bogotaDateStr = formatInTimeZone(now, TIMEZONE, 'yyyy-MM-dd');
+  const today = toDate(`${bogotaDateStr}T00:00:00.000`, { timeZone: TIMEZONE });
+  const tomorrow = new Date(today.getTime() + 24 * 60 * 60 * 1000);
 
   // 2. Obtener KPIs Diarios (Dinámicos)
   // Ingresos del día
@@ -101,7 +104,7 @@ export default async function DashboardPage() {
   .where(
     and(
       eq(appointments.organizationId, orgId),
-      gte(appointments.startTime, new Date()), // A partir de este instante
+      gte(appointments.startTime, now), // A partir de este instante
       lt(appointments.startTime, tomorrow)
     )
   )
