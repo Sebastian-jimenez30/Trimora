@@ -105,13 +105,15 @@ export const transactionItems = pgTable('transaction_items', {
 });
 
 export const inventoryMovements = pgTable('inventory_movements', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  organizationId: uuid('organization_id').references(() => organizations.id).notNull(),
-  productId: uuid('product_id').references(() => products.id).notNull(),
-  quantityChange: numeric('quantity_change', { precision: 10, scale: 2 }).notNull(),
-  movementType: text('movement_type').notNull(), // SALE, USAGE, PURCHASE, ADJUSTMENT
-  transactionId: uuid('transaction_id').references(() => transactions.id),
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  id: uuid('id').defaultRandom().primaryKey(),
+  organizationId: uuid('organization_id').references(() => organizations.id, { onDelete: 'cascade' }).notNull(),
+  productId: uuid('product_id').references(() => products.id, { onDelete: 'cascade' }).notNull(),
+  type: varchar('type', { length: 20 }).notNull(), // IN, OUT
+  quantity: integer('quantity').notNull(),
+  previousStock: integer('previous_stock').notNull(),
+  newStock: integer('new_stock').notNull(),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
 // ----------------------------------------------------------------------

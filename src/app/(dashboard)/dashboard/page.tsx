@@ -7,7 +7,9 @@ import {
   clients, 
   services, 
   transactions, 
-  products 
+  products,
+  auditLogs,
+  transactionItems
 } from "@/core/database/schema";
 import { eq, and, gte, lt, desc, asc, lte, sql } from "drizzle-orm";
 import { redirect } from "next/navigation";
@@ -111,9 +113,10 @@ export default async function DashboardPage() {
   .orderBy(asc(appointments.startTime))
   .limit(5);
 
-  // 5. Últimas Ventas (POS)
-  const recentSales = await db.select({
+  // 5. Últimos Movimientos (Ventas y Gastos POS)
+  const recentTransactions = await db.select({
     id: transactions.id,
+    type: transactions.type,
     totalAmount: transactions.totalAmount,
     paymentMethod: transactions.paymentMethod,
     createdAt: transactions.createdAt,
@@ -124,6 +127,20 @@ export default async function DashboardPage() {
   .where(eq(transactions.organizationId, orgId))
   .orderBy(desc(transactions.createdAt))
   .limit(4);
+
+  // Mapear historial para incluir descripción si es gasto
+  const recentMovements = await Promise.all(recentTransactions.map(async (tx) => {
+    let description = "";
+    if (tx.type === "EXPENSE") {
+      const logs = await db.select().from(auditLogs).where(eq(auditLogs.entityId, tx.id)).limit(1);
+      description = logs[0]?.details || "Gasto sin descripción";
+    }
+    
+    return {
+      ...tx,
+      description
+    };
+  }));
 
   // 6. Alertas de Inventario
   const inventoryAlerts = await db.select()
@@ -264,23 +281,27 @@ export default async function DashboardPage() {
 
           {/* Actividad Reciente POS */}
           <div className="bg-[#141414] border border-white/10 rounded-xl p-4 md:p-6">
-            <h3 className="font-serif text-lg text-sterling mb-5">Últimas Ventas (POS)</h3>
-            {recentSales.length === 0 ? (
+            <h3 className="font-serif text-lg text-sterling mb-5">Últimos Movimientos</h3>
+            {recentMovements.length === 0 ? (
               <div className="py-6 text-center text-charcoal text-sm">
-                Aún no hay ventas registradas.
+                Aún no hay movimientos registrados.
               </div>
             ) : (
               <ul className="flex flex-col gap-3">
-                {recentSales.map(sale => (
-                  <li key={sale.id} className="flex justify-between items-center border-b border-white/5 pb-3 last:border-0">
+                {recentMovements.map(mov => (
+                  <li key={mov.id} className="flex justify-between items-center border-b border-white/5 pb-3 last:border-0">
                     <div>
-                      <h4 className="text-sm text-sterling">{sale.clientName || 'Cliente General'}</h4>
-                      <p className="text-xs text-charcoal">{sale.paymentMethod}</p>
+                      <h4 className="text-sm text-sterling">
+                        {mov.type === "EXPENSE" ? mov.description : (mov.clientName || 'Cliente General')}
+                      </h4>
+                      <p className="text-xs text-charcoal">{mov.paymentMethod}</p>
                     </div>
                     <div className="text-right">
-                      <p className="text-sm font-bold text-sterling">${sale.totalAmount}</p>
+                      <p className={`text-sm font-bold ${mov.type === "EXPENSE" ? "text-red-400" : "text-green-400"}`}>
+                        {mov.type === "EXPENSE" ? "-" : ""}${mov.totalAmount}
+                      </p>
                       <p className="text-xs text-charcoal">
-                        {sale.createdAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        {mov.createdAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </p>
                     </div>
                   </li>

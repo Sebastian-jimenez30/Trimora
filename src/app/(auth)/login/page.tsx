@@ -54,7 +54,9 @@ export default async function LoginPage(props: { searchParams: Promise<{ message
             <div>
               <div className="flex justify-between items-center mb-2">
                 <label className="block text-sm font-medium text-sterling">Contraseña</label>
-                <a href="#" className="text-xs text-cognac hover:text-cognac-hover transition-colors font-semibold">¿La olvidaste?</a>
+                <Link href="/forgot-password" className="text-xs text-cognac hover:text-cognac-hover font-bold transition-colors">
+                  ¿Olvidaste tu contraseña?
+                </Link>
               </div>
               <input 
                 name="password"
