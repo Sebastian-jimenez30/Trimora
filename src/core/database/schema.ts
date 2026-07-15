@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, numeric, integer, boolean } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, timestamp, numeric, integer, boolean, varchar } from 'drizzle-orm/pg-core';
 
 // ----------------------------------------------------------------------
 // 1. NÚCLEO SAAS
