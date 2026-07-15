@@ -30,10 +30,29 @@ export default async function DashboardLayout({
   const res = await getPendingAppointmentsForToday();
   const pendingAppointments = res.success ? res.data : [];
 
+  // Verificar si el usuario es administrador de la organización activa
+  let isAdmin = false;
+  if (user.user_metadata?.organization_id) {
+    const { db } = await import('@/core/database/db');
+    const { organizationMembers } = await import('@/core/database/schema');
+    const { eq, and } = await import('drizzle-orm');
+    
+    const [member] = await db.select()
+      .from(organizationMembers)
+      .where(and(
+        eq(organizationMembers.organizationId, user.user_metadata.organization_id),
+        eq(organizationMembers.userId, user.id)
+      ));
+      
+    if (member && member.role === 'ADMIN') {
+      isAdmin = true;
+    }
+  }
+
   return (
     <>
       <SessionTimeout />
-      <DashboardNavigation username={capitalizedUsername} avatarUrl={avatarUrl} pendingAppointments={pendingAppointments}>
+      <DashboardNavigation username={capitalizedUsername} avatarUrl={avatarUrl} pendingAppointments={pendingAppointments} isAdmin={isAdmin}>
         {children}
       </DashboardNavigation>
     </>

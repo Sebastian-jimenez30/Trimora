@@ -10,10 +10,11 @@ type Props = {
   username: string;
   avatarUrl?: string;
   pendingAppointments?: any[];
+  isAdmin?: boolean;
   children: React.ReactNode;
 };
 
-export default function DashboardNavigation({ username, avatarUrl, pendingAppointments, children }: Props) {
+export default function DashboardNavigation({ username, avatarUrl, pendingAppointments, isAdmin = false, children }: Props) {
   const [isOpen, setIsOpen] = useState(false);
   const [isPendingsOpen, setIsPendingsOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -33,6 +34,10 @@ export default function DashboardNavigation({ username, avatarUrl, pendingAppoin
     { href: "/pos", label: "Punto de Venta (POS)" },
     { href: "/inventario", label: "Inventario" },
   ];
+
+  if (isAdmin) {
+    navLinks.push({ href: "/equipo", label: "Equipo" });
+  }
 
   const closeMenu = () => setIsOpen(false);
 
