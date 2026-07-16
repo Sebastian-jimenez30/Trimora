@@ -47,22 +47,24 @@ export async function POST(req: Request) {
     }
     
     for (const event of events) {
-      if (event.type === 'whatsapp.message.received') {
-        // Soporte para ambos formatos (envuelto en data o en la raíz)
-        const eventData = event.data || event;
-        
-        const message = eventData.message?.kapso?.content;
-        const fromNumber = eventData.conversation?.phone_number;
-        const phoneNumberId = eventData.phone_number_id;
-        
-        if (!message || !fromNumber || !phoneNumberId) {
-          console.log("Ignorando webhook porque faltan datos esenciales.", {
-            message: !!message,
-            fromNumber: !!fromNumber,
-            phoneNumberId: !!phoneNumberId
-          });
-          continue;
-        }
+      // Kapso v2 a veces manda el payload directo sin campo `type` cuando no está en batch.
+      const eventData = event.data || event;
+      
+      // Si no es un mensaje entrante, lo saltamos
+      if (!eventData.message) continue;
+      
+      const message = eventData.message?.kapso?.content;
+      const fromNumber = eventData.conversation?.phone_number;
+      const phoneNumberId = eventData.phone_number_id;
+      
+      if (!message || !fromNumber || !phoneNumberId) {
+        console.log("Ignorando webhook porque faltan datos esenciales.", {
+          message: !!message,
+          fromNumber: !!fromNumber,
+          phoneNumberId: !!phoneNumberId
+        });
+        continue;
+      }
 
         // Obtener la primera organización (Para nuestra prueba single-tenant)
         const org = await db.query.organizations.findFirst();
@@ -113,7 +115,6 @@ IMPORTANTE: Hoy es ${new Date().toLocaleString()}`,
           // Si solo respondió con texto
           await sendWhatsAppMessage(phoneNumberId, fromNumber, result.text);
         }
-      }
     }
     
     // Siempre respondemos 200 OK a Kapso dentro de 10 segundos para que no reintente
