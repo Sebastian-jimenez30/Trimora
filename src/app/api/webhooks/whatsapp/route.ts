@@ -52,11 +52,15 @@ export async function POST(req: Request) {
         const eventData = event.data || event;
         
         const message = eventData.message?.kapso?.content;
-        const fromNumber = eventData.from?.phone_number;
-        const phoneNumberId = eventData.conversation?.phone_number_id;
+        const fromNumber = eventData.conversation?.phone_number;
+        const phoneNumberId = eventData.phone_number_id;
         
         if (!message || !fromNumber || !phoneNumberId) {
-          console.log("Ignorando webhook porque faltan datos esenciales.");
+          console.log("Ignorando webhook porque faltan datos esenciales.", {
+            message: !!message,
+            fromNumber: !!fromNumber,
+            phoneNumberId: !!phoneNumberId
+          });
           continue;
         }
 
