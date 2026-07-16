@@ -75,7 +75,7 @@ export async function POST(req: Request) {
         // --- EL CEREBRO DEL AGENTE ---
         // Procesamos el mensaje con Gemini y le damos la herramienta de agendar
         const result = await generateText({
-          model: google('models/gemini-1.5-flash'),
+          model: google('gemini-1.5-flash'),
           system: `Eres el recepcionista virtual de Trimora. Eres súper amable, conciso y usas emojis moderadamente.
 Tu objetivo principal es ayudar a los clientes a agendar citas. 
 Si el cliente quiere agendar, asegúrate de tener su nombre completo, el servicio que quiere y la fecha/hora.
