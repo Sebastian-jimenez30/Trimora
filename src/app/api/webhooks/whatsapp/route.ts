@@ -103,7 +103,7 @@ IMPORTANTE: Hoy es ${new Date().toLocaleString()}`,
         // Enviamos la respuesta final generada por Gemini de vuelta al WhatsApp del cliente
         if (result.toolResults && result.toolResults.length > 0) {
           // Si ejecutó una herramienta, le enviamos el resultado
-          const message = result.toolResults[0].result;
+          const message = (result.toolResults[0] as any).result as string;
           await sendWhatsAppMessage(phoneNumberId, fromNumber, message);
         } else if (result.text) {
           // Si solo respondió con texto
