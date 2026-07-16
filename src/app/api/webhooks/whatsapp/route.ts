@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { generateText, tool } from 'ai';
-import { groq } from '@ai-sdk/groq';
+import { google } from '@ai-sdk/google';
 import { z } from 'zod';
 import { createAppointmentFromAI } from '@/modules/appointments/actions';
 import { db } from '@/core/database/db';
@@ -82,9 +82,9 @@ export async function POST(req: Request) {
           : "No hay servicios disponibles en este momento.";
 
         // --- EL CEREBRO DEL AGENTE ---
-        // Procesamos el mensaje con Groq Llama 3.1 y le damos la herramienta de agendar
+        // Procesamos el mensaje con Google Gemini y le damos la herramienta de agendar
         const result = await generateText({
-          model: groq('llama-3.1-8b-instant'),
+          model: google('gemini-flash-latest'),
           system: `Eres el recepcionista virtual de Trimora. Eres súper amable, conciso y usas emojis moderadamente.
 Tu objetivo principal es ayudar a los clientes a agendar citas. 
 
