@@ -14,8 +14,6 @@ const nvidia = createOpenAI({
   baseURL: 'https://integrate.api.nvidia.com/v1',
   apiKey: process.env.NVIDIA_API_KEY,
 });
-const nvidiaModel = nvidia('meta/llama-3.1-70b-instruct');
-const googleModel = google('gemini-flash-latest');
 
 // Función auxiliar para enviar un mensaje usando la API directa de Telegram
 async function sendTelegramMessage(chatId: string | number, text: string) {
@@ -138,9 +136,15 @@ IMPORTANTE: Hoy es ${new Date().toLocaleString("es-CO", { timeZone: "America/Bog
     }));
 
     // --- ESTRATEGIA DE FALLBACK ---
+    // Inicializar el modelo NVIDIA principal (Laguna)
+    const nvidiaModel = nvidia.chat('poolside/laguna-xs-2.1');
+    // Inicializar el modelo NVIDIA secundario (Qwen)
+    const qwenModel = nvidia.chat('qwen/qwen3.5-122b-a10b');
+    // Inicializar Gemini como último recurso
+    const googleModel = google('gemini-flash-latest');
+
     let result;
     try {
-      console.log("Intentando con modelo primario (NVIDIA)...");
       result = await generateText({
         model: nvidiaModel,
         system: systemPrompt,
@@ -148,22 +152,47 @@ IMPORTANTE: Hoy es ${new Date().toLocaleString("es-CO", { timeZone: "America/Bog
         tools: tools,
       });
     } catch (error) {
-      console.error("Fallo NVIDIA, usando Fallback (Gemini)...", error);
-      result = await generateText({
-        model: googleModel,
-        system: systemPrompt,
-        messages: coreMessages,
-        tools: tools,
-      });
+      console.error("Fallo Laguna (NVIDIA), intentando Qwen (NVIDIA)...", error);
+      try {
+        result = await generateText({
+          model: qwenModel,
+          system: systemPrompt,
+          messages: coreMessages,
+          tools: tools,
+        });
+      } catch (qwenError) {
+        console.error("Fallo Qwen (NVIDIA), usando Fallback final (Gemini)...", qwenError);
+        try {
+          result = await generateText({
+            model: googleModel,
+            system: systemPrompt,
+            messages: coreMessages,
+            tools: tools,
+          });
+        } catch (geminiError) {
+          console.error("Fallo Gemini también...", geminiError);
+          // Todos fallaron
+          result = null;
+        }
+      }
     }
 
     // --- ENVIAR RESPUESTA ---
     let finalResponse = "";
-    if (result.toolResults && result.toolResults.length > 0) {
-      const toolRes = result.toolResults[0];
-      finalResponse = (toolRes as any).result ? String((toolRes as any).result) : `La herramienta se ejecutó pero no devolvió texto.`;
-    } else if (result.text) {
+    if (!result) {
+      finalResponse = "Lo siento, nuestros servidores están muy ocupados o en mantenimiento en este momento. Por favor, intenta de nuevo en unos minutos. 🙏";
+    } else if (result.text && result.text.trim().length > 0) {
       finalResponse = result.text;
+    } else if (result.toolResults && result.toolResults.length > 0) {
+      const toolRes = result.toolResults[0];
+      const resultMessage = (toolRes as any).result;
+      if (resultMessage && typeof resultMessage === 'string') {
+        finalResponse = resultMessage;
+      } else {
+        finalResponse = "¡Perfecto! He procesado tu solicitud para la cita exitosamente. 🎉";
+      }
+    } else if (result.toolCalls && result.toolCalls.length > 0) {
+      finalResponse = "¡Perfecto! He procesado tu solicitud de cita. 🎉";
     } else {
       finalResponse = "Lo siento, procesé tu solicitud pero no pude generar una respuesta de texto.";
     }
