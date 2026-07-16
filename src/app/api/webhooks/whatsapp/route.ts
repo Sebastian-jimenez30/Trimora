@@ -72,15 +72,28 @@ export async function POST(req: Request) {
           throw new Error("No organization found");
         }
 
+        // Obtener los servicios activos de la organización para inyectarlos en el prompt
+        const orgServices = await db.query.services.findMany({
+          where: (services, { eq, and }) => and(eq(services.organizationId, org.id), eq(services.isActive, true))
+        });
+        
+        const servicesListText = orgServices.length > 0 
+          ? orgServices.map(s => `- ${s.name} ($${s.price})`).join('\\n')
+          : "No hay servicios disponibles en este momento.";
+
         // --- EL CEREBRO DEL AGENTE ---
         // Procesamos el mensaje con Groq Llama 3.1 y le damos la herramienta de agendar
         const result = await generateText({
           model: groq('llama-3.1-8b-instant'),
           system: `Eres el recepcionista virtual de Trimora. Eres súper amable, conciso y usas emojis moderadamente.
 Tu objetivo principal es ayudar a los clientes a agendar citas. 
-Si el cliente quiere agendar, asegúrate de tener su nombre completo, el servicio que quiere y la fecha/hora.
+
+SERVICIOS DISPONIBLES:
+${servicesListText}
+
+Si el cliente quiere agendar, asegúrate de tener su nombre completo, el servicio exacto que quiere (DEBE ser uno de los servicios disponibles) y la fecha/hora.
 Cuando tengas esos 3 datos, EJECUTA la herramienta 'agendar_cita'. NO inventes confirmaciones si no has llamado a la herramienta.
-Si el usuario solo saluda, devuélvele el saludo amablemente y pregúntale en qué puedes ayudarle.
+Si el usuario solo saluda, devuélvele el saludo amablemente y menciónale los servicios disponibles.
 IMPORTANTE: Hoy es ${new Date().toLocaleString()}`,
           prompt: message,
           tools: {
@@ -88,19 +101,24 @@ IMPORTANTE: Hoy es ${new Date().toLocaleString()}`,
               description: 'Agenda una cita en la barbería con los datos proporcionados por el cliente.',
               inputSchema: z.object({
                 customerName: z.string().describe('El nombre completo del cliente.'),
-                serviceName: z.string().describe('El nombre del servicio, ej. "Corte clásico".'),
+                serviceName: z.string().describe('El nombre exacto del servicio, ej. "Corte de cabello". Solo pon el nombre, NO oraciones completas.'),
                 date: z.string().describe('La fecha y hora de la cita en formato ISO 8601, ej. "2026-07-16T15:00:00".'),
               }),
               execute: async (args: { customerName: string; serviceName: string; date: string }) => {
                 const { customerName, serviceName, date } = args;
-                const res = await createAppointmentFromAI({
-                  organizationId: org.id,
-                  customerName,
-                  customerPhone: fromNumber,
-                  serviceName,
-                  date
-                });
-                return res.message;
+                try {
+                  const res = await createAppointmentFromAI({
+                    organizationId: org.id,
+                    customerName,
+                    customerPhone: fromNumber,
+                    serviceName,
+                    date
+                  });
+                  return res.message;
+                } catch (error: any) {
+                  console.error("Error creating AI appointment:", error);
+                  return `Lo siento, hubo un problema al agendar: ${error.message}. ¿Podrías intentar con otro servicio o darnos más detalles?`;
+                }
               },
             }),
           }
