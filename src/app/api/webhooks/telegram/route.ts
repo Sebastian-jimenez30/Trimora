@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import { generateText, tool } from 'ai';
-import { google } from '@ai-sdk/google';
 import { createOpenAI } from '@ai-sdk/openai';
 import { z } from 'zod';
 import { createAppointmentFromAI } from '@/modules/appointments/actions';
@@ -140,8 +139,6 @@ IMPORTANTE: Hoy es ${new Date().toLocaleString("es-CO", { timeZone: "America/Bog
     const nvidiaModel = nvidia.chat('poolside/laguna-xs-2.1');
     // Inicializar el modelo NVIDIA secundario (Qwen)
     const qwenModel = nvidia.chat('qwen/qwen3.5-122b-a10b');
-    // Inicializar Gemini como último recurso
-    const googleModel = google('gemini-flash-latest');
 
     let result;
     try {
@@ -162,18 +159,10 @@ IMPORTANTE: Hoy es ${new Date().toLocaleString("es-CO", { timeZone: "America/Bog
         });
       } catch (qwenError) {
         console.error("Fallo Qwen (NVIDIA), usando Fallback final (Gemini)...", qwenError);
-        try {
-          result = await generateText({
-            model: googleModel,
-            system: systemPrompt,
-            messages: coreMessages,
-            tools: tools,
-          });
-        } catch (geminiError) {
-          console.error("Fallo Gemini también...", geminiError);
-          // Todos fallaron
-          result = null;
-        }
+        console.error("Fallo Qwen (NVIDIA) también. Lanzando error para ver en logs...", qwenError);
+        // En lugar de usar Gemini, lanzamos el error para que Vercel lo muestre en sus logs de producción.
+        result = null;
+        throw qwenError;
       }
     }
 
