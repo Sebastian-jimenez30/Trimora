@@ -77,14 +77,14 @@ ${servicesListText}
 Si el cliente quiere agendar, asegúrate de tener el servicio exacto que quiere (DEBE ser uno de los servicios disponibles) y la fecha/hora (no le pidas el nombre, ya sabes que es ${fromName}).
 Cuando tengas esos datos, EJECUTA la herramienta 'agendar_cita'. NO inventes confirmaciones si no has llamado a la herramienta.
 Si el usuario solo saluda, devuélvele el saludo amablemente y menciónale los servicios disponibles.
-IMPORTANTE: Hoy es ${new Date().toLocaleString()}`,
+IMPORTANTE: Hoy es ${new Date().toLocaleString("es-CO", { timeZone: "America/Bogota" })} (Zona horaria GMT-5)`,
       prompt: message,
       tools: {
         agendar_cita: tool({
           description: 'Agenda una cita en la barbería con los datos proporcionados por el cliente.',
           inputSchema: z.object({
             serviceName: z.string().describe('El nombre exacto del servicio, ej. "Corte de cabello". Solo pon el nombre, NO oraciones completas.'),
-            date: z.string().describe('La fecha y hora de la cita en formato ISO 8601, ej. "2026-07-16T15:00:00".'),
+            date: z.string().describe('La fecha y hora de la cita en formato ISO 8601 incluyendo la zona horaria GMT-5, ej. "2026-07-16T19:00:00-05:00" para las 7pm.'),
           }),
           execute: async (args: { serviceName: string; date: string }) => {
             const { serviceName, date } = args;
