@@ -107,11 +107,25 @@ IMPORTANTE: Hoy es ${new Date().toLocaleString()}`,
     });
 
     // Enviamos la respuesta final generada por Gemini de vuelta al Telegram del cliente
+    console.log("Gemini Result:", {
+      text: result.text,
+      toolCalls: result.toolCalls,
+      toolResults: result.toolResults
+    });
+
+    let finalResponse = "";
+
     if (result.toolResults && result.toolResults.length > 0) {
-      const toolResponseMsg = (result.toolResults[0] as any).result as string;
-      await sendTelegramMessage(chatId, toolResponseMsg);
+      const toolRes = result.toolResults[0];
+      finalResponse = (toolRes as any).result ? String((toolRes as any).result) : `La herramienta se ejecutó pero no devolvió texto. Argumentos: ${JSON.stringify((result.toolCalls?.[0] as any)?.args)}`;
     } else if (result.text) {
-      await sendTelegramMessage(chatId, result.text);
+      finalResponse = result.text;
+    } else {
+      finalResponse = "Lo siento, procesé tu solicitud pero no pude generar una respuesta de texto.";
+    }
+
+    if (finalResponse) {
+      await sendTelegramMessage(chatId, finalResponse);
     }
     
     // Telegram exige responder 200 OK para no reintentar
