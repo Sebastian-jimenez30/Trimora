@@ -1,11 +1,21 @@
 import { NextResponse } from 'next/server';
 import { generateText, tool } from 'ai';
 import { google } from '@ai-sdk/google';
+import { createOpenAI } from '@ai-sdk/openai';
 import { z } from 'zod';
 import { createAppointmentFromAI } from '@/modules/appointments/actions';
 import { db } from '@/core/database/db';
+import { chatMessages } from '@/core/database/schema';
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+
+// Configuración de NVIDIA
+const nvidia = createOpenAI({
+  baseURL: 'https://integrate.api.nvidia.com/v1',
+  apiKey: process.env.NVIDIA_API_KEY,
+});
+const nvidiaModel = nvidia('meta/llama-3.1-70b-instruct');
+const googleModel = google('gemini-flash-latest');
 
 // Función auxiliar para enviar un mensaje usando la API directa de Telegram
 async function sendTelegramMessage(chatId: string | number, text: string) {
@@ -44,8 +54,6 @@ export async function POST(req: Request) {
     
     const message = body.message.text;
     const chatId = body.message.chat.id;
-    // fromNumber en WhatsApp lo usábamos para guardar el teléfono, aquí podemos guardar el username de Telegram
-    // o el ID como string temporalmente.
     const fromName = body.message.from?.first_name || body.message.from?.username || "Usuario";
     const telegramUserId = body.message.from?.id?.toString() || chatId.toString();
 
@@ -55,7 +63,7 @@ export async function POST(req: Request) {
       throw new Error("No organization found");
     }
 
-    // Obtener los servicios activos de la organización para inyectarlos en el prompt
+    // Obtener los servicios activos de la organización
     const orgServices = await db.query.services.findMany({
       where: (services, { eq, and }) => and(eq(services.organizationId, org.id), eq(services.isActive, true))
     });
@@ -64,10 +72,7 @@ export async function POST(req: Request) {
       ? orgServices.map(s => `- ${s.name} ($${s.price})`).join('\n')
       : "No hay servicios disponibles en este momento.";
 
-    // --- EL CEREBRO DEL AGENTE ---
-    const result = await generateText({
-      model: google('gemini-flash-latest'),
-      system: `Eres el recepcionista virtual de Trimora, una barbería. Eres súper amable, conciso y usas emojis moderadamente.
+    const systemPrompt = `Eres el recepcionista virtual de Trimora, una barbería. Eres súper amable, conciso y usas emojis moderadamente.
 Tu objetivo principal es ayudar a los clientes a agendar citas. 
 El cliente con el que hablas se llama ${fromName}.
 
@@ -77,47 +82,86 @@ ${servicesListText}
 Si el cliente quiere agendar, asegúrate de tener el servicio exacto que quiere (DEBE ser uno de los servicios disponibles) y la fecha/hora (no le pidas el nombre, ya sabes que es ${fromName}).
 Cuando tengas esos datos, EJECUTA la herramienta 'agendar_cita'. NO inventes confirmaciones si no has llamado a la herramienta.
 Si el usuario solo saluda, devuélvele el saludo amablemente y menciónale los servicios disponibles.
-IMPORTANTE: Hoy es ${new Date().toLocaleString("es-CO", { timeZone: "America/Bogota" })} (Zona horaria GMT-5)`,
-      prompt: message,
-      tools: {
-        agendar_cita: tool({
-          description: 'Agenda una cita en la barbería con los datos proporcionados por el cliente.',
-          inputSchema: z.object({
-            serviceName: z.string().describe('El nombre exacto del servicio, ej. "Corte de cabello". Solo pon el nombre, NO oraciones completas.'),
-            date: z.string().describe('La fecha y hora de la cita en formato ISO 8601 incluyendo la zona horaria GMT-5, ej. "2026-07-16T19:00:00-05:00" para las 7pm.'),
-          }),
-          execute: async (args: { serviceName: string; date: string }) => {
-            const { serviceName, date } = args;
-            try {
-              const res = await createAppointmentFromAI({
-                organizationId: org.id,
-                customerName: fromName,
-                customerPhone: telegramUserId, // Guardamos el ID de telegram como "teléfono" para enlazar la cuenta
-                serviceName,
-                date
-              });
-              return res.message;
-            } catch (error: any) {
-              console.error("Error creating AI appointment:", error);
-              return `Lo siento, hubo un problema al agendar: ${error.message}. ¿Podrías intentar con otro servicio o darnos más detalles?`;
-            }
-          },
+IMPORTANTE: Hoy es ${new Date().toLocaleString("es-CO", { timeZone: "America/Bogota" })} (Zona horaria GMT-5)`;
+
+    const tools = {
+      agendar_cita: tool({
+        description: 'Agenda una cita en la barbería con los datos proporcionados por el cliente.',
+        inputSchema: z.object({
+          serviceName: z.string().describe('El nombre exacto del servicio, ej. "Corte de cabello". Solo pon el nombre, NO oraciones completas.'),
+          date: z.string().describe('La fecha y hora de la cita en formato ISO 8601 incluyendo la zona horaria GMT-5, ej. "2026-07-16T19:00:00-05:00" para las 7pm.'),
         }),
-      }
+        execute: async (args: { serviceName: string; date: string }) => {
+          const { serviceName, date } = args;
+          try {
+            const res = await createAppointmentFromAI({
+              organizationId: org.id,
+              customerName: fromName,
+              customerPhone: telegramUserId,
+              serviceName,
+              date
+            });
+            return res.message;
+          } catch (error: any) {
+            console.error("Error creating AI appointment:", error);
+            return `Lo siento, hubo un problema al agendar: ${error.message}. ¿Podrías intentar con otro servicio o darnos más detalles?`;
+          }
+        },
+      }),
+    };
+
+    // --- MANEJO DE MEMORIA ---
+    // Guardar el mensaje del usuario
+    await db.insert(chatMessages).values({
+      organizationId: org.id,
+      telegramUserId,
+      role: 'user',
+      content: message,
     });
 
-    // Enviamos la respuesta final generada por Gemini de vuelta al Telegram del cliente
-    console.log("Gemini Result:", {
-      text: result.text,
-      toolCalls: result.toolCalls,
-      toolResults: result.toolResults
+    // Recuperar últimos 10 mensajes
+    const history = await db.query.chatMessages.findMany({
+      where: (msgs, { eq, and }) => and(
+        eq(msgs.organizationId, org.id), 
+        eq(msgs.telegramUserId, telegramUserId)
+      ),
+      orderBy: (msgs, { desc }) => [desc(msgs.createdAt)],
+      limit: 10
     });
+    
+    // Order chronological
+    const chronologicalHistory = history.reverse();
+    
+    const coreMessages: { role: 'user' | 'assistant'; content: string }[] = chronologicalHistory.map(m => ({
+      role: m.role as 'user' | 'assistant',
+      content: m.content
+    }));
 
+    // --- ESTRATEGIA DE FALLBACK ---
+    let result;
+    try {
+      console.log("Intentando con modelo primario (NVIDIA)...");
+      result = await generateText({
+        model: nvidiaModel,
+        system: systemPrompt,
+        messages: coreMessages,
+        tools: tools,
+      });
+    } catch (error) {
+      console.error("Fallo NVIDIA, usando Fallback (Gemini)...", error);
+      result = await generateText({
+        model: googleModel,
+        system: systemPrompt,
+        messages: coreMessages,
+        tools: tools,
+      });
+    }
+
+    // --- ENVIAR RESPUESTA ---
     let finalResponse = "";
-
     if (result.toolResults && result.toolResults.length > 0) {
       const toolRes = result.toolResults[0];
-      finalResponse = (toolRes as any).result ? String((toolRes as any).result) : `La herramienta se ejecutó pero no devolvió texto. Argumentos: ${JSON.stringify((result.toolCalls?.[0] as any)?.args)}`;
+      finalResponse = (toolRes as any).result ? String((toolRes as any).result) : `La herramienta se ejecutó pero no devolvió texto.`;
     } else if (result.text) {
       finalResponse = result.text;
     } else {
@@ -126,9 +170,16 @@ IMPORTANTE: Hoy es ${new Date().toLocaleString("es-CO", { timeZone: "America/Bog
 
     if (finalResponse) {
       await sendTelegramMessage(chatId, finalResponse);
+      
+      // Guardar la respuesta del bot
+      await db.insert(chatMessages).values({
+        organizationId: org.id,
+        telegramUserId,
+        role: 'assistant',
+        content: finalResponse,
+      });
     }
     
-    // Telegram exige responder 200 OK para no reintentar
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Webhook error:", error);

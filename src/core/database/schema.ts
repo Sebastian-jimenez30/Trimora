@@ -149,3 +149,15 @@ export const auditLogs = pgTable('audit_logs', {
   details: text('details'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
+
+// ----------------------------------------------------------------------
+// 6. CHAT Y MEMORIA DE IA
+// ----------------------------------------------------------------------
+export const chatMessages = pgTable('chat_messages', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  organizationId: uuid('organization_id').references(() => organizations.id).notNull(),
+  telegramUserId: text('telegram_user_id').notNull(),
+  role: text('role').notNull(), // 'user' o 'assistant'
+  content: text('content').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
