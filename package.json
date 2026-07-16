@@ -9,17 +9,20 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@ai-sdk/google": "^4.0.17",
     "@sendgrid/mail": "^8.1.6",
     "@supabase/server": "^1.3.0",
     "@supabase/ssr": "^0.12.0",
     "@supabase/supabase-js": "^2.110.5",
+    "ai": "^7.0.29",
     "date-fns": "^4.4.0",
     "date-fns-tz": "^3.2.0",
     "drizzle-orm": "^0.45.2",
     "next": "16.2.10",
     "postgres": "^3.4.9",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
