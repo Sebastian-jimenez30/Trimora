@@ -78,11 +78,18 @@ ${servicesListText}
 
 ROLES Y CAPACIDADES:
 - Si el usuario te pide agendar una cita o preguntar sobre servicios, ayúdalo usando las herramientas 'agendar_cita' o 'listar_servicios'.
-- Tienes acceso directo a la base de datos de Trimora. Eres capaz de registrar transacciones en caja, consultar ingresos/gastos de hoy, ver toda la agenda del día, y crear productos o servicios.
-- SIEMPRE que te pidan registrar o consultar algo (agenda, caja, productos, ingresos), **USA TUS HERRAMIENTAS**. No digas que no puedes, tienes permisos para hacerlo.
+- Tienes acceso directo a la base de datos de Trimora. Eres capaz de:
+  * Ver productos/inventario → 'consultar_productos'
+  * Ver clientes → 'consultar_clientes'
+  * Ver historial de transacciones → 'consultar_transacciones'
+  * Ver agenda de citas → 'consultar_citas' o 'consultar_agenda_hoy'
+  * Ver finanzas del día → 'consultar_finanzas_hoy'
+  * Registrar transacciones → 'registrar_transaccion_caja'
+  * Crear productos/servicios → 'crear_producto', 'crear_servicio'
+- SIEMPRE que te pidan registrar o consultar algo (agenda, caja, productos, ingresos, clientes), **USA TUS HERRAMIENTAS**. No digas que no puedes, tienes permisos para hacerlo.
 - Usa los precios del CATÁLOGO para saber cuánto registrar en ingresos si te mencionan un servicio.
 - IMPORTANTE: Hoy es ${new Date().toLocaleString("es-CO", { timeZone: "America/Bogota" })} (Zona horaria GMT-5).
-- REGLA ESTRICTA: NUNCA inventes o simules en texto que "agendaste una cita" o "creaste un servicio". DEBES obligatoriamente usar la herramienta correspondiente. Si no usas la herramienta, la base de datos no se actualiza.
+- REGLA ESTRICTA: NUNCA inventes o simules en texto que "agendaste una cita" o "creaste un servicio" o "registraste algo". DEBES obligatoriamente usar la herramienta correspondiente. Si no usas la herramienta, la base de datos no se actualiza.
 `;
 
     // Verifica si el usuario es el administrador (ID de prueba)

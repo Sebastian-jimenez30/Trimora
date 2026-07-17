@@ -105,30 +105,84 @@ export function getAiTools(context: { organizationId: string; telegramUserId: st
       }
     }),
 
-    // 4. CONSULTAR FINANZAS HOY (Admin)
+    // 4. CONSULTAR FINANZAS HOY / DESGLOSE DE CAJA (Admin)
     consultar_finanzas_hoy: tool({
-      description: 'ADMIN: Consulta cuánto dinero ha ingresado y cuánto se ha gastado en el día de hoy.',
-      inputSchema: z.object({}),
-      execute: async () => {
+      description: 'ADMIN: Consulta el resumen financiero y el desglose completo de ingresos y gastos de hoy (o de cualquier otro día). Muestra cada transacción con su concepto, monto, método de pago y hora. Úsalo cuando pidan: resumen del día, cuánto se hizo hoy, desglose de caja, ingresos de hoy, etc.',
+      inputSchema: z.object({
+        fecha: z.string().optional().describe('Fecha a consultar en formato YYYY-MM-DD (ej. "2026-07-17"). Si no se especifica, se usa hoy.'),
+      }),
+      execute: async (args) => {
         if (!context.isAdmin) return "Acceso denegado: Solo administradores pueden ver finanzas.";
-        const { start, end } = getTodayRange();
+
+        let start: Date;
+        let end: Date;
+
+        if (args.fecha) {
+          // Fecha específica proporcionada
+          const [year, month, day] = args.fecha.split('-').map(Number);
+          // Interpretar la fecha en zona horaria -5 (Colombia/Perú)
+          start = new Date(Date.UTC(year, month - 1, day, 5, 0, 0));   // 00:00 local = 05:00 UTC
+          end   = new Date(Date.UTC(year, month - 1, day, 28, 59, 59)); // 23:59 local = 04:59 UTC del día siguiente
+        } else {
+          const { start: s, end: e } = getTodayRange();
+          start = s;
+          end = e;
+        }
 
         const txs = await db.query.transactions.findMany({
           where: and(
             eq(transactions.organizationId, context.organizationId),
             gte(transactions.createdAt, start),
             lte(transactions.createdAt, end)
-          )
+          ),
+          orderBy: (t, { asc }) => [asc(t.createdAt)],
         });
 
-        let ingresos = 0;
-        let gastos = 0;
-        txs.forEach(tx => {
-          if (tx.type === 'INCOME') ingresos += Number(tx.totalAmount);
-          if (tx.type === 'EXPENSE') gastos += Number(tx.totalAmount);
+        if (txs.length === 0) return "No hay transacciones registradas para ese día.";
+
+        let totalIngresos = 0;
+        let totalGastos = 0;
+        const ingresos: string[] = [];
+        const gastos: string[] = [];
+
+        txs.forEach((tx, i) => {
+          const hora = new Date(tx.createdAt.getTime() - 5 * 60 * 60 * 1000)
+            .toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+          const metodo = tx.paymentMethod ? ` [${tx.paymentMethod}]` : '';
+          const concepto = tx.notes ?? 'Sin descripción';
+          const monto = Number(tx.totalAmount);
+
+          if (tx.type === 'INCOME') {
+            totalIngresos += monto;
+            ingresos.push(`  ${i + 1}. ${hora}${metodo} $${monto.toLocaleString('es-CO')} — ${concepto}`);
+          } else {
+            totalGastos += monto;
+            gastos.push(`  ${i + 1}. ${hora}${metodo} $${monto.toLocaleString('es-CO')} — ${concepto}`);
+          }
         });
 
-        return `Resumen de hoy:\nIngresos Totales: $${ingresos}\nGastos Totales: $${gastos}\nBalance: $${ingresos - gastos}`;
+        const balance = totalIngresos - totalGastos;
+        const balanceEmoji = balance >= 0 ? '✅' : '⚠️';
+
+        let resumen = `📊 *DESGLOSE DE CAJA*\n`;
+        resumen += `📅 ${args.fecha ?? new Date().toLocaleDateString('es-CO', { timeZone: 'America/Bogota' })}\n\n`;
+
+        if (ingresos.length > 0) {
+          resumen += `💰 INGRESOS (${ingresos.length}):\n${ingresos.join('\n')}\n`;
+          resumen += `   Subtotal ingresos: $${totalIngresos.toLocaleString('es-CO')}\n\n`;
+        } else {
+          resumen += `💰 INGRESOS: $0\n\n`;
+        }
+
+        if (gastos.length > 0) {
+          resumen += `💸 GASTOS (${gastos.length}):\n${gastos.join('\n')}\n`;
+          resumen += `   Subtotal gastos: $${totalGastos.toLocaleString('es-CO')}\n\n`;
+        } else {
+          resumen += `💸 GASTOS: $0\n\n`;
+        }
+
+        resumen += `${balanceEmoji} BALANCE NETO: $${balance.toLocaleString('es-CO')}`;
+        return resumen;
       }
     }),
 
@@ -212,6 +266,131 @@ export function getAiTools(context: { organizationId: string; telegramUserId: st
         } catch (error: any) {
           return `Error creando servicio: ${error.message}`;
         }
+      }
+    }),
+
+    // 8. CONSULTAR INVENTARIO / PRODUCTOS (Admin)
+    consultar_productos: tool({
+      description: 'ADMIN: Consulta productos del inventario con stock, precios y categoría. Usar cuando pregunten por precios, existencias, o qué productos hay disponibles. También sirve para buscar el precio de un producto específico.',
+      inputSchema: z.object({
+        nombre: z.string().optional().describe('Buscar un producto por nombre (búsqueda parcial, ej. "loción"). Dejar vacío para ver todos.'),
+        categoria: z.enum(['VENTA', 'CONSUMO', 'TODOS']).optional().describe('Filtrar por categoría: VENTA (para clientes), CONSUMO (uso interno), o TODOS.'),
+      }),
+      execute: async (args) => {
+        if (!context.isAdmin) return "Acceso denegado.";
+        const allProducts = await db.query.products.findMany({
+          where: args.nombre
+            ? and(eq(products.organizationId, context.organizationId), ilike(products.name, `%${args.nombre}%`))
+            : eq(products.organizationId, context.organizationId),
+        });
+        let filtered = allProducts;
+        if (args.categoria && args.categoria !== 'TODOS') {
+          filtered = allProducts.filter(p => p.category === args.categoria);
+        }
+        if (filtered.length === 0) return args.nombre ? `No se encontró ningún producto llamado "${args.nombre}".` : "No hay productos registrados.";
+        return filtered.map(p =>
+          `📦 ${p.name} | Stock: ${p.currentStock} | Precio venta: $${p.salePrice ?? 'N/A'} | Costo: $${p.costPrice ?? 'N/A'} | Categoría: ${p.category} | ${p.isActive ? 'Activo' : 'Inactivo'}`
+        ).join('\n');
+      }
+    }),
+
+    // 9. CONSULTAR CLIENTES (Admin)
+    consultar_clientes: tool({
+      description: 'ADMIN: Consulta la lista de clientes registrados. Puede buscar por nombre.',
+      inputSchema: z.object({
+        nombre: z.string().optional().describe('Filtrar clientes por nombre (búsqueda parcial). Dejar vacío para ver todos.'),
+      }),
+      execute: async (args) => {
+        if (!context.isAdmin) return "Acceso denegado.";
+        let query = db.select().from(clients).where(eq(clients.organizationId, context.organizationId));
+        const allClients = await db.query.clients.findMany({
+          where: args.nombre
+            ? and(eq(clients.organizationId, context.organizationId), ilike(clients.firstName, `%${args.nombre}%`))
+            : eq(clients.organizationId, context.organizationId),
+        });
+        if (allClients.length === 0) return "No se encontraron clientes.";
+        return allClients.map(c =>
+          `👤 ${c.firstName}${c.lastName ? ' ' + c.lastName : ''} | Tel: ${c.phone ?? 'N/A'} | Total gastado: $${c.totalSpent ?? 0} | Última visita: ${c.lastVisit ? new Date(c.lastVisit).toLocaleDateString() : 'N/A'}`
+        ).join('\n');
+      }
+    }),
+
+    // 10. CONSULTAR HISTORIAL DE TRANSACCIONES (Admin)
+    consultar_transacciones: tool({
+      description: 'ADMIN: Consulta el historial de transacciones (ventas/gastos). Puede filtrar por rango de días.',
+      inputSchema: z.object({
+        dias: z.number().optional().describe('Número de días hacia atrás a consultar (ej. 7 para última semana, 30 para el mes). Por defecto 7.'),
+      }),
+      execute: async (args) => {
+        if (!context.isAdmin) return "Acceso denegado.";
+        const dias = args.dias ?? 7;
+        const desde = new Date();
+        desde.setDate(desde.getDate() - dias);
+
+        const txs = await db.query.transactions.findMany({
+          where: and(
+            eq(transactions.organizationId, context.organizationId),
+            gte(transactions.createdAt, desde)
+          ),
+          orderBy: (t, { desc }) => [desc(t.createdAt)],
+          limit: 50,
+        });
+
+        if (txs.length === 0) return `No hay transacciones en los últimos ${dias} días.`;
+
+        const totalIngresos = txs.filter(t => t.type === 'INCOME').reduce((s, t) => s + Number(t.totalAmount), 0);
+        const totalGastos = txs.filter(t => t.type === 'EXPENSE').reduce((s, t) => s + Number(t.totalAmount), 0);
+
+        const lista = txs.map(t => {
+          const fecha = new Date(t.createdAt).toLocaleDateString();
+          const tipo = t.type === 'INCOME' ? '💰 Ingreso' : '💸 Gasto';
+          return `${tipo} $${t.totalAmount} - ${t.notes ?? 'Sin descripción'} | ${t.paymentMethod ?? ''} | ${fecha}`;
+        }).join('\n');
+
+        return `Resumen últimos ${dias} días:\nIngresos: $${totalIngresos} | Gastos: $${totalGastos} | Balance: $${totalIngresos - totalGastos}\n\n${lista}`;
+      }
+    }),
+
+    // 11. CONSULTAR CITAS (Admin) - por rango
+    consultar_citas: tool({
+      description: 'ADMIN: Consulta citas agendadas. Puede ver las de hoy, mañana, o los próximos días.',
+      inputSchema: z.object({
+        dias: z.number().optional().describe('Número de días hacia adelante a consultar (1 = solo hoy, 7 = próxima semana). Por defecto 1.'),
+      }),
+      execute: async (args) => {
+        if (!context.isAdmin) return "Acceso denegado.";
+        const dias = args.dias ?? 1;
+        const { start } = getTodayRange();
+        const end = new Date(start);
+        end.setDate(end.getDate() + dias);
+
+        const appts = await db
+          .select({
+            startTime: appointments.startTime,
+            status: appointments.status,
+            notes: appointments.notes,
+            clientName: clients.firstName,
+            serviceName: services.name,
+          })
+          .from(appointments)
+          .innerJoin(clients, eq(appointments.clientId, clients.id))
+          .innerJoin(services, eq(appointments.serviceId, services.id))
+          .where(
+            and(
+              eq(appointments.organizationId, context.organizationId),
+              gte(appointments.startTime, start),
+              lte(appointments.startTime, end)
+            )
+          )
+          .orderBy(appointments.startTime);
+
+        if (appts.length === 0) return `No hay citas en los próximos ${dias} día(s).`;
+        return appts.map(a => {
+          const dt = new Date(a.startTime.getTime() - 5 * 60 * 60 * 1000);
+          const fecha = dt.toLocaleDateString();
+          const hora = dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          return `📅 ${fecha} ${hora} | ${a.clientName} - ${a.serviceName} (${a.status})`;
+        }).join('\n');
       }
     }),
   };
