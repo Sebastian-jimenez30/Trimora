@@ -1,18 +1,21 @@
 import sgMail from '@sendgrid/mail';
 
-if (!process.env.SENDGRID_API_KEY) {
-  console.warn("SENDGRID_API_KEY no está configurada en las variables de entorno.");
-} else {
-  sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+function initSendGrid() {
+  if (!process.env.SENDGRID_API_KEY) {
+    console.warn("SENDGRID_API_KEY no está configurada en las variables de entorno.");
+  } else {
+    sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+  }
 }
 
-const FROM_EMAIL = process.env.SENDGRID_FROM_EMAIL || 'support@trimora.com'; // Debe ser un remitente verificado en SendGrid
+const getFromEmail = () => process.env.SENDGRID_FROM_EMAIL || 'support@trimora.com';
 
 export async function sendVerificationCode(email: string, code: string) {
   try {
+    initSendGrid();
     const msg = {
       to: email,
-      from: FROM_EMAIL,
+      from: getFromEmail(),
       subject: 'Trimora - Código de Verificación de Registro',
       text: `Tu código de verificación es: ${code}`,
       html: `
@@ -38,9 +41,10 @@ export async function sendVerificationCode(email: string, code: string) {
 
 export async function sendPasswordResetCode(email: string, code: string) {
   try {
+    initSendGrid();
     const msg = {
       to: email,
-      from: FROM_EMAIL,
+      from: getFromEmail(),
       subject: 'Trimora - Recuperación de Contraseña',
       text: `Tu código de recuperación es: ${code}`,
       html: `
@@ -66,6 +70,7 @@ export async function sendPasswordResetCode(email: string, code: string) {
 
 export async function sendInvitationEmail(email: string, orgName: string, role: string, token: string) {
   try {
+    initSendGrid();
     const inviteUrl = `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/invite?token=${token}`;
     
     // Diccionario de roles para mostrar en español
@@ -79,7 +84,7 @@ export async function sendInvitationEmail(email: string, orgName: string, role: 
 
     const msg = {
       to: email,
-      from: FROM_EMAIL,
+      from: getFromEmail(),
       subject: `Trimora - Has sido invitado a unirte a ${orgName}`,
       text: `Has sido invitado a unirte a ${orgName} como ${roleDisplay}. Para aceptar la invitación, haz clic aquí: ${inviteUrl}`,
       html: `
