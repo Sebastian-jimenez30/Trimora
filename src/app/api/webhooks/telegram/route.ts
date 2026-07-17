@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { generateText, tool } from 'ai';
+import { generateText, isStepCount } from 'ai';
 import { createOpenAI, openai } from '@ai-sdk/openai';
 import { z } from 'zod';
 import { db } from '@/core/database/db';
@@ -196,6 +196,7 @@ ROLES Y CAPACIDADES:
         system: systemPrompt,
         messages: coreMessages,
         tools: tools,
+        stopWhen: isStepCount(5),
       });
     } catch (error) {
       console.error("Error from OpenAI (o4-mini)...", error);

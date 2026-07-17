@@ -215,7 +215,62 @@ export function getAiTools(context: { organizationId: string; telegramUserId: st
       }
     }),
 
-    // 6. CREAR PRODUCTO (Admin)
+    // 6b. REGISTRAR VENTA DE PRODUCTO (Admin) - con cálculo automático de precio
+    registrar_venta_producto: tool({
+      description: 'ADMIN: Registra la venta de uno o más productos consultando automáticamente el precio en la base de datos y calculando el total. Úsalo cuando digan "registra la venta de X unidades de [producto]", "vendí 2 lociones", "registra venta de X [producto]", etc. NO necesitas saber el precio de antemano, lo busca solo.',
+      inputSchema: z.object({
+        nombreProducto: z.string().describe('Nombre del producto vendido (búsqueda parcial, ej. "loción", "pomade", "shampoo").'),
+        cantidad: z.number().describe('Cantidad de unidades vendidas.'),
+        paymentMethod: z.string().optional().describe('Método de pago: CASH, CARD o TRANSFER. Por defecto CASH.'),
+        clienteNombre: z.string().optional().describe('Nombre del cliente si se menciona.'),
+      }),
+      execute: async (args) => {
+        if (!context.isAdmin) return "Acceso denegado.";
+        try {
+          // 1. Buscar el producto por nombre
+          const found = await db.query.products.findMany({
+            where: and(
+              eq(products.organizationId, context.organizationId),
+              ilike(products.name, `%${args.nombreProducto}%`)
+            ),
+          });
+
+          if (found.length === 0) {
+            return `No encontré ningún producto con el nombre "${args.nombreProducto}". ¿Puedes verificar el nombre? Usa "consultar_productos" para ver el catálogo.`;
+          }
+
+          const producto = found[0];
+          const precioUnitario = Number(producto.salePrice ?? 0);
+
+          if (precioUnitario === 0) {
+            return `El producto "${producto.name}" no tiene precio de venta configurado. Regístralo manualmente con el monto correcto.`;
+          }
+
+          const totalVenta = precioUnitario * args.cantidad;
+          const metodo = (args.paymentMethod ?? 'CASH').toUpperCase();
+          const clienteTexto = args.clienteNombre ? ` para ${args.clienteNombre}` : '';
+          const descripcion = `Venta de ${args.cantidad} ${producto.name}${clienteTexto}`;
+
+          // 2. Registrar la transacción
+          await db.insert(transactions).values({
+            organizationId: context.organizationId,
+            type: 'INCOME',
+            totalAmount: totalVenta.toString(),
+            paymentMethod: metodo,
+            status: 'COMPLETED',
+            notes: descripcion,
+          });
+
+          revalidatePath('/', 'layout');
+
+          return `✅ Venta registrada:\n📦 ${args.cantidad}x ${producto.name} @ $${precioUnitario.toLocaleString('es-CO')} c/u\n💰 Total: $${totalVenta.toLocaleString('es-CO')} [${metodo}]\n📝 ${descripcion}`;
+        } catch (error: any) {
+          return `Error registrando venta: ${error.message}`;
+        }
+      }
+    }),
+
+    // 7. CREAR PRODUCTO (Admin)
     crear_producto: tool({
       description: 'ADMIN: Registra un nuevo producto en el catálogo / inventario.',
       inputSchema: z.object({
