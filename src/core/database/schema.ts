@@ -101,6 +101,7 @@ export const transactions = pgTable('transactions', {
   totalAmount: numeric('total_amount', { precision: 10, scale: 2 }).notNull(),
   paymentMethod: text('payment_method'), // CASH, CARD, TRANSFER
   status: text('status').default('COMPLETED').notNull(), // PENDING, COMPLETED, REFUNDED
+  notes: text('notes'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
 

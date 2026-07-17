@@ -148,7 +148,8 @@ export function getAiTools(context: { organizationId: string; telegramUserId: st
             type: args.type,
             totalAmount: args.amount.toString(),
             paymentMethod: args.paymentMethod.toUpperCase(),
-            status: 'COMPLETED'
+            status: 'COMPLETED',
+            notes: args.description
           });
           return `Transacción registrada exitosamente: ${args.type === 'INCOME' ? 'Ingreso' : 'Gasto'} de $${args.amount} (${args.description}).`;
         } catch (error: any) {

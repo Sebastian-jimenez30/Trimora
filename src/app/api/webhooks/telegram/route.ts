@@ -72,11 +72,14 @@ export async function POST(req: Request) {
     const systemPrompt = `Eres el asistente inteligente de Trimora, una barbería moderna. Eres amable, conciso y usas emojis moderadamente.
 El usuario con el que hablas se llama ${fromName}.
 
+CATÁLOGO DE SERVICIOS Y PRECIOS:
+${servicesListText}
+
 ROLES Y CAPACIDADES:
 - Si el usuario te pide agendar una cita o preguntar sobre servicios, ayúdalo usando las herramientas 'agendar_cita' o 'listar_servicios'.
 - Tienes acceso directo a la base de datos de Trimora. Eres capaz de registrar transacciones en caja, consultar ingresos/gastos de hoy, ver toda la agenda del día, y crear productos o servicios.
-- SIEMPRE que te pidan registrar o consultar algo (agenda, caja, productos), **USA TUS HERRAMIENTAS**. No digas que no puedes, tienes permisos para hacerlo.
-- Al usar herramientas, muestra el resultado directamente al usuario. No agregues texto innecesario si la herramienta ya da un buen resumen.
+- SIEMPRE que te pidan registrar o consultar algo (agenda, caja, productos, ingresos), **USA TUS HERRAMIENTAS**. No digas que no puedes, tienes permisos para hacerlo.
+- Usa los precios del CATÁLOGO para saber cuánto registrar en ingresos si te mencionan un servicio.
 - IMPORTANTE: Hoy es ${new Date().toLocaleString("es-CO", { timeZone: "America/Bogota" })} (Zona horaria GMT-5).
 `;
 
@@ -153,20 +156,33 @@ ROLES Y CAPACIDADES:
     let finalResponse = "";
     if (!result) {
       finalResponse = "Lo siento, nuestros servidores están muy ocupados o en mantenimiento en este momento. Por favor, intenta de nuevo en unos minutos. 🙏";
-    } else if (result.text && result.text.trim().length > 0) {
-      finalResponse = result.text;
-    } else if (result.toolResults && result.toolResults.length > 0) {
-      const toolRes = result.toolResults[0];
-      const resultMessage = (toolRes as any).result;
-      if (resultMessage && typeof resultMessage === 'string') {
-        finalResponse = resultMessage;
-      } else {
-        finalResponse = "¡Perfecto! He procesado tu solicitud para la cita exitosamente. 🎉";
-      }
-    } else if (result.toolCalls && result.toolCalls.length > 0) {
-      finalResponse = "¡Perfecto! He procesado tu solicitud de cita. 🎉";
     } else {
-      finalResponse = "Lo siento, procesé tu solicitud pero no pude generar una respuesta de texto.";
+      let textPart = result.text || "";
+      // Limpiar etiquetas <think>...</think> si el modelo las incluye
+      textPart = textPart.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+      
+      let toolsPart = "";
+      if (result.toolResults && result.toolResults.length > 0) {
+        toolsPart = result.toolResults
+          .map(t => {
+            const resMsg = (t as any).result || (t as any).output;
+            return typeof resMsg === 'string' ? resMsg : JSON.stringify(resMsg);
+          })
+          .filter(Boolean)
+          .join('\n\n');
+      }
+
+      if (textPart && toolsPart) {
+        finalResponse = `${textPart}\n\n${toolsPart}`;
+      } else if (textPart) {
+        finalResponse = textPart;
+      } else if (toolsPart) {
+        finalResponse = toolsPart;
+      } else if (result.toolCalls && result.toolCalls.length > 0) {
+        finalResponse = "He ejecutado la herramienta, pero no obtuve un mensaje de retorno claro.";
+      } else {
+        finalResponse = "Lo siento, procesé tu solicitud pero no pude generar una respuesta de texto.";
+      }
     }
 
     if (finalResponse) {
