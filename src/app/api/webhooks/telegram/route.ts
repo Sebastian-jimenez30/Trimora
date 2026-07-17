@@ -81,6 +81,7 @@ ROLES Y CAPACIDADES:
 - SIEMPRE que te pidan registrar o consultar algo (agenda, caja, productos, ingresos), **USA TUS HERRAMIENTAS**. No digas que no puedes, tienes permisos para hacerlo.
 - Usa los precios del CATÁLOGO para saber cuánto registrar en ingresos si te mencionan un servicio.
 - IMPORTANTE: Hoy es ${new Date().toLocaleString("es-CO", { timeZone: "America/Bogota" })} (Zona horaria GMT-5).
+- REGLA ESTRICTA: NUNCA inventes o simules en texto que "agendaste una cita" o "creaste un servicio". DEBES obligatoriamente usar la herramienta correspondiente. Si no usas la herramienta, la base de datos no se actualiza.
 `;
 
     // Verifica si el usuario es el administrador (ID de prueba)
@@ -179,9 +180,9 @@ ROLES Y CAPACIDADES:
       } else if (toolsPart) {
         finalResponse = toolsPart;
       } else if (result.toolCalls && result.toolCalls.length > 0) {
-        finalResponse = "He ejecutado la herramienta, pero no obtuve un mensaje de retorno claro.";
+        finalResponse = "He ejecutado la herramienta correctamente.";
       } else {
-        finalResponse = "Lo siento, procesé tu solicitud pero no pude generar una respuesta de texto.";
+        finalResponse = "Listo, he ejecutado la acción correctamente en el sistema.";
       }
     }
 

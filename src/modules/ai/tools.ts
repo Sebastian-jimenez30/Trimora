@@ -4,6 +4,7 @@ import { db } from "@/core/database/db";
 import { appointments, clients, services, products, transactions, transactionItems, organizationMembers } from "@/core/database/schema";
 import { eq, ilike, and, gte, lte } from "drizzle-orm";
 import { createAppointmentFromAI } from '@/modules/appointments/actions';
+import { revalidatePath } from 'next/cache';
 
 // Helpers para fechas (Zona Horaria Bogotá/Lima/Quito -05:00)
 function getTodayRange() {
@@ -28,7 +29,7 @@ export function getAiTools(context: { organizationId: string; telegramUserId: st
       description: 'Agenda una cita en la barbería para un cliente.',
       inputSchema: z.object({
         serviceName: z.string().describe('El nombre del servicio a agendar (ej. Corte, Barba)'),
-        date: z.string().describe('La fecha y hora en formato ISO 8601 (ej. 2024-07-16T19:00:00)'),
+        date: z.string().describe('La fecha y hora en formato ISO 8601 con zona horaria (SIEMPRE usar -05:00 al final, ej. 2026-07-17T09:00:00-05:00)'),
         customerNameOverride: z.string().optional().describe('Si la persona está agendando para un amigo, el nombre del amigo. Si es para él mismo, dejar vacío.'),
       }),
       execute: async (args) => {
@@ -42,6 +43,7 @@ export function getAiTools(context: { organizationId: string; telegramUserId: st
             serviceName,
             date
           });
+          revalidatePath('/', 'layout');
           return res.message;
         } catch (error: any) {
           console.error("Error agendando cita", error);
@@ -151,6 +153,7 @@ export function getAiTools(context: { organizationId: string; telegramUserId: st
             status: 'COMPLETED',
             notes: args.description
           });
+          revalidatePath('/', 'layout');
           return `Transacción registrada exitosamente: ${args.type === 'INCOME' ? 'Ingreso' : 'Gasto'} de $${args.amount} (${args.description}).`;
         } catch (error: any) {
           return `Error registrando transacción: ${error.message}`;
@@ -178,7 +181,8 @@ export function getAiTools(context: { organizationId: string; telegramUserId: st
             currentStock: args.stock.toString(),
             isActive: true
           });
-          return `Producto "${args.name}" creado con éxito. Precio: $${args.price}, Stock: ${args.stock}.`;
+          revalidatePath('/', 'layout');
+          return `[SISTEMA] Producto "${args.name}" creado con éxito en la base de datos.`;
         } catch (error: any) {
           return `Error creando producto: ${error.message}`;
         }
@@ -203,7 +207,8 @@ export function getAiTools(context: { organizationId: string; telegramUserId: st
             durationMinutes: args.durationMinutes,
             isActive: true
           });
-          return `Servicio "${args.name}" creado con éxito por $${args.price} (${args.durationMinutes} mins).`;
+          revalidatePath('/', 'layout');
+          return `[SISTEMA] Servicio "${args.name}" creado con éxito en la base de datos por $${args.price} (${args.durationMinutes} mins).`;
         } catch (error: any) {
           return `Error creando servicio: ${error.message}`;
         }
