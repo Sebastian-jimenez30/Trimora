@@ -43,7 +43,7 @@ export default function DashboardNavigation({ username, avatarUrl, pendingAppoin
   const closeMenu = () => setIsOpen(false);
 
   return (
-    <div className="flex h-screen bg-pitch text-sterling font-sans overflow-hidden w-full relative">
+    <div className="flex h-[100dvh] bg-pitch text-sterling font-sans overflow-hidden w-full relative overscroll-none">
       
       {/* Mobile Backdrop */}
       {isOpen && (

@@ -229,23 +229,8 @@ export default function AgendaManager({
     
     return (
       <div className="flex-1 flex flex-col bg-[#141414] overflow-hidden relative">
-        {/* Day Header */}
-        <div className="flex items-center border-b border-white/10 pb-2 pt-2 bg-[#1a1a1a] shrink-0 z-20 shadow-sm">
-          <div className="w-[60px] shrink-0"></div>
-          <div className="flex-1 flex justify-center">
-            <div className="flex flex-col items-center">
-              <span className="text-[11px] uppercase text-[#888] font-medium tracking-wide">
-                {currentDate.toLocaleDateString("es-ES", { weekday: 'short' })}
-              </span>
-              <div className={`w-10 h-10 flex items-center justify-center rounded-full mt-1 text-lg ${isToday ? 'bg-cognac text-white font-bold' : 'text-sterling hover:bg-white/5 cursor-pointer'}`}>
-                {currentDate.getDate()}
-              </div>
-            </div>
-          </div>
-        </div>
-
         {/* Time Grid */}
-        <div className="flex-1 overflow-y-auto relative">
+        <div className="flex-1 overflow-y-auto relative pt-3">
           <div className="grid grid-cols-[60px_1fr]">
             {/* Hours Column */}
             <div className="border-r border-white/10 shrink-0 sticky left-0 bg-[#141414] z-20">
@@ -318,7 +303,7 @@ export default function AgendaManager({
           </div>
         </div>
         
-        <div className="flex-1 overflow-y-auto overflow-x-auto relative">
+        <div className="flex-1 overflow-y-auto overflow-x-auto relative pt-3">
           <div className="grid grid-cols-[60px_1fr] min-w-[560px]">
             {/* Hours Column */}
             <div className="border-r border-white/10 shrink-0 sticky left-0 bg-[#141414] z-20">
@@ -437,9 +422,16 @@ export default function AgendaManager({
       <header className="h-[64px] border-b border-white/10 flex items-center justify-between px-4 lg:px-6 bg-[#1a1a1a] shrink-0 shadow-sm z-30">
         <div className="flex items-center gap-2 md:gap-6">
           <div className="flex items-center gap-1 group relative">
-            <h2 className="text-xl md:text-2xl font-serif text-white capitalize flex items-center gap-2">
-              {currentDate.toLocaleDateString("es-ES", { month: 'long' })}
-              <span className="text-sm font-sans text-[#888] font-normal">{currentDate.getFullYear()}</span>
+            <h2 className="text-xl md:text-2xl font-serif text-white capitalize flex items-baseline gap-2">
+              {view === 'day' && (
+                <div className="flex items-baseline gap-1.5 mr-1 md:mr-2">
+                  <span className="text-2xl md:text-3xl text-cognac font-bold">{currentDate.getDate()}</span>
+                  <span className="text-sm md:text-base text-[#888] uppercase tracking-wider font-sans font-medium">{currentDate.toLocaleDateString("es-ES", { weekday: 'short' })}</span>
+                </div>
+              )}
+              <span className="md:hidden">{currentDate.toLocaleDateString("es-ES", { month: 'short' })}</span>
+              <span className="hidden md:inline">{currentDate.toLocaleDateString("es-ES", { month: 'long' })}</span>
+              <span className="text-sm font-sans text-[#888] font-normal hidden md:inline">{currentDate.getFullYear()}</span>
             </h2>
           </div>
         </div>
@@ -473,7 +465,7 @@ export default function AgendaManager({
       {/* Floating Action Button (FAB) */}
       <button 
         onClick={() => openCreateModal()}
-        className="absolute bottom-6 right-6 w-14 h-14 bg-cognac text-white rounded-2xl flex items-center justify-center shadow-[0_4px_20px_rgba(139,69,19,0.5)] hover:shadow-[0_8px_25px_rgba(139,69,19,0.6)] hover:-translate-y-1 transition-all z-40"
+        className="fixed md:absolute bottom-6 right-6 w-14 h-14 bg-cognac text-white rounded-2xl flex items-center justify-center shadow-[0_4px_20px_rgba(139,69,19,0.5)] hover:shadow-[0_8px_25px_rgba(139,69,19,0.6)] hover:-translate-y-1 transition-all z-50"
       >
         <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
       </button>
