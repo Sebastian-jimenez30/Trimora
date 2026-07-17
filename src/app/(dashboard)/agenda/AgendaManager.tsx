@@ -68,6 +68,30 @@ export default function AgendaManager({
   
   const [isPending, startTransition] = useTransition();
 
+  // Swipe Handlers
+  const [touchStart, setTouchStart] = useState<number | null>(null);
+  const [touchEnd, setTouchEnd] = useState<number | null>(null);
+
+  const minSwipeDistance = 50;
+
+  const onTouchStart = (e: React.TouchEvent) => {
+    setTouchEnd(null);
+    setTouchStart(e.targetTouches[0].clientX);
+  };
+
+  const onTouchMove = (e: React.TouchEvent) => {
+    setTouchEnd(e.targetTouches[0].clientX);
+  };
+
+  const onTouchEnd = () => {
+    if (!touchStart || !touchEnd) return;
+    const distance = touchStart - touchEnd;
+    const isLeftSwipe = distance > minSwipeDistance;
+    const isRightSwipe = distance < -minSwipeDistance;
+    if (isLeftSwipe) changeDate(1);
+    if (isRightSwipe) changeDate(-1);
+  };
+
   const changeDate = (amount: number) => {
     if (view === 'day') {
       setCurrentDate(prev => amount > 0 ? addDays(prev, 1) : subDays(prev, 1));
@@ -174,11 +198,13 @@ export default function AgendaManager({
     const start = toDate(app.startTime, { timeZone: TIMEZONE });
     const end = toDate(app.endTime, { timeZone: TIMEZONE });
     
-    const startMins = (start.getHours() * 60) + start.getMinutes();
-    const endMins = (end.getHours() * 60) + end.getMinutes();
+    const startMins = ((start.getHours() - 5) * 60) + start.getMinutes();
+    const endMins = ((end.getHours() - 5) * 60) + end.getMinutes();
     
-    const offset = startMins;
-    const height = endMins - startMins;
+    // Si la cita termina antes de las 5am o empieza después de las 10pm, la altura puede ser extraña,
+    // pero Math.max lo mantendrá en su lugar visualmente.
+    const offset = Math.max(0, startMins);
+    const height = Math.max(10, endMins - offset);
 
     let bgClass = "bg-[#2a1f18] border-l-[4px] border-[#8B4513]"; 
     if (app.status === "CONFIRMED") bgClass = "bg-[#2C2C2C] border-l-[4px] border-white";
@@ -191,7 +217,7 @@ export default function AgendaManager({
     };
   };
 
-  const hours = Array.from({ length: 24 }, (_, i) => i);
+  const hours = Array.from({ length: 18 }, (_, i) => i + 5); // 5 AM to 10 PM
   const weekStart = startOfWeek(currentDate, { weekStartsOn: 1 });
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 
@@ -239,8 +265,8 @@ export default function AgendaManager({
               ))}
               
               {/* Current Time Marker */}
-              {isToday && (
-                <div className="absolute w-full border-t-[2px] border-cognac z-30 pointer-events-none" style={{ top: `${(now.getHours() * 60) + now.getMinutes()}px` }}>
+              {isToday && now.getHours() >= 5 && now.getHours() <= 22 && (
+                <div className="absolute w-full border-t-[2px] border-cognac z-30 pointer-events-none" style={{ top: `${((now.getHours() - 5) * 60) + now.getMinutes()}px` }}>
                   <div className="w-2.5 h-2.5 rounded-full bg-cognac absolute -left-[5px] -top-[5px]"></div>
                 </div>
               )}
@@ -316,8 +342,8 @@ export default function AgendaManager({
                       <div key={`slot-${h}`} onClick={() => openCreateModal(`${h.toString().padStart(2, '0')}:00`, d)} className="absolute w-full h-[60px] cursor-pointer hover:bg-white/[0.03] transition-colors" style={{ top: `${i * 60}px` }} />
                     ))}
                     
-                    {isToday && (
-                      <div className="absolute w-full border-t-[2px] border-cognac z-30 pointer-events-none" style={{ top: `${(now.getHours() * 60) + now.getMinutes()}px` }}>
+                    {isToday && now.getHours() >= 5 && now.getHours() <= 22 && (
+                      <div className="absolute w-full border-t-[2px] border-cognac z-30 pointer-events-none" style={{ top: `${((now.getHours() - 5) * 60) + now.getMinutes()}px` }}>
                         <div className="w-2 h-2 rounded-full bg-cognac absolute -left-[4px] -top-[4px]"></div>
                       </div>
                     )}
@@ -401,7 +427,12 @@ export default function AgendaManager({
   };
 
   return (
-    <div className="flex flex-col h-full bg-[#141414] relative">
+    <div 
+      className="flex flex-col h-full bg-[#141414] relative"
+      onTouchStart={onTouchStart} 
+      onTouchMove={onTouchMove} 
+      onTouchEnd={onTouchEnd}
+    >
       {/* Topbar Inspired by Google Calendar */}
       <header className="h-[64px] border-b border-white/10 flex items-center justify-between px-4 lg:px-6 bg-[#1a1a1a] shrink-0 shadow-sm z-30">
         <div className="flex items-center gap-2 md:gap-6">
@@ -421,7 +452,7 @@ export default function AgendaManager({
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line><circle cx="12" cy="15" r="1"></circle></svg>
           </button>
           
-          <div className="flex items-center bg-white/5 rounded-full p-0.5">
+          <div className="hidden md:flex items-center bg-white/5 rounded-full p-0.5">
             <button onClick={() => changeDate(-1)} className="text-sterling w-8 h-8 rounded-full flex items-center justify-center hover:bg-white/10 transition-colors">&lt;</button>
             <button onClick={() => changeDate(1)} className="text-sterling w-8 h-8 rounded-full flex items-center justify-center hover:bg-white/10 transition-colors">&gt;</button>
           </div>
