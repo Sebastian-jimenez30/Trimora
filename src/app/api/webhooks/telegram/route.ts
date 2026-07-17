@@ -128,7 +128,7 @@ ROLES Y CAPACIDADES:
              }
              if (parsed.toolCalls && parsed.toolCalls.length > 0) {
                  parsed.toolCalls.forEach((tc: any) => {
-                     assistantContent.push({ type: 'tool-call', toolCallId: tc.toolCallId, toolName: tc.toolName, input: tc.args || {} });
+                     assistantContent.push({ type: 'tool-call', toolCallId: tc.toolCallId, toolName: tc.toolName, input: tc.input ?? tc.args ?? {} });
                  });
              }
              
@@ -140,20 +140,41 @@ ROLES Y CAPACIDADES:
                  if (parsed.toolResults && parsed.toolResults.length > 0) {
                      coreMessages.push({
                        role: 'tool',
-                       content: parsed.toolResults.map((tr: any) => ({ type: 'tool-result', toolCallId: tr.toolCallId, toolName: tr.toolName, output: { result: tr.result || "Executed" } }))
+                       content: parsed.toolResults.map((tr: any) => ({
+                         type: 'tool-result',
+                         toolCallId: tr.toolCallId,
+                         toolName: tr.toolName,
+                         output: { type: 'json', value: { result: tr.result || 'Executed' } }
+                       }))
                      });
                  } else {
                      coreMessages.push({
                        role: 'tool',
-                       content: parsed.toolCalls.map((tc: any) => ({ type: 'tool-result', toolCallId: tc.toolCallId, toolName: tc.toolName, output: { result: "Executed" } }))
+                       content: parsed.toolCalls.map((tc: any) => ({
+                         type: 'tool-result',
+                         toolCallId: tc.toolCallId,
+                         toolName: tc.toolName,
+                         output: { type: 'json', value: { result: 'Executed' } }
+                       }))
                      });
                  }
              }
              continue;
           }
+          // Si el content parseado es un array (mensaje corrupto/alucinado), lo omitimos
+          if (Array.isArray(parsed)) {
+            continue;
+          }
         } catch (e) {
-          // Ignorar y caer al comportamiento normal
+          // No es JSON, continuar normalmente
         }
+      }
+      // Saltar mensajes cuyo content es un array JSON serializado (alucinados)
+      if (typeof m.content === 'string') {
+        try {
+          const maybeArray = JSON.parse(m.content);
+          if (Array.isArray(maybeArray)) continue;
+        } catch (_) {}
       }
       coreMessages.push({ role: m.role as 'user' | 'assistant', content: m.content });
     }
@@ -215,7 +236,12 @@ ROLES Y CAPACIDADES:
         dbContent = JSON.stringify({
           type: "tool-response",
           text: finalResponse,
-          toolCalls: result.toolCalls,
+          // Normalize: always save as 'input' (AI SDK v7 field name)
+          toolCalls: result.toolCalls.map((tc: any) => ({
+            toolCallId: tc.toolCallId,
+            toolName: tc.toolName,
+            input: tc.input ?? tc.args ?? {},
+          })),
           toolResults: result.toolResults
         });
       }
