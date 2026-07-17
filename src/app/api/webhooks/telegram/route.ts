@@ -122,20 +122,32 @@ ROLES Y CAPACIDADES:
         try {
           const parsed = JSON.parse(m.content);
           if (parsed.type === 'tool-response') {
+             const assistantContent: any[] = [];
              if (parsed.text) {
-                coreMessages.push({ role: 'assistant', content: parsed.text });
+                assistantContent.push({ type: 'text', text: parsed.text });
              }
              if (parsed.toolCalls && parsed.toolCalls.length > 0) {
-                 coreMessages.push({
-                   role: 'assistant',
-                   content: parsed.toolCalls.map((tc: any) => ({ type: 'tool-call', toolCallId: tc.toolCallId, toolName: tc.toolName, args: tc.args }))
+                 parsed.toolCalls.forEach((tc: any) => {
+                     assistantContent.push({ type: 'tool-call', toolCallId: tc.toolCallId, toolName: tc.toolName, args: tc.args || {} });
                  });
              }
-             if (parsed.toolResults && parsed.toolResults.length > 0) {
-                 coreMessages.push({
-                   role: 'tool',
-                   content: parsed.toolResults.map((tr: any) => ({ type: 'tool-result', toolCallId: tr.toolCallId, toolName: tr.toolName, result: tr.result }))
-                 });
+             
+             if (assistantContent.length > 0) {
+                 coreMessages.push({ role: 'assistant', content: assistantContent });
+             }
+
+             if (parsed.toolCalls && parsed.toolCalls.length > 0) {
+                 if (parsed.toolResults && parsed.toolResults.length > 0) {
+                     coreMessages.push({
+                       role: 'tool',
+                       content: parsed.toolResults.map((tr: any) => ({ type: 'tool-result', toolCallId: tr.toolCallId, toolName: tr.toolName, result: tr.result || "Executed" }))
+                     });
+                 } else {
+                     coreMessages.push({
+                       role: 'tool',
+                       content: parsed.toolCalls.map((tc: any) => ({ type: 'tool-result', toolCallId: tc.toolCallId, toolName: tc.toolName, result: "Executed" }))
+                     });
+                 }
              }
              continue;
           }
