@@ -198,27 +198,54 @@ export default function AgendaManager({
   // Render Día
   const renderDayView = () => {
     const dayApps = getAppointmentsForDate(currentDate);
+    const now = new Date();
+    const isToday = isSameDay(currentDate, getBogotaToday());
+    
     return (
-      <div className="flex-1 overflow-y-auto relative bg-[#0f0f0f] p-6">
-        <div className="flex-1 bg-[#141414] border border-white/10 rounded-2xl flex flex-col overflow-hidden max-w-4xl mx-auto w-full">
-          <div className="h-[60px] border-b border-white/10 flex items-center px-4 bg-white/5 shrink-0">
-            <div className="w-[50px] md:w-[80px] shrink-0 font-serif text-sm text-sterling">Hora</div>
-            <div className="flex-1 text-center font-serif text-lg text-sterling border-l border-white/10 pl-4">
-              Agenda del Día
+      <div className="flex-1 flex flex-col bg-[#141414] overflow-hidden relative">
+        {/* Day Header */}
+        <div className="flex items-center border-b border-white/10 pb-2 pt-2 bg-[#1a1a1a] shrink-0 z-20 shadow-sm">
+          <div className="w-[60px] shrink-0"></div>
+          <div className="flex-1 flex justify-center">
+            <div className="flex flex-col items-center">
+              <span className="text-[11px] uppercase text-[#888] font-medium tracking-wide">
+                {currentDate.toLocaleDateString("es-ES", { weekday: 'short' })}
+              </span>
+              <div className={`w-10 h-10 flex items-center justify-center rounded-full mt-1 text-lg ${isToday ? 'bg-cognac text-white font-bold' : 'text-sterling hover:bg-white/5 cursor-pointer'}`}>
+                {currentDate.getDate()}
+              </div>
             </div>
           </div>
-          <div className="grid grid-cols-[50px_1fr] md:grid-cols-[80px_1fr] flex-1 overflow-y-auto relative">
-            <div className="w-[50px] md:w-[80px] border-r border-white/10 shrink-0 sticky left-0 bg-[#141414] z-10">
+        </div>
+
+        {/* Time Grid */}
+        <div className="flex-1 overflow-y-auto relative">
+          <div className="grid grid-cols-[60px_1fr]">
+            {/* Hours Column */}
+            <div className="border-r border-white/10 shrink-0 sticky left-0 bg-[#141414] z-20">
               {hours.map(h => (
-                <div key={h} className="h-[60px] flex items-start justify-center text-xs text-[#888] pt-2 relative">
-                  <span className="relative -top-4 bg-pitch px-1">{h.toString().padStart(2, '0')}:00</span>
+                <div key={h} className="h-[60px] flex justify-end pr-2 pt-0 relative">
+                  <span className="text-[10px] text-[#888] relative -top-[8px] pr-1">
+                    {h === 0 ? '12 a.m.' : h < 12 ? `${h} a.m.` : h === 12 ? '12 p.m.' : `${h-12} p.m.`}
+                  </span>
                 </div>
               ))}
             </div>
-            <div className="relative" style={{ backgroundImage: 'linear-gradient(to bottom, rgba(255,255,255,0.05) 1px, transparent 1px)', backgroundSize: '100% 60px' }}>
+
+            {/* Grid & Appointments */}
+            <div className="relative" style={{ backgroundImage: 'linear-gradient(to bottom, rgba(255,255,255,0.06) 1px, transparent 1px)', backgroundSize: '100% 60px' }}>
               {hours.map((h, i) => (
-                <div key={`slot-${h}`} onClick={() => openCreateModal(`${h.toString().padStart(2, '0')}:00`, currentDate)} className="absolute w-full h-[60px] cursor-pointer hover:bg-white/[0.02] transition-colors" style={{ top: `${i * 60}px` }} />
+                <div key={`slot-${h}`} onClick={() => openCreateModal(`${h.toString().padStart(2, '0')}:00`, currentDate)} className="absolute w-full h-[60px] cursor-pointer hover:bg-white/[0.03] transition-colors" style={{ top: `${i * 60}px` }} />
               ))}
+              
+              {/* Current Time Marker */}
+              {isToday && (
+                <div className="absolute w-full border-t-[2px] border-cognac z-30 pointer-events-none" style={{ top: `${(now.getHours() * 60) + now.getMinutes()}px` }}>
+                  <div className="w-2.5 h-2.5 rounded-full bg-cognac absolute -left-[5px] -top-[5px]"></div>
+                </div>
+              )}
+
+              {/* Appointments */}
               {dayApps.filter(app => {
                 const client = clients.find(c => c.id === app.clientId);
                 return searchTerm && client ? client.firstName.toLowerCase().includes(searchTerm.toLowerCase()) : true;
@@ -229,8 +256,8 @@ export default function AgendaManager({
                 const start = toDate(app.startTime, { timeZone: TIMEZONE });
                 return (
                   <div key={app.id} className={style.className} style={{ top: style.top, height: style.height }} onClick={(e) => { e.stopPropagation(); openEditModal(app); }}>
-                    <div className="font-bold text-white text-[11px] truncate">{client?.firstName} {client?.lastName}</div>
-                    <div className="text-[10px] text-[#ccc] truncate">{service?.name} ({start.getHours()}:{start.getMinutes().toString().padStart(2, '0')})</div>
+                    <div className="font-bold text-white text-[12px] truncate">{client?.firstName} {client?.lastName}</div>
+                    <div className="text-[11px] text-[#ccc] truncate mt-0.5">{service?.name} • {start.getHours()}:{start.getMinutes().toString().padStart(2, '0')}</div>
                   </div>
                 );
               })}
@@ -243,45 +270,71 @@ export default function AgendaManager({
 
   // Render Semana
   const renderWeekView = () => {
+    const now = new Date();
     return (
-      <div className="flex-1 overflow-y-auto relative bg-[#0f0f0f] p-4">
-        <div className="flex-1 bg-[#141414] border border-white/10 rounded-2xl flex flex-col overflow-hidden w-full min-w-[800px]">
-          <div className="grid grid-cols-[60px_1fr_1fr_1fr_1fr_1fr_1fr_1fr] border-b border-white/10 shrink-0 bg-white/5">
-            <div className="border-r border-white/10 flex items-center justify-center text-xs text-[#888]">Hora</div>
-            {weekDays.map(d => (
-              <div key={d.toString()} className={`py-3 text-center border-r border-white/10 last:border-0 ${isSameDay(d, getBogotaToday()) ? 'bg-cognac/20' : ''}`}>
-                <div className="text-xs text-[#888] uppercase">{d.toLocaleDateString("es-ES", { weekday: 'short' })}</div>
-                <div className={`text-lg font-bold ${isSameDay(d, getBogotaToday()) ? 'text-cognac' : 'text-sterling'}`}>{d.getDate()}</div>
-              </div>
-            ))}
-          </div>
-          <div className="grid grid-cols-[60px_1fr_1fr_1fr_1fr_1fr_1fr_1fr] flex-1 overflow-y-auto relative h-[800px]">
-            <div className="border-r border-white/10 shrink-0 sticky left-0 bg-[#141414] z-20">
-              {hours.map(h => (
-                <div key={h} className="h-[60px] flex items-start justify-center text-[10px] text-[#888] pt-2 relative">
-                  <span className="relative -top-3 bg-[#141414] px-1">{h.toString().padStart(2, '0')}:00</span>
-                </div>
-              ))}
-            </div>
+      <div className="flex-1 flex flex-col bg-[#141414] overflow-hidden relative">
+        <div className="flex items-center border-b border-white/10 pb-2 pt-2 bg-[#1a1a1a] shrink-0 z-20 shadow-sm overflow-x-auto">
+          <div className="w-[60px] shrink-0 sticky left-0 bg-[#1a1a1a] border-r border-white/10 z-30"></div>
+          <div className="flex-1 grid grid-cols-7 min-w-[500px]">
             {weekDays.map(d => {
-              const apps = getAppointmentsForDate(d);
+              const isToday = isSameDay(d, getBogotaToday());
               return (
-                <div key={`col-${d.toString()}`} className={`relative border-r border-white/10 last:border-0 ${isSameDay(d, getBogotaToday()) ? 'bg-cognac/5' : ''}`} style={{ backgroundImage: 'linear-gradient(to bottom, rgba(255,255,255,0.05) 1px, transparent 1px)', backgroundSize: '100% 60px' }}>
-                  {hours.map((h, i) => (
-                    <div key={`slot-${h}`} onClick={() => openCreateModal(`${h.toString().padStart(2, '0')}:00`, d)} className="absolute w-full h-[60px] cursor-pointer hover:bg-white/[0.05] transition-colors" style={{ top: `${i * 60}px` }} />
-                  ))}
-                  {apps.map(app => {
-                    const style = getAppointmentStyle(app);
-                    const client = clients.find(c => c.id === app.clientId);
-                    return (
-                      <div key={app.id} className={`${style.className} !px-1.5`} style={{ top: style.top, height: style.height }} onClick={(e) => { e.stopPropagation(); openEditModal(app); }}>
-                        <div className="font-bold text-white text-[9px] truncate">{client?.firstName}</div>
-                      </div>
-                    );
-                  })}
+                <div key={d.toString()} className="flex flex-col items-center border-r border-white/10 last:border-0 cursor-pointer hover:bg-white/5" onClick={() => { setCurrentDate(d); setView('day'); }}>
+                  <span className={`text-[10px] uppercase font-medium tracking-wide ${isToday ? 'text-cognac' : 'text-[#888]'}`}>
+                    {d.toLocaleDateString("es-ES", { weekday: 'short' })}
+                  </span>
+                  <div className={`w-8 h-8 flex items-center justify-center rounded-full mt-1 text-sm ${isToday ? 'bg-cognac text-white font-bold' : 'text-sterling'}`}>
+                    {d.getDate()}
+                  </div>
                 </div>
               );
             })}
+          </div>
+        </div>
+        
+        <div className="flex-1 overflow-y-auto overflow-x-auto relative">
+          <div className="grid grid-cols-[60px_1fr] min-w-[560px]">
+            {/* Hours Column */}
+            <div className="border-r border-white/10 shrink-0 sticky left-0 bg-[#141414] z-20">
+              {hours.map(h => (
+                <div key={h} className="h-[60px] flex justify-end pr-2 pt-0 relative">
+                  <span className="text-[10px] text-[#888] relative -top-[8px] pr-1">
+                    {h === 0 ? '12 a.m.' : h < 12 ? `${h} a.m.` : h === 12 ? '12 p.m.' : `${h-12} p.m.`}
+                  </span>
+                </div>
+              ))}
+            </div>
+            
+            {/* Week Grid */}
+            <div className="grid grid-cols-7 relative" style={{ backgroundImage: 'linear-gradient(to bottom, rgba(255,255,255,0.06) 1px, transparent 1px)', backgroundSize: '100% 60px' }}>
+              {weekDays.map((d, index) => {
+                const apps = getAppointmentsForDate(d);
+                const isToday = isSameDay(d, getBogotaToday());
+                return (
+                  <div key={`col-${d.toString()}`} className="relative border-r border-white/10 last:border-0">
+                    {hours.map((h, i) => (
+                      <div key={`slot-${h}`} onClick={() => openCreateModal(`${h.toString().padStart(2, '0')}:00`, d)} className="absolute w-full h-[60px] cursor-pointer hover:bg-white/[0.03] transition-colors" style={{ top: `${i * 60}px` }} />
+                    ))}
+                    
+                    {isToday && (
+                      <div className="absolute w-full border-t-[2px] border-cognac z-30 pointer-events-none" style={{ top: `${(now.getHours() * 60) + now.getMinutes()}px` }}>
+                        <div className="w-2 h-2 rounded-full bg-cognac absolute -left-[4px] -top-[4px]"></div>
+                      </div>
+                    )}
+                    
+                    {apps.map(app => {
+                      const style = getAppointmentStyle(app);
+                      const client = clients.find(c => c.id === app.clientId);
+                      return (
+                        <div key={app.id} className={`${style.className} !left-0 !w-full !rounded-sm !border-l-[3px]`} style={{ top: style.top, height: style.height }} onClick={(e) => { e.stopPropagation(); openEditModal(app); }}>
+                          <div className="font-bold text-white text-[10px] truncate leading-tight">{client?.firstName}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
       </div>
@@ -299,104 +352,85 @@ export default function AgendaManager({
     const weekDayNames = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 
     return (
-      <div className="flex-1 relative bg-[#0f0f0f] p-6 flex flex-col">
-        <div className="bg-[#141414] border border-white/10 rounded-2xl flex flex-col flex-1 overflow-hidden">
-          <div className="grid grid-cols-7 border-b border-white/10 shrink-0 bg-white/5">
-            {weekDayNames.map(d => (
-              <div key={d} className="py-3 text-center text-xs font-bold text-sterling border-r border-white/10 last:border-0 uppercase tracking-wider">
-                {d}
-              </div>
-            ))}
-          </div>
-          <div className="grid grid-cols-7 grid-rows-5 flex-1 bg-white/[0.02]">
-            {days.map(d => {
-              const isCurrentMonth = isSameMonth(d, currentDate);
-              const isToday = isSameDay(d, getBogotaToday());
-              const apps = getAppointmentsForDate(d);
-              
-              return (
-                <div 
-                  key={d.toString()} 
-                  className={`border-r border-b border-white/10 last:border-r-0 p-2 flex flex-col cursor-pointer transition-colors hover:bg-white/5 ${isCurrentMonth ? '' : 'opacity-40 bg-black/20'} ${isToday ? 'bg-cognac/10' : ''}`}
-                  onClick={() => {
-                    setCurrentDate(d);
-                    setView('day');
-                  }}
-                >
-                  <div className={`text-right text-sm mb-1 ${isToday ? 'text-cognac font-bold' : 'text-sterling'}`}>
-                    {isToday ? <span className="bg-cognac text-white w-6 h-6 inline-flex items-center justify-center rounded-full">{d.getDate()}</span> : d.getDate()}
-                  </div>
-                  <div className="flex-1 overflow-y-auto space-y-1">
-                    {apps.slice(0, 4).map(app => {
-                      const client = clients.find(c => c.id === app.clientId);
-                      const start = toDate(app.startTime, { timeZone: TIMEZONE });
-                      return (
-                        <div key={app.id} className="text-[9px] bg-[#2a1f18] text-[#dcdcdc] rounded px-1.5 py-0.5 truncate border-l-2 border-[#8B4513]">
-                          {start.getHours()}:{start.getMinutes().toString().padStart(2, '0')} - {client?.firstName}
-                        </div>
-                      )
-                    })}
-                    {apps.length > 4 && (
-                      <div className="text-[9px] text-[#888] pl-1 font-bold">+{apps.length - 4} más...</div>
-                    )}
-                  </div>
+      <div className="flex-1 flex flex-col bg-[#141414]">
+        <div className="grid grid-cols-7 border-b border-white/10 shrink-0 bg-[#1a1a1a]">
+          {weekDayNames.map(d => (
+            <div key={d} className="py-2 text-center text-[10px] font-medium text-[#888] uppercase tracking-wider">
+              {d}
+            </div>
+          ))}
+        </div>
+        <div className="grid grid-cols-7 grid-rows-5 flex-1 bg-[#141414]">
+          {days.map(d => {
+            const isCurrentMonth = isSameMonth(d, currentDate);
+            const isToday = isSameDay(d, getBogotaToday());
+            const apps = getAppointmentsForDate(d);
+            
+            return (
+              <div 
+                key={d.toString()} 
+                className={`border-r border-b border-white/10 last:border-r-0 p-1 md:p-2 flex flex-col cursor-pointer transition-colors hover:bg-white/5 ${isCurrentMonth ? '' : 'bg-black/20'}`}
+                onClick={() => {
+                  setCurrentDate(d);
+                  setView('day');
+                }}
+              >
+                <div className={`text-center text-xs mb-1 mx-auto flex items-center justify-center w-6 h-6 rounded-full ${isToday ? 'bg-cognac text-white font-bold' : isCurrentMonth ? 'text-sterling' : 'text-charcoal'}`}>
+                  {d.getDate()}
                 </div>
-              );
-            })}
-          </div>
+                <div className="flex-1 overflow-y-auto space-y-1 mt-1 px-1">
+                  {apps.slice(0, 3).map(app => {
+                    const client = clients.find(c => c.id === app.clientId);
+                    const start = toDate(app.startTime, { timeZone: TIMEZONE });
+                    return (
+                      <div key={app.id} className="text-[9px] bg-cognac text-white rounded-[4px] px-1.5 py-0.5 truncate shadow-sm">
+                        {start.getHours()}:{start.getMinutes().toString().padStart(2, '0')} {client?.firstName}
+                      </div>
+                    )
+                  })}
+                  {apps.length > 3 && (
+                    <div className="text-[10px] text-[#888] text-center font-medium">+{apps.length - 3}</div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
     );
   };
 
   return (
-    <div className="flex flex-col h-full bg-[#0f0f0f]">
-      {/* Topbar */}
-      <header className="h-[70px] border-b border-white/10 flex items-center justify-between px-8 bg-pitch shrink-0">
-        <div className="flex items-center gap-4">
-          <button onClick={setToday} className="border border-white/10 text-sterling px-4 py-1.5 rounded-md text-sm hover:bg-white/5 transition-colors">
-            Hoy
-          </button>
-          <div className="flex items-center">
-            <button onClick={() => changeDate(-1)} className="border border-white/10 text-sterling w-8 h-8 rounded-l-md flex items-center justify-center hover:bg-white/5 transition-colors">&lt;</button>
-            <button onClick={() => changeDate(1)} className="border-y border-r border-white/10 text-sterling w-8 h-8 rounded-r-md flex items-center justify-center hover:bg-white/5 transition-colors">&gt;</button>
+    <div className="flex flex-col h-full bg-[#141414] relative">
+      {/* Topbar Inspired by Google Calendar */}
+      <header className="h-[64px] border-b border-white/10 flex items-center justify-between px-4 lg:px-6 bg-[#1a1a1a] shrink-0 shadow-sm z-30">
+        <div className="flex items-center gap-2 md:gap-6">
+          <div className="flex items-center gap-1 group relative">
+            <h2 className="text-xl md:text-2xl font-serif text-white capitalize flex items-center gap-2">
+              {currentDate.toLocaleDateString("es-ES", { month: 'long' })}
+              <span className="text-sm font-sans text-[#888] font-normal">{currentDate.getFullYear()}</span>
+            </h2>
           </div>
-          <h2 className="text-lg font-semibold text-sterling min-w-[220px] text-center capitalize">
-            {view === 'month' 
-              ? currentDate.toLocaleDateString("es-ES", { month: 'long', year: 'numeric' })
-              : view === 'week'
-              ? `${weekStart.getDate()} ${weekStart.toLocaleDateString("es-ES", { month: 'short' })} - ${addDays(weekStart, 6).getDate()} ${addDays(weekStart, 6).toLocaleDateString("es-ES", { month: 'short', year: 'numeric' })}`
-              : currentDate.toLocaleDateString("es-ES", { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
-            }
-          </h2>
         </div>
 
-        <div className="flex items-center gap-4">
-          {/* View Toggle */}
-          <div className="flex bg-[#141414] rounded-lg p-1 border border-white/10">
-            <button onClick={() => setView('day')} className={`px-3 py-1 text-xs rounded-md font-medium transition-colors ${view === 'day' ? 'bg-cognac text-white' : 'text-charcoal hover:text-white'}`}>Día</button>
-            <button onClick={() => setView('week')} className={`px-3 py-1 text-xs rounded-md font-medium transition-colors ${view === 'week' ? 'bg-cognac text-white' : 'text-charcoal hover:text-white'}`}>Semana</button>
-            <button onClick={() => setView('month')} className={`px-3 py-1 text-xs rounded-md font-medium transition-colors ${view === 'month' ? 'bg-cognac text-white' : 'text-charcoal hover:text-white'}`}>Mes</button>
+        <div className="flex items-center gap-3 md:gap-5">
+          <button onClick={setToday} className="hidden md:flex border border-white/10 text-sterling px-4 py-1.5 rounded-full text-sm hover:bg-white/5 transition-colors font-medium">
+            Hoy
+          </button>
+          <button onClick={setToday} className="md:hidden text-sterling p-2 hover:bg-white/5 rounded-full">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line><circle cx="12" cy="15" r="1"></circle></svg>
+          </button>
+          
+          <div className="flex items-center bg-white/5 rounded-full p-0.5">
+            <button onClick={() => changeDate(-1)} className="text-sterling w-8 h-8 rounded-full flex items-center justify-center hover:bg-white/10 transition-colors">&lt;</button>
+            <button onClick={() => changeDate(1)} className="text-sterling w-8 h-8 rounded-full flex items-center justify-center hover:bg-white/10 transition-colors">&gt;</button>
           </div>
 
-          {view === 'day' && (
-            <div className="relative">
-              <input 
-                type="text" 
-                placeholder="Buscar cita..." 
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="bg-[#141414] border border-white/10 text-sterling pl-4 pr-4 py-1.5 rounded-full text-xs w-[200px] focus:outline-none focus:border-[#888]"
-              />
-            </div>
-          )}
-
-          <button 
-            onClick={() => openCreateModal()}
-            className="bg-[#8B4513] hover:brightness-110 text-white px-5 py-2 rounded-lg text-sm font-medium transition-all shadow-[0_0_10px_rgba(139,69,19,0.3)]"
-          >
-            + Nueva Cita
-          </button>
+          <div className="flex bg-[#0f0f0f] rounded-lg p-1 border border-white/5 shadow-inner">
+            <button onClick={() => setView('day')} className={`px-2 md:px-3 py-1.5 text-xs rounded-md font-medium transition-all ${view === 'day' ? 'bg-white/10 text-white shadow-sm' : 'text-[#888] hover:text-white'}`}>Día</button>
+            <button onClick={() => setView('week')} className={`px-2 md:px-3 py-1.5 text-xs rounded-md font-medium transition-all ${view === 'week' ? 'bg-white/10 text-white shadow-sm' : 'text-[#888] hover:text-white'}`}>Semana</button>
+            <button onClick={() => setView('month')} className={`px-2 md:px-3 py-1.5 text-xs rounded-md font-medium transition-all ${view === 'month' ? 'bg-white/10 text-white shadow-sm' : 'text-[#888] hover:text-white'}`}>Mes</button>
+          </div>
         </div>
       </header>
 
@@ -404,6 +438,14 @@ export default function AgendaManager({
       {view === 'day' && renderDayView()}
       {view === 'week' && renderWeekView()}
       {view === 'month' && renderMonthView()}
+
+      {/* Floating Action Button (FAB) */}
+      <button 
+        onClick={() => openCreateModal()}
+        className="absolute bottom-6 right-6 w-14 h-14 bg-cognac text-white rounded-2xl flex items-center justify-center shadow-[0_4px_20px_rgba(139,69,19,0.5)] hover:shadow-[0_8px_25px_rgba(139,69,19,0.6)] hover:-translate-y-1 transition-all z-40"
+      >
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+      </button>
 
       {/* Modal CRUD */}
       {isModalOpen && (

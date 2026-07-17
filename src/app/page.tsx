@@ -28,10 +28,9 @@ export default function Home() {
             <span className="font-serif text-[28px] font-bold tracking-[2px]">TRIMORA</span>
           </Link>
           
-          <nav className="hidden md:flex items-center gap-8 text-sm tracking-wide">
-            <Link href="/login" className="hover:text-cognac font-semibold transition-colors duration-300">INICIAR SESIÓN</Link>
-            <Link href="/register" className="px-5 py-2.5 bg-cognac hover:bg-cognac-hover text-white rounded-full transition-all duration-300 shadow-[0_0_15px_rgba(139,69,19,0.3)] hover:shadow-[0_0_20px_rgba(139,69,19,0.5)]">
-              REGISTRARSE
+          <nav className="flex items-center gap-8 text-sm tracking-wide">
+            <Link href="/login" className="px-5 py-2.5 bg-cognac hover:bg-cognac-hover text-white rounded-full transition-all duration-300 shadow-[0_0_15px_rgba(139,69,19,0.3)] hover:shadow-[0_0_20px_rgba(139,69,19,0.5)] font-semibold">
+              INICIAR SESIÓN
             </Link>
           </nav>
         </nav>

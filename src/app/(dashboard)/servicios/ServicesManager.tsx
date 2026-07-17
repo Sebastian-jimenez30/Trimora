@@ -149,8 +149,15 @@ export default function ServicesManager({ services, products: initialProducts }:
       if (res.success && res.data) {
         setProducts([...products, res.data as any]);
         setIsProductModalOpen(false);
-        // Add it directly to materials if we want
-        setMaterials([...materials, { productId: res.data.id, quantityUsed: 1 }]);
+        // Llenar la primera fila vacía si existe, de lo contrario agregar una nueva
+        const emptyIndex = materials.findIndex(m => m.productId === "");
+        if (emptyIndex !== -1) {
+          const newMats = [...materials];
+          newMats[emptyIndex] = { ...newMats[emptyIndex], productId: res.data.id };
+          setMaterials(newMats);
+        } else {
+          setMaterials([...materials, { productId: res.data.id, quantityUsed: 1 }]);
+        }
         setProdName(""); setProdCost(""); setProdStock("0"); setProdMinStock("0");
       } else {
         setProdMsg({ text: res.error || "Error al crear", type: "error" });
