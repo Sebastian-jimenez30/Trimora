@@ -140,12 +140,12 @@ ROLES Y CAPACIDADES:
                  if (parsed.toolResults && parsed.toolResults.length > 0) {
                      coreMessages.push({
                        role: 'tool',
-                       content: parsed.toolResults.map((tr: any) => ({ type: 'tool-result', toolCallId: tr.toolCallId, toolName: tr.toolName, result: tr.result || "Executed" }))
+                       content: parsed.toolResults.map((tr: any) => ({ type: 'tool-result', toolCallId: tr.toolCallId, toolName: tr.toolName, result: tr.result || "Executed", output: tr.result || "Executed" }))
                      });
                  } else {
                      coreMessages.push({
                        role: 'tool',
-                       content: parsed.toolCalls.map((tc: any) => ({ type: 'tool-result', toolCallId: tc.toolCallId, toolName: tc.toolName, result: "Executed" }))
+                       content: parsed.toolCalls.map((tc: any) => ({ type: 'tool-result', toolCallId: tc.toolCallId, toolName: tc.toolName, result: "Executed", output: "Executed" }))
                      });
                  }
              }
