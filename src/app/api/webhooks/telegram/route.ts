@@ -2,9 +2,9 @@ import { NextResponse } from 'next/server';
 import { generateText, tool } from 'ai';
 import { createOpenAI } from '@ai-sdk/openai';
 import { z } from 'zod';
-import { createAppointmentFromAI } from '@/modules/appointments/actions';
 import { db } from '@/core/database/db';
 import { chatMessages } from '@/core/database/schema';
+import { getAiTools } from '@/modules/ai/tools';
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 
@@ -69,43 +69,26 @@ export async function POST(req: Request) {
       ? orgServices.map(s => `- ${s.name} ($${s.price})`).join('\n')
       : "No hay servicios disponibles en este momento.";
 
-    const systemPrompt = `Eres el recepcionista virtual de Trimora, una barbería. Eres súper amable, conciso y usas emojis moderadamente.
-Tu objetivo principal es ayudar a los clientes a agendar citas. 
-El cliente con el que hablas se llama ${fromName}.
+    const systemPrompt = `Eres el asistente inteligente de Trimora, una barbería moderna. Eres amable, conciso y usas emojis moderadamente.
+El usuario con el que hablas se llama ${fromName}.
 
-SERVICIOS DISPONIBLES:
-${servicesListText}
+ROLES Y CAPACIDADES:
+- Si el usuario te pide agendar una cita o preguntar sobre servicios, ayúdalo usando las herramientas 'agendar_cita' o 'listar_servicios'.
+- Tienes acceso directo a la base de datos de Trimora. Eres capaz de registrar transacciones en caja, consultar ingresos/gastos de hoy, ver toda la agenda del día, y crear productos o servicios.
+- SIEMPRE que te pidan registrar o consultar algo (agenda, caja, productos), **USA TUS HERRAMIENTAS**. No digas que no puedes, tienes permisos para hacerlo.
+- Al usar herramientas, muestra el resultado directamente al usuario. No agregues texto innecesario si la herramienta ya da un buen resumen.
+- IMPORTANTE: Hoy es ${new Date().toLocaleString("es-CO", { timeZone: "America/Bogota" })} (Zona horaria GMT-5).
+`;
 
-Si el cliente quiere agendar, asegúrate de tener el servicio exacto que quiere (DEBE ser uno de los servicios disponibles) y la fecha/hora (no le pidas el nombre, ya sabes que es ${fromName}).
-Cuando tengas esos datos, EJECUTA la herramienta 'agendar_cita'. NO inventes confirmaciones si no has llamado a la herramienta.
-Si el usuario solo saluda, devuélvele el saludo amablemente y menciónale los servicios disponibles.
-IMPORTANTE: Hoy es ${new Date().toLocaleString("es-CO", { timeZone: "America/Bogota" })} (Zona horaria GMT-5)`;
+    // Verifica si el usuario es el administrador (ID de prueba)
+    const isAdmin = telegramUserId === '5190604908'; 
 
-    const tools = {
-      agendar_cita: tool({
-        description: 'Agenda una cita en la barbería con los datos proporcionados por el cliente.',
-        inputSchema: z.object({
-          serviceName: z.string().describe('El nombre exacto del servicio, ej. "Corte de cabello". Solo pon el nombre, NO oraciones completas.'),
-          date: z.string().describe('La fecha y hora de la cita en formato ISO 8601 incluyendo la zona horaria GMT-5, ej. "2026-07-16T19:00:00-05:00" para las 7pm.'),
-        }),
-        execute: async (args: { serviceName: string; date: string }) => {
-          const { serviceName, date } = args;
-          try {
-            const res = await createAppointmentFromAI({
-              organizationId: org.id,
-              customerName: fromName,
-              customerPhone: telegramUserId,
-              serviceName,
-              date
-            });
-            return res.message;
-          } catch (error: any) {
-            console.error("Error creating AI appointment:", error);
-            return `Lo siento, hubo un problema al agendar: ${error.message}. ¿Podrías intentar con otro servicio o darnos más detalles?`;
-          }
-        },
-      }),
-    };
+    const tools = getAiTools({
+      organizationId: org.id,
+      telegramUserId,
+      fromName,
+      isAdmin
+    });
 
     // --- MANEJO DE MEMORIA ---
     // Guardar el mensaje del usuario
