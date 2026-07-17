@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { generateText, tool } from 'ai';
-import { createOpenAI } from '@ai-sdk/openai';
+import { createOpenAI, openai } from '@ai-sdk/openai';
 import { z } from 'zod';
 import { db } from '@/core/database/db';
 import { chatMessages } from '@/core/database/schema';
@@ -8,6 +8,7 @@ import { getAiTools } from '@/modules/ai/tools';
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 
+// Configuración de OpenAI (por defecto usa process.env.OPENAI_API_KEY)
 // Configuración de NVIDIA
 const nvidia = createOpenAI({
   baseURL: 'https://integrate.api.nvidia.com/v1',
@@ -146,34 +147,34 @@ ROLES Y CAPACIDADES:
     }
 
     // --- ESTRATEGIA DE FALLBACK ---
-    // Inicializar el modelo NVIDIA principal (Llama 3.1 70B)
-    const nvidiaModel = nvidia.chat('meta/llama-3.1-70b-instruct');
-    // Inicializar el modelo NVIDIA secundario (Llama 3.1 405B)
-    const qwenModel = nvidia.chat('meta/llama-3.1-405b-instruct');
+    // Inicializar el modelo OpenAI principal (o4-mini)
+    const openaiModel = openai('o4-mini');
+    // Inicializar el modelo NVIDIA secundario (Llama 3.1 70B)
+    const nvidiaFallbackModel = nvidia.chat('meta/llama-3.1-70b-instruct');
 
     let result;
     try {
       result = await generateText({
-        model: nvidiaModel,
+        model: openaiModel,
         system: systemPrompt,
         messages: coreMessages,
         tools: tools,
       });
     } catch (error) {
-      console.error("Fallo Llama 70B (NVIDIA), intentando Llama 405B (NVIDIA)...", error);
+      console.error("Fallo OpenAI (o4-mini), intentando Llama 70B (NVIDIA)...", error);
       try {
         result = await generateText({
-          model: qwenModel,
+          model: nvidiaFallbackModel,
           system: systemPrompt,
           messages: coreMessages,
           tools: tools,
         });
-      } catch (qwenError) {
-        console.error("Fallo Llama 405B (NVIDIA), usando Fallback final...", qwenError);
-        console.error("Fallo Llama 405B (NVIDIA) también. Lanzando error para ver en logs...", qwenError);
+      } catch (nvidiaError) {
+        console.error("Fallo Llama 70B (NVIDIA), usando Fallback final...", nvidiaError);
+        console.error("Fallo Llama 70B (NVIDIA) también. Lanzando error para ver en logs...", nvidiaError);
         // En lugar de usar Gemini, lanzamos el error para que Vercel lo muestre en sus logs de producción.
         result = null;
-        throw qwenError;
+        throw nvidiaError;
       }
     }
 
