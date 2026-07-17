@@ -158,11 +158,8 @@ ROLES Y CAPACIDADES:
       coreMessages.push({ role: m.role as 'user' | 'assistant', content: m.content });
     }
 
-    // --- ESTRATEGIA DE FALLBACK ---
     // Inicializar el modelo OpenAI principal (o4-mini)
     const openaiModel = openai('o4-mini');
-    // Inicializar el modelo NVIDIA secundario (Llama 3.1 70B)
-    const nvidiaFallbackModel = nvidia.chat('meta/llama-3.1-70b-instruct');
 
     let result;
     try {
@@ -173,21 +170,8 @@ ROLES Y CAPACIDADES:
         tools: tools,
       });
     } catch (error) {
-      console.error("Fallo OpenAI (o4-mini), intentando Llama 70B (NVIDIA)...", error);
-      try {
-        result = await generateText({
-          model: nvidiaFallbackModel,
-          system: systemPrompt,
-          messages: coreMessages,
-          tools: tools,
-        });
-      } catch (nvidiaError) {
-        console.error("Fallo Llama 70B (NVIDIA), usando Fallback final...", nvidiaError);
-        console.error("Fallo Llama 70B (NVIDIA) también. Lanzando error para ver en logs...", nvidiaError);
-        // En lugar de usar Gemini, lanzamos el error para que Vercel lo muestre en sus logs de producción.
-        result = null;
-        throw nvidiaError;
-      }
+      console.error("Error from OpenAI (o4-mini)...", error);
+      throw error;
     }
 
     // --- ENVIAR RESPUESTA ---
