@@ -115,17 +115,41 @@ ROLES Y CAPACIDADES:
     
     // Order chronological
     const chronologicalHistory = history.reverse();
-    
-    const coreMessages: { role: 'user' | 'assistant'; content: string }[] = chronologicalHistory.map(m => ({
-      role: m.role as 'user' | 'assistant',
-      content: m.content
-    }));
+    const coreMessages: any[] = [];
+    for (const m of chronologicalHistory) {
+      if (m.role === 'assistant') {
+        try {
+          const parsed = JSON.parse(m.content);
+          if (parsed.type === 'tool-response') {
+             if (parsed.text) {
+                coreMessages.push({ role: 'assistant', content: parsed.text });
+             }
+             if (parsed.toolCalls && parsed.toolCalls.length > 0) {
+                 coreMessages.push({
+                   role: 'assistant',
+                   content: parsed.toolCalls.map((tc: any) => ({ type: 'tool-call', toolCallId: tc.toolCallId, toolName: tc.toolName, args: tc.args }))
+                 });
+             }
+             if (parsed.toolResults && parsed.toolResults.length > 0) {
+                 coreMessages.push({
+                   role: 'tool',
+                   content: parsed.toolResults.map((tr: any) => ({ type: 'tool-result', toolCallId: tr.toolCallId, toolName: tr.toolName, result: tr.result }))
+                 });
+             }
+             continue;
+          }
+        } catch (e) {
+          // Ignorar y caer al comportamiento normal
+        }
+      }
+      coreMessages.push({ role: m.role as 'user' | 'assistant', content: m.content });
+    }
 
     // --- ESTRATEGIA DE FALLBACK ---
-    // Inicializar el modelo NVIDIA principal (Laguna)
-    const nvidiaModel = nvidia.chat('poolside/laguna-xs-2.1');
-    // Inicializar el modelo NVIDIA secundario (Qwen)
-    const qwenModel = nvidia.chat('qwen/qwen3.5-122b-a10b');
+    // Inicializar el modelo NVIDIA principal (Llama 3.1 70B)
+    const nvidiaModel = nvidia.chat('meta/llama-3.1-70b-instruct');
+    // Inicializar el modelo NVIDIA secundario (Llama 3.1 405B)
+    const qwenModel = nvidia.chat('meta/llama-3.1-405b-instruct');
 
     let result;
     try {
@@ -136,7 +160,7 @@ ROLES Y CAPACIDADES:
         tools: tools,
       });
     } catch (error) {
-      console.error("Fallo Laguna (NVIDIA), intentando Qwen (NVIDIA)...", error);
+      console.error("Fallo Llama 70B (NVIDIA), intentando Llama 405B (NVIDIA)...", error);
       try {
         result = await generateText({
           model: qwenModel,
@@ -145,8 +169,8 @@ ROLES Y CAPACIDADES:
           tools: tools,
         });
       } catch (qwenError) {
-        console.error("Fallo Qwen (NVIDIA), usando Fallback final (Gemini)...", qwenError);
-        console.error("Fallo Qwen (NVIDIA) también. Lanzando error para ver en logs...", qwenError);
+        console.error("Fallo Llama 405B (NVIDIA), usando Fallback final...", qwenError);
+        console.error("Fallo Llama 405B (NVIDIA) también. Lanzando error para ver en logs...", qwenError);
         // En lugar de usar Gemini, lanzamos el error para que Vercel lo muestre en sus logs de producción.
         result = null;
         throw qwenError;
@@ -189,12 +213,22 @@ ROLES Y CAPACIDADES:
     if (finalResponse) {
       await sendTelegramMessage(chatId, finalResponse);
       
+      let dbContent = finalResponse;
+      if (result && result.toolCalls && result.toolCalls.length > 0) {
+        dbContent = JSON.stringify({
+          type: "tool-response",
+          text: finalResponse,
+          toolCalls: result.toolCalls,
+          toolResults: result.toolResults
+        });
+      }
+
       // Guardar la respuesta del bot
       await db.insert(chatMessages).values({
         organizationId: org.id,
         telegramUserId,
         role: 'assistant',
-        content: finalResponse,
+        content: dbContent,
       });
     }
     

@@ -78,7 +78,7 @@ export async function POST(req: Request) {
         });
         
         const servicesListText = orgServices.length > 0 
-          ? orgServices.map(s => `- ${s.name} ($${s.price})`).join('\\n')
+          ? orgServices.map(s => `- ${s.name} ($${s.price})`).join('\n')
           : "No hay servicios disponibles en este momento.";
 
         // --- EL CEREBRO DEL AGENTE ---
