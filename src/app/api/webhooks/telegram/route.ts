@@ -93,7 +93,7 @@ ROLES Y CAPACIDADES:
 `;
 
     // Verifica si el usuario es el administrador (ID de prueba)
-    const isAdmin = telegramUserId === '5190604908'; 
+    const isAdmin = true; // temporalmente true para que cualquiera pueda usarlo (antes: telegramUserId === '5190604908') 
 
     const tools = getAiTools({
       organizationId: org.id,
