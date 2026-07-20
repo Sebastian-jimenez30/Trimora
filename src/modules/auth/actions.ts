@@ -157,7 +157,12 @@ export async function loginWithGoogle(formData?: FormData) {
     },
   })
   
-  if (data.url) {
+  if (error) {
+    console.error("Error from Supabase OAuth:", error);
+    redirect('/login?message=Error al iniciar sesión con Google')
+  }
+  
+  if (data?.url) {
     redirect(data.url)
   }
 }

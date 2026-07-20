@@ -65,6 +65,8 @@ export default async function POSPage() {
       id: tx.id,
       type: tx.type,
       totalAmount: tx.totalAmount,
+      paidAmount: tx.paidAmount,
+      status: tx.status,
       paymentMethod: tx.paymentMethod,
       createdAt: tx.createdAt.toISOString(),
       description,

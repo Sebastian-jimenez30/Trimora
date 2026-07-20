@@ -59,37 +59,45 @@ export default async function DashboardPage() {
     .where(
       and(
         eq(appointments.organizationId, orgId),
-        gte(appointments.createdAt, today)
+        gte(appointments.startTime, today),
+        lt(appointments.startTime, tomorrow)
       )
     );
   
   const citasAgendadas = todaysAppointmentsQuery[0]?.count || 0;
 
-  // Clientes nuevos hoy
-  const newClientsQuery = await db.select({ count: sql<number>`count(*)` })
-    .from(clients)
+  // Egresos del día
+  const todaysExpenses = await db.select({ totalAmount: transactions.totalAmount })
+    .from(transactions)
     .where(
       and(
-        eq(clients.organizationId, orgId),
-        gte(clients.createdAt, today)
+        eq(transactions.organizationId, orgId),
+        eq(transactions.type, 'EXPENSE'),
+        gte(transactions.createdAt, today),
+        lt(transactions.createdAt, tomorrow)
       )
     );
   
-  const clientesNuevos = newClientsQuery[0]?.count || 0;
+  const egresosDia = todaysExpenses.reduce((acc, curr) => acc + parseFloat(curr.totalAmount), 0).toFixed(2);
 
-  // 3. Obtener Servicio más popular (Top 1)
-  const popularServiceQuery = await db.select({
-    name: services.name,
-    count: sql<number>`count(${appointments.id})`
+  // Lista de deudores (Cuentas por cobrar detalladas)
+  const pendingDebts = await db.select({
+    id: transactions.id,
+    totalAmount: transactions.totalAmount,
+    paidAmount: transactions.paidAmount,
+    clientName: clients.firstName,
+    clientLastName: clients.lastName,
+    createdAt: transactions.createdAt
   })
-  .from(appointments)
-  .leftJoin(services, eq(appointments.serviceId, services.id))
-  .where(eq(appointments.organizationId, orgId))
-  .groupBy(services.name)
-  .orderBy(desc(sql`count(${appointments.id})`))
-  .limit(1);
-
-  const popularService = popularServiceQuery[0]?.name || "---";
+  .from(transactions)
+  .leftJoin(clients, eq(transactions.clientId, clients.id))
+  .where(
+    and(
+      eq(transactions.organizationId, orgId),
+      eq(transactions.status, 'PENDING')
+    )
+  )
+  .orderBy(desc(transactions.createdAt));
 
   // 4. Próximas Citas Hoy
   const upcomingAppointments = await db.select({
@@ -113,34 +121,7 @@ export default async function DashboardPage() {
   .orderBy(asc(appointments.startTime))
   .limit(5);
 
-  // 5. Últimos Movimientos (Ventas y Gastos POS)
-  const recentTransactions = await db.select({
-    id: transactions.id,
-    type: transactions.type,
-    totalAmount: transactions.totalAmount,
-    paymentMethod: transactions.paymentMethod,
-    createdAt: transactions.createdAt,
-    clientName: clients.firstName,
-  })
-  .from(transactions)
-  .leftJoin(clients, eq(transactions.clientId, clients.id))
-  .where(eq(transactions.organizationId, orgId))
-  .orderBy(desc(transactions.createdAt))
-  .limit(4);
 
-  // Mapear historial para incluir descripción si es gasto
-  const recentMovements = await Promise.all(recentTransactions.map(async (tx) => {
-    let description = "";
-    if (tx.type === "EXPENSE") {
-      const logs = await db.select().from(auditLogs).where(eq(auditLogs.entityId, tx.id)).limit(1);
-      description = logs[0]?.details || "Gasto sin descripción";
-    }
-    
-    return {
-      ...tx,
-      description
-    };
-  }));
 
   // 6. Alertas de Inventario
   const inventoryAlerts = await db.select()
@@ -157,7 +138,7 @@ export default async function DashboardPage() {
     <div className="p-4 md:p-[30px] flex flex-col gap-4 md:gap-6">
       
       {/* KPIs */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
         <div className="bg-gradient-to-br from-[#141414] to-[#1a1a1a] border border-white/10 rounded-xl p-5 flex items-center gap-[15px] transition-all hover:-translate-y-[3px] hover:shadow-[0_8px_15px_rgba(0,0,0,0.4)] hover:border-cognac/40">
           <div className="w-[50px] h-[50px] rounded-lg bg-cognac/10 text-cognac flex items-center justify-center shrink-0">
             <svg viewBox="0 0 24 24" className="w-6 h-6 fill-current"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
@@ -169,32 +150,24 @@ export default async function DashboardPage() {
         </div>
 
         <div className="bg-gradient-to-br from-[#141414] to-[#1a1a1a] border border-white/10 rounded-xl p-5 flex items-center gap-[15px] transition-all hover:-translate-y-[3px] hover:shadow-[0_8px_15px_rgba(0,0,0,0.4)] hover:border-cognac/40">
+          <div className="w-[50px] h-[50px] rounded-lg bg-red-900/20 text-red-400 flex items-center justify-center shrink-0">
+            <svg viewBox="0 0 24 24" className="w-6 h-6 fill-current"><path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20a2 2 0 0 0 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zm0-12H5V6h14v2zm-7 5h5v5h-5z"/></svg>
+          </div>
+          <div>
+            <h3 className="text-2xl font-bold mb-1">${egresosDia}</h3>
+            <p className="text-xs text-charcoal uppercase tracking-[0.5px]">Egresos del Día</p>
+          </div>
+        </div>
+
+
+
+        <div className="bg-gradient-to-br from-[#141414] to-[#1a1a1a] border border-white/10 rounded-xl p-5 flex items-center gap-[15px] transition-all hover:-translate-y-[3px] hover:shadow-[0_8px_15px_rgba(0,0,0,0.4)] hover:border-cognac/40">
           <div className="w-[50px] h-[50px] rounded-lg bg-cognac/10 text-cognac flex items-center justify-center shrink-0">
             <svg viewBox="0 0 24 24" className="w-6 h-6 fill-current"><path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20a2 2 0 0 0 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zm0-12H5V6h14v2zm-7 5h5v5h-5z"/></svg>
           </div>
           <div>
             <h3 className="text-2xl font-bold mb-1">{citasAgendadas}</h3>
-            <p className="text-xs text-charcoal uppercase tracking-[0.5px]">Citas Agendadas</p>
-          </div>
-        </div>
-
-        <div className="bg-gradient-to-br from-[#141414] to-[#1a1a1a] border border-white/10 rounded-xl p-5 flex items-center gap-[15px] transition-all hover:-translate-y-[3px] hover:shadow-[0_8px_15px_rgba(0,0,0,0.4)] hover:border-cognac/40">
-          <div className="w-[50px] h-[50px] rounded-lg bg-cognac/10 text-cognac flex items-center justify-center shrink-0">
-            <svg viewBox="0 0 24 24" className="w-6 h-6 fill-current"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
-          </div>
-          <div>
-            <h3 className="text-2xl font-bold mb-1">{clientesNuevos}</h3>
-            <p className="text-xs text-charcoal uppercase tracking-[0.5px]">Clientes Nuevos</p>
-          </div>
-        </div>
-
-        <div className="bg-gradient-to-br from-[#141414] to-[#1a1a1a] border border-white/10 rounded-xl p-5 flex items-center gap-[15px] transition-all hover:-translate-y-[3px] hover:shadow-[0_8px_15px_rgba(0,0,0,0.4)] hover:border-cognac/40">
-          <div className="w-[50px] h-[50px] rounded-lg bg-cognac/10 text-cognac flex items-center justify-center shrink-0">
-            <svg viewBox="0 0 24 24" className="w-6 h-6 fill-current"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
-          </div>
-          <div>
-            <h3 className="text-lg font-bold mt-1 text-cognac">{popularService}</h3>
-            <p className="text-xs text-charcoal uppercase tracking-[0.5px]">Servicio más popular</p>
+            <p className="text-xs text-charcoal uppercase tracking-[0.5px]">Citas de Hoy</p>
           </div>
         </div>
       </div>
@@ -254,17 +227,12 @@ export default async function DashboardPage() {
           </div>
         </div>
 
-        {/* Columna Derecha (Estrecha) */}
-        <div className="flex flex-col gap-4 md:gap-6">
-          
-          {/* Alertas de Inventario */}
-          <div className="bg-[#141414] border border-white/10 rounded-xl p-4 md:p-6">
-            <h3 className="font-serif text-lg text-sterling mb-5">Alertas de Inventario</h3>
-            {inventoryAlerts.length === 0 ? (
-              <div className="py-6 text-center text-charcoal text-sm">
-                Inventario estable. No hay alertas por el momento.
-              </div>
-            ) : (
+        {inventoryAlerts.length > 0 && (
+          <div className="flex flex-col gap-4 md:gap-6">
+            
+            {/* Alertas de Inventario */}
+            <div className="bg-[#141414] border border-white/10 rounded-xl p-4 md:p-6">
+              <h3 className="font-serif text-lg text-sterling mb-5">Alertas de Inventario</h3>
               <ul className="flex flex-col gap-3">
                 {inventoryAlerts.map(product => (
                   <li key={product.id} className="flex justify-between items-center bg-red-900/10 border border-red-500/20 p-3 rounded-lg">
@@ -276,40 +244,41 @@ export default async function DashboardPage() {
                   </li>
                 ))}
               </ul>
-            )}
-          </div>
+            </div>
 
-          {/* Actividad Reciente POS */}
+          </div>
+        )}
+        
+        {/* Cuentas por Cobrar List */}
+        <div className="flex flex-col gap-4 md:gap-6">
           <div className="bg-[#141414] border border-white/10 rounded-xl p-4 md:p-6">
-            <h3 className="font-serif text-lg text-sterling mb-5">Últimos Movimientos</h3>
-            {recentMovements.length === 0 ? (
+            <h3 className="font-serif text-lg text-sterling mb-5 text-orange-400">Cuentas por Cobrar</h3>
+            {pendingDebts.length === 0 ? (
               <div className="py-6 text-center text-charcoal text-sm">
-                Aún no hay movimientos registrados.
+                No hay cuentas pendientes por cobrar.
               </div>
             ) : (
               <ul className="flex flex-col gap-3">
-                {recentMovements.map(mov => (
-                  <li key={mov.id} className="flex justify-between items-center border-b border-white/5 pb-3 last:border-0">
-                    <div>
-                      <h4 className="text-sm text-sterling">
-                        {mov.type === "EXPENSE" ? mov.description : (mov.clientName || 'Cliente General')}
-                      </h4>
-                      <p className="text-xs text-charcoal">{mov.paymentMethod}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className={`text-sm font-bold ${mov.type === "EXPENSE" ? "text-red-400" : "text-green-400"}`}>
-                        {mov.type === "EXPENSE" ? "-" : ""}${mov.totalAmount}
-                      </p>
-                      <p className="text-xs text-charcoal">
-                        {mov.createdAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </p>
-                    </div>
-                  </li>
-                ))}
+                {pendingDebts.map(debt => {
+                  const remaining = (parseFloat(debt.totalAmount) - parseFloat(debt.paidAmount || '0')).toFixed(2);
+                  return (
+                    <li key={debt.id} className="flex justify-between items-center bg-orange-500/10 border border-orange-500/20 p-3 rounded-lg">
+                      <div>
+                        <h4 className="text-sm font-bold text-sterling">{debt.clientName} {debt.clientLastName || ''}</h4>
+                        <p className="text-xs text-orange-400 font-medium mt-0.5">Debe: ${remaining}</p>
+                      </div>
+                      <Link 
+                        href={`/pos?tab=HISTORY&payTx=${debt.id}&payAmount=${remaining}`}
+                        className="bg-orange-500/20 hover:bg-orange-500 text-orange-400 hover:text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-colors"
+                      >
+                        Abonar
+                      </Link>
+                    </li>
+                  )
+                })}
               </ul>
             )}
           </div>
-
         </div>
       </div>
     </div>
