@@ -20,6 +20,7 @@ export default function POSManager({ services, products, clients, staff, history
   const [activeTab, setActiveTab] = useState<"VENTA" | "HISTORY" | "COMPRA">("VENTA");
   const [isServicesOpen, setIsServicesOpen] = useState(true);
   const [isProductsOpen, setIsProductsOpen] = useState(true);
+  const [isCartOpenMobile, setIsCartOpenMobile] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [cart, setCart] = useState<CartItem[]>([]);
   
@@ -347,9 +348,10 @@ export default function POSManager({ services, products, clients, staff, history
               <div className="p-5 border-b border-white/10">
                 <h3 className="font-serif text-lg text-sterling">Transacciones Recientes</h3>
               </div>
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse whitespace-nowrap min-w-[600px]">
+                  <thead>
+                    <tr>
                     <th className="py-3 px-5 text-xs text-[#888] font-medium border-b border-white/10">Fecha / Hora</th>
                     <th className="py-3 px-5 text-xs text-[#888] font-medium border-b border-white/10">Tipo</th>
                     <th className="py-3 px-5 text-xs text-[#888] font-medium border-b border-white/10">Descripción</th>
@@ -384,6 +386,7 @@ export default function POSManager({ services, products, clients, staff, history
                   )}
                 </tbody>
               </table>
+              </div>
             </div>
           )}
 
@@ -423,8 +426,22 @@ export default function POSManager({ services, products, clients, staff, history
       </div>
 
       {/* Barra Lateral de Caja (Sidebar POS) */}
+      
+      {/* Botón Flotante para Móviles */}
+      {activeTab === "VENTA" && cart.length > 0 && !isCartOpenMobile && (
+        <div className="lg:hidden absolute bottom-4 left-4 right-4 z-10">
+          <button 
+            onClick={() => setIsCartOpenMobile(true)}
+            className="w-full bg-[#8B4513] hover:bg-[#A0522D] text-white py-4 rounded-xl font-bold shadow-lg flex justify-between px-6 items-center"
+          >
+            <span>Ver Carrito ({cartCount})</span>
+            <span>${cartTotal.toFixed(2)}</span>
+          </button>
+        </div>
+      )}
+
       {activeTab === "VENTA" && cart.length > 0 && (
-        <div className="w-full lg:w-[420px] bg-[#101010] border-l border-white/10 flex flex-col h-full z-20 animate-in slide-in-from-right duration-300 absolute lg:relative right-0 shadow-[-10px_0_20px_rgba(0,0,0,0.5)] lg:shadow-none">
+        <div className={`w-full lg:w-[420px] bg-[#101010] border-l border-white/10 flex-col h-full z-20 animate-in slide-in-from-right duration-300 absolute lg:relative right-0 shadow-[-10px_0_20px_rgba(0,0,0,0.5)] lg:shadow-none ${isCartOpenMobile ? 'flex' : 'hidden lg:flex'}`}>
           
           <div className="p-5 border-b border-white/10 bg-[#141414] flex justify-between items-center shrink-0">
             <div>
@@ -432,7 +449,7 @@ export default function POSManager({ services, products, clients, staff, history
               <p className="text-[10px] text-charcoal uppercase tracking-wider mt-1">{cartCount} {cartCount === 1 ? 'ítem' : 'ítems'}</p>
             </div>
             {/* Botón solo visible en móviles para ocultar el carrito si se desea seguir agregando */}
-            <button onClick={() => {/* En un app real, aquí se podría minimizar la barra lateral en mobile */}} className="lg:hidden text-charcoal hover:text-white">
+            <button onClick={() => setIsCartOpenMobile(false)} className="lg:hidden text-charcoal hover:text-white">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
             </button>
           </div>
