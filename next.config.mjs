@@ -1,5 +1,11 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  allowedDevOrigins: ['*'],
+  experimental: {
+    serverActions: {
+      allowedOrigins: ['localhost:3000', '*.devtunnels.ms', '*.use2.devtunnels.ms', '*.ngrok-free.app']
+    }
+  },
   async headers() {
     return [
       {

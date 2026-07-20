@@ -2,7 +2,23 @@
 
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
+import { headers } from 'next/headers'
 import { createClient } from '@/core/database/server'
+
+async function getSiteUrl() {
+  let siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+  try {
+    const headersList = await headers();
+    const host = headersList.get('x-forwarded-host') || headersList.get('host');
+    if (host) {
+      const protocol = headersList.get('x-forwarded-proto') || (host.includes('localhost') ? 'http' : 'https');
+      siteUrl = `${protocol}://${host}`;
+    }
+  } catch (e) {
+    // ignore
+  }
+  return siteUrl;
+}
 
 export async function login(formData: FormData) {
   const supabase = await createClient()
@@ -33,7 +49,7 @@ export async function register(formData: FormData) {
   const password = formData.get('password') as string;
   const name = formData.get('name') as string || 'Mi Barbería';
   
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+  const siteUrl = await getSiteUrl();
   
   // 1. Generar ID de la organización
   const organizationId = crypto.randomUUID();
@@ -94,8 +110,7 @@ export async function register(formData: FormData) {
 export async function sendPasswordReset(formData: FormData) {
   const supabase = await createClient()
   const email = formData.get('email') as string;
-  
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+  const siteUrl = await getSiteUrl();
 
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
     redirectTo: `${siteUrl}/auth/callback?next=/reset-password`,
@@ -125,7 +140,8 @@ export async function updatePassword(formData: FormData) {
 export async function loginWithGoogle(formData?: FormData) {
   const supabase = await createClient()
   
-  let redirectUrl = `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/auth/callback`;
+  const siteUrl = await getSiteUrl();
+  let redirectUrl = `${siteUrl}/auth/callback`;
   
   if (formData) {
     const inviteToken = formData.get('invite_token') as string;
