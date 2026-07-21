@@ -122,7 +122,7 @@ export default function ChatWidget() {
       {/* Botón Flotante (Burbuja) */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="fixed bottom-6 right-6 z-50 bg-cognac hover:brightness-110 text-white p-3.5 rounded-full shadow-2xl transition-all duration-300 transform hover:scale-105 flex items-center justify-center border border-white/20 active:scale-95 group"
+        className="fixed bottom-24 right-6 z-50 bg-cognac hover:brightness-110 text-white p-3.5 rounded-full shadow-2xl transition-all duration-300 transform hover:scale-105 flex items-center justify-center border border-white/20 active:scale-95 group"
         title="Asistente de Trimora"
         aria-label="Abrir asistente de IA"
       >
@@ -146,7 +146,7 @@ export default function ChatWidget() {
 
       {/* Ventana Emergente del Chatbot */}
       {isOpen && (
-        <div className="fixed bottom-24 right-4 sm:right-6 z-50 w-[calc(100vw-2rem)] sm:w-[380px] h-[520px] max-h-[80vh] bg-[#141414] border border-white/10 rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-5 fade-in duration-200 backdrop-blur-md">
+        <div className="fixed bottom-40 right-4 sm:right-6 z-50 w-[calc(100vw-2rem)] sm:w-[380px] h-[520px] max-h-[80vh] bg-[#141414] border border-white/10 rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-5 fade-in duration-200 backdrop-blur-md">
           {/* Header */}
           <div className="p-4 bg-pitch border-b border-white/10 flex items-center justify-between shrink-0">
             <div className="flex items-center gap-3">

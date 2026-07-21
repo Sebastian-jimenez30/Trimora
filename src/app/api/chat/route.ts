@@ -154,10 +154,11 @@ CAPACIDADES Y ROLES:
     }
 
     let finalResponse = "";
+    let textPart = "";
     if (!result) {
       finalResponse = "Lo siento, hubo un problema procesando tu solicitud. Por favor intenta de nuevo.";
     } else {
-      let textPart = result.text || "";
+      textPart = result.text || "";
       textPart = textPart.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
 
       let toolsPart = "";
@@ -187,7 +188,7 @@ CAPACIDADES Y ROLES:
     if (result && result.toolCalls && result.toolCalls.length > 0) {
       dbContent = JSON.stringify({
         type: "tool-response",
-        text: finalResponse,
+        text: textPart,
         toolCalls: result.toolCalls.map((tc: any) => ({
           toolCallId: tc.toolCallId,
           toolName: tc.toolName,

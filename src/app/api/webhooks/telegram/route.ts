@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { generateText, isStepCount } from 'ai';
+import { generateText } from 'ai';
 import { createOpenAI, openai } from '@ai-sdk/openai';
 import { z } from 'zod';
 import { db } from '@/core/database/db';
@@ -196,19 +196,18 @@ ROLES Y CAPACIDADES:
         system: systemPrompt,
         messages: coreMessages,
         tools: tools,
-        stopWhen: isStepCount(5),
       });
     } catch (error) {
       console.error("Error from OpenAI (o4-mini)...", error);
       throw error;
     }
 
-    // --- ENVIAR RESPUESTA ---
     let finalResponse = "";
+    let textPart = "";
     if (!result) {
       finalResponse = "Lo siento, nuestros servidores están muy ocupados o en mantenimiento en este momento. Por favor, intenta de nuevo en unos minutos. 🙏";
     } else {
-      let textPart = result.text || "";
+      textPart = result.text || "";
       // Limpiar etiquetas <think>...</think> si el modelo las incluye
       textPart = textPart.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
       
@@ -243,7 +242,7 @@ ROLES Y CAPACIDADES:
       if (result && result.toolCalls && result.toolCalls.length > 0) {
         dbContent = JSON.stringify({
           type: "tool-response",
-          text: finalResponse,
+          text: textPart,
           // Normalize: always save as 'input' (AI SDK v7 field name)
           toolCalls: result.toolCalls.map((tc: any) => ({
             toolCallId: tc.toolCallId,

@@ -2,6 +2,9 @@
 
 import { useState, useTransition } from "react";
 import { createProduct, updateProduct, deleteProduct } from "@/modules/inventory/actions";
+import ImportExportModal from "@/components/ai/ImportExportModal";
+import { toast } from "react-hot-toast";
+import ConfirmModal from "@/components/shared/ConfirmModal";
 
 type ProductType = {
   id: string;
@@ -24,6 +27,7 @@ export default function InventoryManager({ initialProducts }: { initialProducts:
   const [deltas, setDeltas] = useState<Record<string, number>>({});
   const [confirmingProduct, setConfirmingProduct] = useState<ProductType | null>(null);
   const [editingProduct, setEditingProduct] = useState<ProductType | null>(null);
+  const [productToDelete, setProductToDelete] = useState<string | null>(null);
 
   const filteredProducts = initialProducts.filter(p => {
     const term = searchTerm.toLowerCase();
@@ -75,8 +79,9 @@ export default function InventoryManager({ initialProducts }: { initialProducts:
         
       if (result.success) {
         closeCreateModal();
+        toast.success(editingProduct ? "Producto actualizado" : "Producto creado");
       } else {
-        alert(result.error);
+        toast.error(result.error || "Error al guardar el producto");
       }
     });
   };
@@ -100,8 +105,9 @@ export default function InventoryManager({ initialProducts }: { initialProducts:
           return next;
         });
         closeConfirmModal();
+        toast.success("Stock actualizado");
       } else {
-        alert(result.error);
+        toast.error(result.error || "Error al actualizar stock");
       }
     });
   };
@@ -116,10 +122,17 @@ export default function InventoryManager({ initialProducts }: { initialProducts:
           return next;
         });
         closeConfirmModal();
+        toast.success("Producto eliminado exitosamente");
       } else {
-        alert(result.error);
+        toast.error(result.error || "Error al eliminar producto");
       }
     });
+  };
+
+  const confirmDeleteAction = () => {
+    if (!productToDelete) return;
+    handleDeleteProduct(productToDelete);
+    setProductToDelete(null);
   };
 
   return (
@@ -136,12 +149,15 @@ export default function InventoryManager({ initialProducts }: { initialProducts:
             className="bg-pitch border border-white/10 text-sterling pl-10 pr-4 py-2 rounded-lg text-sm w-full sm:w-[350px] focus:outline-none focus:border-cognac transition-colors"
           />
         </div>
-        <button 
-          onClick={openCreateModal}
-          className="w-full sm:w-auto bg-cognac hover:brightness-110 text-white px-5 py-2 rounded-lg text-sm font-medium transition-all"
-        >
-          + Nuevo Producto
-        </button>
+        <div className="flex flex-col sm:flex-row w-full sm:w-auto gap-2">
+          <ImportExportModal entityType="products" />
+          <button 
+            onClick={openCreateModal}
+            className="w-full sm:w-auto bg-cognac hover:brightness-110 text-white px-5 py-2 rounded-lg text-sm font-medium transition-all"
+          >
+            + Nuevo Producto
+          </button>
+        </div>
       </div>
 
       {/* Tabla de Inventario */}
@@ -395,7 +411,7 @@ export default function InventoryManager({ initialProducts }: { initialProducts:
                   {editingProduct && (
                     <button 
                       type="button" 
-                      onClick={() => handleDeleteProduct(editingProduct.id)} 
+                      onClick={() => setProductToDelete(editingProduct.id)} 
                       disabled={isPending}
                       className="text-red-400 hover:text-red-300 px-4 py-2.5 text-sm font-medium transition-colors"
                     >
@@ -417,6 +433,15 @@ export default function InventoryManager({ initialProducts }: { initialProducts:
           </div>
         </div>
       )}
+
+      <ConfirmModal 
+        isOpen={!!productToDelete}
+        title="Eliminar Producto"
+        message="¿Estás seguro que deseas eliminar este producto permanentemente? Esto no se puede deshacer."
+        onConfirm={confirmDeleteAction}
+        onCancel={() => setProductToDelete(null)}
+        isLoading={isPending}
+      />
     </div>
   );
 }

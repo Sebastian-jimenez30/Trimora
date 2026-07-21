@@ -74,3 +74,30 @@ export async function deleteProduct(id: string) {
     return { success: false, error: "No se puede eliminar el producto porque está vinculado a servicios o ventas." };
   }
 }
+
+export async function batchImportProducts(items: any[]) {
+  try {
+    const orgId = await getOrganizationId();
+    
+    if (!items || items.length === 0) return { success: false, error: "No hay productos para importar" };
+
+    const inserts = items.map(item => ({
+      organizationId: orgId,
+      name: item.name,
+      description: item.description || null,
+      category: item.category,
+      currentStock: item.currentStock?.toString() || '0',
+      minimumStock: item.minimumStock?.toString() || '0',
+      salePrice: item.salePrice?.toString() || null,
+      costPrice: item.costPrice?.toString() || null,
+      isActive: true,
+    }));
+    
+    await db.insert(products).values(inserts);
+    revalidatePath("/inventario");
+    
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}

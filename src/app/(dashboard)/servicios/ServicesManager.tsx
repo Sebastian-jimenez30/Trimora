@@ -2,6 +2,9 @@
 
 import { useState, useTransition } from "react";
 import { createServiceWithMaterials, updateServiceWithMaterials, deleteService, quickCreateProduct } from "@/modules/services/actions";
+import ImportExportModal from "@/components/ai/ImportExportModal";
+import { toast } from "react-hot-toast";
+import ConfirmModal from "@/components/shared/ConfirmModal";
 
 type Product = {
   id: string;
@@ -40,6 +43,9 @@ export default function ServicesManager({ services, products: initialProducts }:
   
   // Current editing service
   const [editingId, setEditingId] = useState<string | null>(null);
+  
+  // Confirm Delete State
+  const [serviceToDelete, setServiceToDelete] = useState<string | null>(null);
   
   // Service Form State
   const [name, setName] = useState("");
@@ -100,7 +106,7 @@ export default function ServicesManager({ services, products: initialProducts }:
 
     // Validar cantidades de los materiales que sí se seleccionaron
     if (validMaterials.some(m => Number(m.quantityUsed) <= 0)) {
-      alert("Por favor, ingresa una cantidad válida mayor a 0 para los consumibles seleccionados.");
+      toast.error("Por favor, ingresa una cantidad válida mayor a 0 para los consumibles seleccionados.");
       return;
     }
 
@@ -121,16 +127,23 @@ export default function ServicesManager({ services, products: initialProducts }:
 
       if (res.success) {
         setIsServiceModalOpen(false);
+        toast.success(editingId ? "Servicio actualizado" : "Servicio creado");
       } else {
-        alert(res.error || "Error al guardar el servicio");
+        toast.error(res.error || "Error al guardar el servicio");
       }
     });
   };
 
-  const handleDeleteService = (id: string) => {
-    if (!confirm("¿Seguro que deseas eliminar este servicio de forma permanente?")) return;
+  const confirmDeleteService = () => {
+    if (!serviceToDelete) return;
     startTransition(async () => {
-      await deleteService(id);
+      const res = await deleteService(serviceToDelete);
+      if (res.success) {
+        toast.success("Servicio eliminado permanentemente");
+      } else {
+        toast.error(res.error || "Error al eliminar");
+      }
+      setServiceToDelete(null);
     });
   };
 
@@ -169,21 +182,22 @@ export default function ServicesManager({ services, products: initialProducts }:
     <div className="space-y-8">
       
       {/* Barra superior */}
-      <div className="flex justify-end">
-        <button 
-          onClick={openNewService}
-          className="bg-cognac hover:bg-cognac-hover text-white px-6 py-2.5 rounded-full font-medium transition-all shadow-[0_4px_15px_rgba(139,69,19,0.3)] active:scale-95 flex items-center gap-2"
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-          Nuevo Servicio
-        </button>
+      <div className="flex justify-between items-center bg-[#141414] p-4 rounded-xl border border-white/10 gap-4 shrink-0 mb-4">
+        <h2 className="text-xl font-serif text-white">Catálogo de Servicios</h2>
+        <div className="flex gap-2">
+          <ImportExportModal entityType="services" />
+          <button 
+            onClick={openNewService}
+            className="bg-cognac hover:bg-cognac-hover text-white px-6 py-2.5 rounded-lg font-medium transition-all shadow-[0_4px_15px_rgba(139,69,19,0.3)] active:scale-95 flex items-center gap-2"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            Nuevo Servicio
+          </button>
+        </div>
       </div>
 
       {/* Tabla de Servicios */}
       <div className="bg-midnight/90 rounded-2xl shadow-2xl border border-white/10 overflow-hidden">
-        <div className="p-6 border-b border-white/10 bg-[#1a1a1a]">
-          <h2 className="text-xl font-serif text-white">Catálogo de Servicios</h2>
-        </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
@@ -231,7 +245,7 @@ export default function ServicesManager({ services, products: initialProducts }:
                         Editar
                       </button>
                       <button 
-                        onClick={() => handleDeleteService(srv.id)}
+                        onClick={() => setServiceToDelete(srv.id)}
                         disabled={isPending}
                         className="text-red-400 hover:text-red-300 px-2 py-1 transition-colors disabled:opacity-50"
                       >
@@ -475,6 +489,14 @@ export default function ServicesManager({ services, products: initialProducts }:
         </div>
       )}
 
+      <ConfirmModal 
+        isOpen={!!serviceToDelete}
+        title="Eliminar Servicio"
+        message="¿Estás seguro que deseas eliminar este servicio de forma permanente? Esta acción no se puede deshacer."
+        onConfirm={confirmDeleteService}
+        onCancel={() => setServiceToDelete(null)}
+        isLoading={isPending}
+      />
     </div>
   );
 }
