@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useTransition, useEffect } from "react";
-import { processSale, registerExpense, CartItem } from "@/modules/pos/actions";
+import { processSale, registerExpense, registerPayment, exportFinancialReport, CartItem } from "@/modules/pos/actions";
 import { useSearchParams, useRouter } from "next/navigation";
 
 type POSProps = {
@@ -27,6 +27,15 @@ export default function POSManager({ services, products, clients, staff, history
   const [selectedClientId, setSelectedClientId] = useState<string>("");
   const [paymentMethod, setPaymentMethod] = useState<string>("CASH");
   const [currentAppointmentId, setCurrentAppointmentId] = useState<string>("");
+
+  const [initialPaidAmount, setInitialPaidAmount] = useState<string>("");
+  const [initialPaymentMethod, setInitialPaymentMethod] = useState<string>("CASH");
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [selectedTxId, setSelectedTxId] = useState("");
+  const [paymentAmount, setPaymentAmount] = useState("");
+  const [successTxId, setSuccessTxId] = useState("");
+  
+  const [isExporting, setIsExporting] = useState(false);
 
   const [isPending, startTransition] = useTransition();
 
@@ -59,6 +68,20 @@ export default function POSManager({ services, products, clients, staff, history
     if (urlAppId && pendingAppointments) {
       loadAppointment(urlAppId);
       // Limpiar la URL para evitar recargas raras
+      router.replace("/pos");
+    }
+
+    const tab = searchParams?.get("tab");
+    if (tab === "HISTORY" || tab === "VENTA" || tab === "COMPRA") {
+      setActiveTab(tab as any);
+    }
+    
+    const payTx = searchParams?.get("payTx");
+    const payAmountParam = searchParams?.get("payAmount");
+    if (payTx && payAmountParam) {
+      setSelectedTxId(payTx);
+      setPaymentAmount(payAmountParam);
+      setIsPaymentModalOpen(true);
       router.replace("/pos");
     }
   }, [searchParams, pendingAppointments, services, router]);
@@ -124,17 +147,67 @@ export default function POSManager({ services, products, clients, staff, history
 
   const handleCheckout = () => {
     if (cart.length === 0) return;
+    if (paymentMethod === 'CREDIT' && !selectedClientId) {
+      alert("Debe seleccionar un cliente para fiados.");
+      return;
+    }
+    const parsedInitialPaid = parseFloat(initialPaidAmount) || 0;
+    
     startTransition(async () => {
-      const result = await processSale(cart, selectedClientId || null, paymentMethod, currentAppointmentId || undefined);
-      if (result.success) {
+      const result = await processSale(cart, selectedClientId || null, paymentMethod, currentAppointmentId || undefined, parsedInitialPaid, initialPaymentMethod);
+      if (result.success && result.transactionId) {
         setCart([]);
         setSelectedClientId("");
         setCurrentAppointmentId("");
+        setInitialPaidAmount("");
+        setSuccessTxId(result.transactionId); // Abrir modal de éxito
         setActiveTab("HISTORY");
       } else {
         alert(result.error);
       }
     });
+  };
+
+  const handlePayment = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedTxId || !paymentAmount) return;
+    const amount = parseFloat(paymentAmount);
+    if (amount <= 0) return;
+
+    startTransition(async () => {
+      const result = await registerPayment(selectedTxId, amount, "CASH"); // Asumimos efectivo por rapidez, se podría mejorar
+      if (result.success) {
+        setIsPaymentModalOpen(false);
+        setSelectedTxId("");
+        setPaymentAmount("");
+      } else {
+        alert(result.error);
+      }
+    });
+  };
+
+  const handleExport = async () => {
+    setIsExporting(true);
+    // Exportamos el mes actual como ejemplo, idealmente tendría selectores
+    const start = new Date();
+    start.setDate(1);
+    start.setHours(0,0,0,0);
+    const end = new Date();
+    end.setHours(23,59,59,999);
+    
+    const result = await exportFinancialReport(start.toISOString(), end.toISOString());
+    setIsExporting(false);
+    if (result.success && result.csv) {
+      const blob = new Blob([result.csv], { type: 'text/csv' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `reporte_financiero_${start.toLocaleDateString().replace(/\//g, '-')}.csv`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } else {
+      alert(result.error || "Error exportando");
+    }
   };
 
   const handleExpenseSubmit = (e: React.FormEvent<HTMLFormElement>) => {
@@ -345,8 +418,15 @@ export default function POSManager({ services, products, clients, staff, history
           {/* HISTORIAL */}
           {activeTab === "HISTORY" && (
             <div className="bg-[#141414] border border-white/10 rounded-xl overflow-hidden max-w-5xl">
-              <div className="p-5 border-b border-white/10">
+              <div className="p-5 border-b border-white/10 flex justify-between items-center">
                 <h3 className="font-serif text-lg text-sterling">Transacciones Recientes</h3>
+                <button 
+                  onClick={handleExport}
+                  disabled={isExporting}
+                  className="bg-[#1a1a1a] border border-white/10 hover:bg-white/5 text-[#888] hover:text-white px-4 py-2 rounded-lg text-xs font-bold transition-colors disabled:opacity-50"
+                >
+                  {isExporting ? "Exportando..." : "Exportar CSV (Mes)"}
+                </button>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse whitespace-nowrap min-w-[600px]">
@@ -356,12 +436,17 @@ export default function POSManager({ services, products, clients, staff, history
                     <th className="py-3 px-5 text-xs text-[#888] font-medium border-b border-white/10">Tipo</th>
                     <th className="py-3 px-5 text-xs text-[#888] font-medium border-b border-white/10">Descripción</th>
                     <th className="py-3 px-5 text-xs text-[#888] font-medium border-b border-white/10">Cliente</th>
+                    <th className="py-3 px-5 text-xs text-[#888] font-medium border-b border-white/10">Estado</th>
                     <th className="py-3 px-5 text-xs text-[#888] font-medium border-b border-white/10 text-right">Monto</th>
+                    <th className="py-3 px-5 text-xs text-[#888] font-medium border-b border-white/10 text-center">Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {history.map(tx => (
-                    <tr key={tx.id} className="hover:bg-white/5 border-b border-white/5 transition-colors">
+                  {history.map(tx => {
+                    const isPending = tx.status === 'PENDING';
+                    const remaining = isPending ? (parseFloat(tx.totalAmount) - parseFloat(tx.paidAmount || '0')).toFixed(2) : '0.00';
+                    return (
+                    <tr key={tx.id} className={`hover:bg-white/5 border-b border-white/5 transition-colors ${isPending ? 'bg-[#8B4513]/10' : ''}`}>
                       <td className="py-3 px-5 text-sm text-sterling">
                         {new Date(tx.createdAt).toLocaleDateString()} {new Date(tx.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                       </td>
@@ -374,11 +459,45 @@ export default function POSManager({ services, products, clients, staff, history
                       </td>
                       <td className="py-3 px-5 text-sm text-sterling">{tx.description}</td>
                       <td className="py-3 px-5 text-sm text-[#888]">{tx.clientName}</td>
+                      <td className="py-3 px-5">
+                        {isPending ? (
+                          <div className="flex flex-col">
+                            <span className="text-orange-400 font-bold text-xs uppercase tracking-wider">Pendiente</span>
+                            <span className="text-[10px] text-orange-400/70">Debe: ${remaining}</span>
+                          </div>
+                        ) : (
+                          <span className="text-green-500 font-bold text-xs uppercase tracking-wider">Completado</span>
+                        )}
+                      </td>
                       <td className={`py-3 px-5 text-sm font-bold text-right ${tx.type === "INCOME" ? "text-green-500" : "text-red-500"}`}>
                         {tx.type === "INCOME" ? "+" : "-"}${tx.totalAmount}
                       </td>
+                      <td className="py-3 px-5 text-center flex items-center justify-center gap-2">
+                        {tx.type === "INCOME" && (
+                          <button
+                            onClick={() => window.open(`/pos/receipt/${tx.id}`, '_blank')}
+                            className="bg-white/5 hover:bg-white/10 text-sterling px-3 py-1.5 rounded text-xs transition-colors"
+                            title="Imprimir Factura"
+                          >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+                          </button>
+                        )}
+                        {isPending && (
+                           <button
+                             onClick={() => {
+                               setSelectedTxId(tx.id);
+                               setPaymentAmount(remaining);
+                               setIsPaymentModalOpen(true);
+                             }}
+                             className="bg-orange-500/20 hover:bg-orange-500/40 border border-orange-500/50 text-orange-400 px-3 py-1.5 rounded text-xs transition-colors font-bold"
+                             title="Abonar"
+                           >
+                             Abonar
+                           </button>
+                        )}
+                      </td>
                     </tr>
-                  ))}
+                  )})}
                   {history.length === 0 && (
                     <tr>
                       <td colSpan={5} className="py-10 text-center text-[#888] text-sm">No hay transacciones recientes.</td>
@@ -512,21 +631,48 @@ export default function POSManager({ services, products, clients, staff, history
 
             <div className="border-t border-white/5 pt-4">
               <h3 className="text-xs text-charcoal uppercase tracking-wider mb-2">Método de Pago</h3>
-              <div className="grid grid-cols-3 gap-2">
-                {(["CASH", "CARD", "TRANSFER"] as const).map(method => (
+              <div className="grid grid-cols-4 gap-2">
+                {(["CASH", "CARD", "TRANSFER", "CREDIT"] as const).map(method => (
                   <button 
                     key={method}
                     onClick={() => setPaymentMethod(method)}
-                    className={`py-2 text-[11px] font-medium rounded-lg border transition-all ${
+                    className={`py-2 text-[10px] font-medium rounded-lg border transition-all ${
                       paymentMethod === method 
                         ? "bg-[#8B4513]/20 border-[#8B4513] text-white" 
                         : "bg-pitch border-white/10 text-[#888] hover:border-white/30"
                     }`}
                   >
-                    {method === "CASH" ? "Efectivo" : method === "CARD" ? "Tarjeta" : "Transferencia"}
+                    {method === "CASH" ? "Efectivo" : method === "CARD" ? "Tarjeta" : method === "TRANSFER" ? "Transferencia" : "Fiado"}
                   </button>
                 ))}
               </div>
+              
+              {paymentMethod === "CREDIT" && (
+                <div className="mt-4 p-3 bg-white/5 rounded-lg border border-orange-500/30 animate-in fade-in slide-in-from-top-2">
+                  <label className="text-xs text-orange-400 font-bold mb-2 block">Abono Inicial (Opcional)</label>
+                  <div className="flex gap-2">
+                    <input 
+                      type="number" 
+                      min="0"
+                      step="0.01"
+                      placeholder="0.00" 
+                      value={initialPaidAmount}
+                      onChange={e => setInitialPaidAmount(e.target.value)}
+                      className="bg-pitch border border-white/10 text-sterling px-3 py-2 rounded-lg text-sm w-full focus:outline-none focus:border-orange-500"
+                    />
+                    <select 
+                      value={initialPaymentMethod}
+                      onChange={e => setInitialPaymentMethod(e.target.value)}
+                      className="bg-pitch border border-white/10 text-[#888] px-2 py-2 rounded-lg text-xs focus:outline-none w-[110px]"
+                    >
+                      <option value="CASH">Efectivo</option>
+                      <option value="CARD">Tarjeta</option>
+                      <option value="TRANSFER">Transf.</option>
+                    </select>
+                  </div>
+                  <p className="text-[10px] text-charcoal mt-1">Deje vacío si no hay abono inicial.</p>
+                </div>
+              )}
             </div>
 
           </div>
@@ -546,6 +692,75 @@ export default function POSManager({ services, products, clients, staff, history
             </button>
           </div>
           
+        </div>
+      )}
+
+      {/* MODAL PARA ABONAR */}
+      {isPaymentModalOpen && (
+        <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#141414] border border-white/10 p-6 rounded-xl w-full max-w-sm shadow-2xl animate-in zoom-in-95">
+            <h3 className="text-lg font-serif text-sterling mb-1">Registrar Abono</h3>
+            <p className="text-xs text-[#888] mb-4">Ingrese el monto a abonar a la deuda.</p>
+            <form onSubmit={handlePayment} className="flex flex-col gap-4">
+              <div>
+                <label className="text-xs text-charcoal uppercase tracking-wider block mb-1">Monto ($)</label>
+                <input 
+                  type="number" 
+                  step="0.01" 
+                  min="0.01"
+                  required
+                  autoFocus
+                  value={paymentAmount}
+                  onChange={e => setPaymentAmount(e.target.value)}
+                  className="bg-pitch border border-white/10 text-sterling px-4 py-3 rounded-lg text-sm focus:outline-none focus:border-orange-500 w-full"
+                />
+              </div>
+              <div className="flex gap-3 mt-2">
+                <button 
+                  type="button" 
+                  onClick={() => setIsPaymentModalOpen(false)}
+                  className="flex-1 bg-white/5 hover:bg-white/10 text-sterling py-2.5 rounded-lg text-sm font-bold transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  type="submit" 
+                  disabled={isPending}
+                  className="flex-1 bg-orange-500/80 hover:bg-orange-500 text-white py-2.5 rounded-lg text-sm font-bold transition-colors disabled:opacity-50"
+                >
+                  {isPending ? "Procesando..." : "Confirmar"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE VENTA EXITOSA */}
+      {successTxId && (
+        <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#141414] border border-white/10 p-8 rounded-xl w-full max-w-sm shadow-2xl animate-in zoom-in-95 flex flex-col items-center text-center">
+            <div className="w-16 h-16 bg-green-500/20 text-green-500 rounded-full flex items-center justify-center mb-4">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            </div>
+            <h3 className="text-2xl font-serif text-sterling mb-2">¡Venta Exitosa!</h3>
+            <p className="text-sm text-[#888] mb-6">La transacción se ha registrado correctamente.</p>
+            <div className="flex flex-col gap-3 w-full">
+              <button 
+                onClick={() => window.open(`/pos/receipt/${successTxId}`, '_blank')}
+                className="w-full bg-[#8B4513] hover:bg-[#A0522D] text-white py-3 rounded-lg text-sm font-bold transition-colors flex items-center justify-center gap-2 shadow-lg"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+                Imprimir Factura
+              </button>
+              <button 
+                onClick={() => setSuccessTxId("")}
+                className="w-full bg-white/5 hover:bg-white/10 text-sterling py-3 rounded-lg text-sm font-bold transition-colors"
+              >
+                Continuar
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

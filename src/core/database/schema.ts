@@ -99,8 +99,9 @@ export const transactions = pgTable('transactions', {
   staffId: uuid('staff_id').references(() => organizationMembers.id), // Quién cobró/atendió
   type: text('type').default('INCOME').notNull(), // INCOME, EXPENSE
   totalAmount: numeric('total_amount', { precision: 10, scale: 2 }).notNull(),
-  paymentMethod: text('payment_method'), // CASH, CARD, TRANSFER
+  paymentMethod: text('payment_method'), // CASH, CARD, TRANSFER, CREDIT
   status: text('status').default('COMPLETED').notNull(), // PENDING, COMPLETED, REFUNDED
+  paidAmount: numeric('paid_amount', { precision: 10, scale: 2 }).default('0').notNull(),
   notes: text('notes'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
@@ -113,6 +114,14 @@ export const transactionItems = pgTable('transaction_items', {
   quantity: numeric('quantity', { precision: 10, scale: 2 }).notNull().default('1'),
   unitPrice: numeric('unit_price', { precision: 10, scale: 2 }).notNull(),
   subtotal: numeric('subtotal', { precision: 10, scale: 2 }).notNull(),
+});
+
+export const transactionPayments = pgTable('transaction_payments', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  transactionId: uuid('transaction_id').references(() => transactions.id, { onDelete: 'cascade' }).notNull(),
+  amount: numeric('amount', { precision: 10, scale: 2 }).notNull(),
+  paymentMethod: text('payment_method').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
 
 export const inventoryMovements = pgTable('inventory_movements', {
