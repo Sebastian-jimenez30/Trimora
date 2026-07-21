@@ -37,6 +37,9 @@ export default function POSManager({ services, products, clients, staff, history
   const [successTxId, setSuccessTxId] = useState("");
   
   const [isExporting, setIsExporting] = useState(false);
+  const [exportRangeType, setExportRangeType] = useState<"MONTH" | "WEEK" | "DAY" | "CUSTOM">("MONTH");
+  const [customStartDate, setCustomStartDate] = useState("");
+  const [customEndDate, setCustomEndDate] = useState("");
 
   const [isPending, startTransition] = useTransition();
 
@@ -190,12 +193,27 @@ export default function POSManager({ services, products, clients, staff, history
 
   const handleExport = async () => {
     setIsExporting(true);
-    // Exportamos el mes actual como ejemplo, idealmente tendría selectores
-    const start = new Date();
-    start.setDate(1);
+    let start = new Date();
+    let end = new Date();
+    
     start.setHours(0,0,0,0);
-    const end = new Date();
     end.setHours(23,59,59,999);
+
+    if (exportRangeType === "MONTH") {
+      start.setDate(1);
+    } else if (exportRangeType === "WEEK") {
+      const day = start.getDay();
+      const diff = start.getDate() - day + (day === 0 ? -6 : 1);
+      start.setDate(diff);
+    } else if (exportRangeType === "CUSTOM") {
+      if (!customStartDate || !customEndDate) {
+        toast.error("Seleccione ambas fechas para el rango personalizado.");
+        setIsExporting(false);
+        return;
+      }
+      start = new Date(customStartDate + "T00:00:00");
+      end = new Date(customEndDate + "T23:59:59");
+    }
     
     const result = await exportFinancialReport(start.toISOString(), end.toISOString());
     setIsExporting(false);
@@ -204,7 +222,7 @@ export default function POSManager({ services, products, clients, staff, history
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `reporte_financiero_${start.toLocaleDateString().replace(/\//g, '-')}.csv`;
+      a.download = `reporte_financiero_${start.toLocaleDateString().replace(/\//g, '-')}_al_${end.toLocaleDateString().replace(/\//g, '-')}.csv`;
       a.click();
       window.URL.revokeObjectURL(url);
     } else {
@@ -423,13 +441,45 @@ export default function POSManager({ services, products, clients, staff, history
             <div className="bg-[#141414] border border-white/10 rounded-xl overflow-hidden max-w-5xl">
               <div className="p-5 border-b border-white/10 flex justify-between items-center">
                 <h3 className="font-serif text-lg text-sterling">Transacciones Recientes</h3>
-                <button 
-                  onClick={handleExport}
-                  disabled={isExporting}
-                  className="bg-[#1a1a1a] border border-white/10 hover:bg-white/5 text-[#888] hover:text-white px-4 py-2 rounded-lg text-xs font-bold transition-colors disabled:opacity-50"
-                >
-                  {isExporting ? "Exportando..." : "Exportar CSV (Mes)"}
-                </button>
+                <div className="flex flex-col sm:flex-row items-center gap-3">
+                  <select 
+                    value={exportRangeType} 
+                    onChange={(e) => setExportRangeType(e.target.value as any)}
+                    className="bg-pitch border border-white/10 text-sterling px-3 py-1.5 rounded-lg text-xs focus:outline-none focus:border-[#8B4513]"
+                  >
+                    <option value="DAY">Hoy</option>
+                    <option value="WEEK">Esta Semana</option>
+                    <option value="MONTH">Este Mes</option>
+                    <option value="CUSTOM">Personalizado</option>
+                  </select>
+                  
+                  {exportRangeType === "CUSTOM" && (
+                    <div className="flex items-center gap-2">
+                      <input 
+                        type="date" 
+                        value={customStartDate} 
+                        onChange={(e) => setCustomStartDate(e.target.value)}
+                        className="bg-pitch border border-white/10 text-sterling px-2 py-1 rounded text-xs focus:outline-none"
+                      />
+                      <span className="text-[#888] text-xs">al</span>
+                      <input 
+                        type="date" 
+                        value={customEndDate} 
+                        onChange={(e) => setCustomEndDate(e.target.value)}
+                        className="bg-pitch border border-white/10 text-sterling px-2 py-1 rounded text-xs focus:outline-none"
+                      />
+                    </div>
+                  )}
+
+                  <button 
+                    onClick={handleExport}
+                    disabled={isExporting}
+                    className="bg-[#1a1a1a] border border-white/10 hover:bg-white/5 text-[#888] hover:text-white px-4 py-2 rounded-lg text-xs font-bold transition-colors disabled:opacity-50 flex items-center gap-2"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                    {isExporting ? "Exportando..." : "Exportar CSV"}
+                  </button>
+                </div>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse whitespace-nowrap min-w-[600px]">

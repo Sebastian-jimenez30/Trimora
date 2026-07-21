@@ -132,7 +132,7 @@ export default function ImportExportModal({ entityType }: ImportExportModalProps
 
       {isOpen && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-          <div className="bg-[#141414] border border-white/10 w-full max-w-md rounded-xl shadow-2xl p-6 animate-in zoom-in-95 duration-200">
+          <div className="bg-[#141414] border border-white/10 w-full max-w-5xl rounded-xl shadow-2xl p-6 animate-in zoom-in-95 duration-200">
             <div className="flex justify-between items-center mb-6 border-b border-white/10 pb-4">
               <h3 className="text-xl font-serif text-sterling flex items-center gap-2">
                 <span className="text-cognac">✨</span> Importación IA
@@ -227,7 +227,7 @@ export default function ImportExportModal({ entityType }: ImportExportModalProps
                               type="text" 
                               value={item.name || ""} 
                               onChange={(e) => handleFieldChange(idx, "name", e.target.value)}
-                              className="w-full bg-transparent border-none focus:ring-1 focus:ring-cognac rounded px-1 outline-none" 
+                              className="w-full bg-white/5 border border-white/10 focus:bg-white/10 focus:ring-1 focus:ring-cognac rounded px-2 py-1 outline-none transition-colors" 
                             />
                           </td>
                           {entityType === "products" ? (
@@ -236,10 +236,10 @@ export default function ImportExportModal({ entityType }: ImportExportModalProps
                                 <select 
                                   value={item.category || "VENTA"} 
                                   onChange={(e) => handleFieldChange(idx, "category", e.target.value)}
-                                  className="w-full bg-transparent border-none focus:ring-1 focus:ring-cognac rounded px-1 outline-none text-[#141414]"
+                                  className="w-full bg-white/5 border border-white/10 focus:bg-white/10 focus:ring-1 focus:ring-cognac rounded px-2 py-1 outline-none text-sterling transition-colors"
                                 >
-                                  <option value="VENTA" className="text-black">VENTA</option>
-                                  <option value="CONSUMO" className="text-black">CONSUMO</option>
+                                  <option value="VENTA" className="text-black bg-white">VENTA</option>
+                                  <option value="CONSUMO" className="text-black bg-white">CONSUMO</option>
                                 </select>
                               </td>
                               <td className="px-4 py-2">
@@ -247,7 +247,7 @@ export default function ImportExportModal({ entityType }: ImportExportModalProps
                                   type="number" 
                                   value={item.salePrice || 0} 
                                   onChange={(e) => handleFieldChange(idx, "salePrice", parseFloat(e.target.value))}
-                                  className="w-full bg-transparent border-none focus:ring-1 focus:ring-cognac rounded px-1 outline-none" 
+                                  className="w-full bg-white/5 border border-white/10 focus:bg-white/10 focus:ring-1 focus:ring-cognac rounded px-2 py-1 outline-none transition-colors" 
                                 />
                               </td>
                               <td className="px-4 py-2">
@@ -255,7 +255,7 @@ export default function ImportExportModal({ entityType }: ImportExportModalProps
                                   type="number" 
                                   value={item.currentStock || 0} 
                                   onChange={(e) => handleFieldChange(idx, "currentStock", parseFloat(e.target.value))}
-                                  className="w-full bg-transparent border-none focus:ring-1 focus:ring-cognac rounded px-1 outline-none" 
+                                  className="w-full bg-white/5 border border-white/10 focus:bg-white/10 focus:ring-1 focus:ring-cognac rounded px-2 py-1 outline-none transition-colors" 
                                 />
                               </td>
                             </>
@@ -266,7 +266,7 @@ export default function ImportExportModal({ entityType }: ImportExportModalProps
                                   type="number" 
                                   value={item.durationMinutes || 30} 
                                   onChange={(e) => handleFieldChange(idx, "durationMinutes", parseInt(e.target.value))}
-                                  className="w-full bg-transparent border-none focus:ring-1 focus:ring-cognac rounded px-1 outline-none" 
+                                  className="w-full bg-white/5 border border-white/10 focus:bg-white/10 focus:ring-1 focus:ring-cognac rounded px-2 py-1 outline-none transition-colors" 
                                 />
                               </td>
                               <td className="px-4 py-2">
@@ -274,7 +274,7 @@ export default function ImportExportModal({ entityType }: ImportExportModalProps
                                   type="number" 
                                   value={item.price || 0} 
                                   onChange={(e) => handleFieldChange(idx, "price", parseFloat(e.target.value))}
-                                  className="w-full bg-transparent border-none focus:ring-1 focus:ring-cognac rounded px-1 outline-none" 
+                                  className="w-full bg-white/5 border border-white/10 focus:bg-white/10 focus:ring-1 focus:ring-cognac rounded px-2 py-1 outline-none transition-colors" 
                                 />
                               </td>
                             </>

@@ -17,14 +17,7 @@ export default function Home() {
         {/* Navbar */}
         <nav className="flex justify-between items-center py-10">
           <Link href="/" className="flex items-center gap-3 text-sterling hover:text-white transition-colors">
-            <svg width="40" height="40" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M40 60 L10 30 L20 20 L50 50" stroke="currentColor" strokeWidth="4" strokeLinecap="round"/>
-                <path d="M60 60 L90 30 L80 20 L50 50" stroke="currentColor" strokeWidth="4" strokeLinecap="round"/>
-                <circle cx="35" cy="75" r="8" stroke="currentColor" strokeWidth="4"/>
-                <circle cx="65" cy="75" r="8" stroke="currentColor" strokeWidth="4"/>
-                <path d="M41 69 L50 50 L59 69" stroke="currentColor" strokeWidth="4" strokeLinecap="round"/>
-                <circle cx="50" cy="50" r="3" fill="currentColor"/>
-            </svg>
+            <img src="/trimora-logo-white.png" alt="Trimora Logo" className="w-[40px] h-[40px] object-contain" />
             <span className="font-serif text-[28px] font-bold tracking-[2px]">TRIMORA</span>
           </Link>
           
