@@ -5,6 +5,7 @@ import DashboardNavigation from "@/components/layout/DashboardNavigation";
 import { getPendingAppointmentsForToday } from "@/modules/agenda/actions";
 
 import SessionTimeout from "@/components/layout/SessionTimeout";
+import ChatWidget from "@/components/ai/ChatWidget";
 
 export default async function DashboardLayout({
   children,
@@ -55,6 +56,7 @@ export default async function DashboardLayout({
       <DashboardNavigation username={capitalizedUsername} avatarUrl={avatarUrl} pendingAppointments={pendingAppointments} isAdmin={isAdmin}>
         {children}
       </DashboardNavigation>
+      <ChatWidget />
     </>
   );
 }
