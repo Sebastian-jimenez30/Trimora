@@ -37,6 +37,10 @@ export async function createAppointment(formData: FormData) {
     const startTime = new Date(startTimeStr);
     const endTime = new Date(endTimeStr);
 
+    if (startTime < new Date()) {
+      return { success: false, error: "No se pueden agendar citas en el pasado." };
+    }
+
     await db.insert(appointments).values({
       organizationId,
       clientId,

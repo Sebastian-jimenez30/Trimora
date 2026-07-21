@@ -110,7 +110,7 @@ export default function DashboardNavigation({ username, avatarUrl, pendingAppoin
       <div className="flex-1 flex flex-col bg-[#0f0f0f] min-w-0">
         
         {/* Topbar */}
-        <header className="h-[70px] border-b border-white/10 flex items-center justify-between px-4 md:px-[30px] bg-pitch sticky top-0 z-10 shrink-0">
+        <header className="h-[70px] border-b border-white/10 flex items-center justify-between px-4 md:px-[30px] bg-pitch sticky top-0 z-40 shrink-0">
           <div className="flex items-center gap-4">
             <button className="md:hidden text-sterling hover:text-white p-1" onClick={() => setIsOpen(true)}>
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
@@ -170,7 +170,7 @@ export default function DashboardNavigation({ username, avatarUrl, pendingAppoin
                           </div>
                           <span className="text-xs text-[#888] truncate">{app.serviceName}</span>
                           <span className="text-[10px] text-charcoal mt-1">
-                            Finalizó: {new Date(app.endTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                            Inició a las: {new Date(app.startTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                           </span>
                         </div>
                       ))

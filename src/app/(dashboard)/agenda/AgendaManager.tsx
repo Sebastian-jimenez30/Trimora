@@ -213,7 +213,8 @@ export default function AgendaManager({
     return {
       top: `${offset}px`,
       height: `${height}px`,
-      className: `absolute w-[95%] left-[2.5%] rounded-md px-2 py-1 cursor-pointer shadow-lg transition-transform hover:scale-[1.02] z-10 overflow-hidden ${bgClass}`
+      minHeight: '30px', // Prevent text cutoff on very short appointments
+      className: `absolute w-[95%] left-[2.5%] rounded-md px-2 py-1 cursor-pointer shadow-lg transition-transform hover:scale-[1.02] hover:z-20 z-10 overflow-hidden flex flex-col justify-center ${bgClass}`
     };
   };
 
@@ -266,9 +267,9 @@ export default function AgendaManager({
                 const service = services.find(s => s.id === app.serviceId);
                 const start = toDate(app.startTime, { timeZone: TIMEZONE });
                 return (
-                  <div key={app.id} className={style.className} style={{ top: style.top, height: style.height }} onClick={(e) => { e.stopPropagation(); openEditModal(app); }}>
-                    <div className="font-bold text-white text-[12px] truncate">{client?.firstName} {client?.lastName}</div>
-                    <div className="text-[11px] text-[#ccc] truncate mt-0.5">{service?.name} • {start.getHours()}:{start.getMinutes().toString().padStart(2, '0')}</div>
+                  <div key={app.id} className={style.className} style={{ top: style.top, height: style.height, minHeight: style.minHeight }} onClick={(e) => { e.stopPropagation(); openEditModal(app); }}>
+                    <div className="font-bold text-white text-[12px] truncate leading-tight">{client?.firstName} {client?.lastName}</div>
+                    <div className="text-[10px] text-[#ccc] truncate mt-0.5">{service?.name} • {start.getHours()}:{start.getMinutes().toString().padStart(2, '0')}</div>
                   </div>
                 );
               })}
@@ -337,7 +338,7 @@ export default function AgendaManager({
                       const style = getAppointmentStyle(app);
                       const client = clients.find(c => c.id === app.clientId);
                       return (
-                        <div key={app.id} className={`${style.className} !left-0 !w-full !rounded-sm !border-l-[3px]`} style={{ top: style.top, height: style.height }} onClick={(e) => { e.stopPropagation(); openEditModal(app); }}>
+                        <div key={app.id} className={`${style.className} !left-0 !w-full !rounded-sm !border-l-[3px]`} style={{ top: style.top, height: style.height, minHeight: style.minHeight }} onClick={(e) => { e.stopPropagation(); openEditModal(app); }}>
                           <div className="font-bold text-white text-[10px] truncate leading-tight">{client?.firstName}</div>
                         </div>
                       );
