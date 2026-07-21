@@ -182,3 +182,28 @@ export async function quickCreateProduct(formData: FormData) {
     return { success: false, error: error.message };
   }
 }
+
+export async function batchImportServices(items: any[]) {
+  try {
+    const { organizationId } = await requireAuth();
+    
+    if (!items || items.length === 0) return { success: false, error: "No hay servicios para importar" };
+
+    const inserts = items.map(item => ({
+      organizationId,
+      name: item.name,
+      description: item.description || null,
+      durationMinutes: item.durationMinutes || 30,
+      price: item.price.toString(),
+      isActive: true,
+    }));
+    
+    await db.insert(services).values(inserts);
+    revalidatePath("/servicios");
+    
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+

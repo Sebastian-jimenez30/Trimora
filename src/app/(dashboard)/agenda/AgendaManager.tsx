@@ -3,6 +3,8 @@
 import { useState, useTransition } from "react";
 import { createAppointment, updateAppointment, updateAppointmentStatus, deleteAppointment } from "@/modules/agenda/actions";
 import { createCustomer } from "@/modules/clients/actions";
+import { toast } from "react-hot-toast";
+import ConfirmModal from "@/components/shared/ConfirmModal";
 import { formatInTimeZone, toDate } from "date-fns-tz";
 import { 
   addDays, 
@@ -65,6 +67,7 @@ export default function AgendaManager({
   const [defaultTime, setDefaultTime] = useState("09:00");
   const [selectedDateForNew, setSelectedDateForNew] = useState<Date | null>(null);
   const [selectedClientId, setSelectedClientId] = useState<string>("");
+  const [appointmentToDelete, setAppointmentToDelete] = useState<string | null>(null);
   
   const [isPending, startTransition] = useTransition();
 
@@ -164,18 +167,24 @@ export default function AgendaManager({
 
       if (result.success) {
         closeModal();
+        toast.success(editingAppointment ? "Cita actualizada" : "Cita creada");
       } else {
-        alert(result.error);
+        toast.error(result.error || "Error al guardar la cita");
       }
     });
   };
 
-  const handleDelete = (id: string) => {
-    if (!confirm("¿Estás seguro de cancelar/eliminar esta cita?")) return;
+  const confirmDeleteAppointment = () => {
+    if (!appointmentToDelete) return;
     startTransition(async () => {
-      const result = await deleteAppointment(id);
-      if (!result.success) alert(result.error);
-      else closeModal();
+      const result = await deleteAppointment(appointmentToDelete);
+      if (!result.success) {
+        toast.error(result.error || "Error al eliminar la cita");
+      } else {
+        toast.success("Cita eliminada exitosamente");
+        closeModal();
+      }
+      setAppointmentToDelete(null);
     });
   };
 
@@ -187,8 +196,9 @@ export default function AgendaManager({
       if (result.success && result.clientId) {
         setSelectedClientId(result.clientId);
         setIsClientModalOpen(false);
+        toast.success("Cliente creado");
       } else {
-        alert(result.error);
+        toast.error(result.error || "Error al crear cliente");
       }
     });
   };
@@ -574,7 +584,7 @@ export default function AgendaManager({
                   {editingAppointment && (
                     <button 
                       type="button" 
-                      onClick={() => handleDelete(editingAppointment.id)} 
+                      onClick={() => setAppointmentToDelete(editingAppointment.id)} 
                       disabled={isPending}
                       className="text-red-400 hover:text-red-300 px-4 py-2 text-sm font-medium transition-colors"
                     >
@@ -630,6 +640,15 @@ export default function AgendaManager({
           </div>
         </div>
       )}
+
+      <ConfirmModal 
+        isOpen={!!appointmentToDelete}
+        title="Eliminar Cita"
+        message="¿Estás seguro que deseas cancelar/eliminar esta cita de forma permanente?"
+        onConfirm={confirmDeleteAppointment}
+        onCancel={() => setAppointmentToDelete(null)}
+        isLoading={isPending}
+      />
     </div>
   );
 }

@@ -3,6 +3,7 @@
 import { useState, useTransition, useEffect } from "react";
 import { processSale, registerExpense, registerPayment, exportFinancialReport, CartItem } from "@/modules/pos/actions";
 import { useSearchParams, useRouter } from "next/navigation";
+import { toast } from "react-hot-toast";
 
 type POSProps = {
   services: any[];
@@ -89,7 +90,7 @@ export default function POSManager({ services, products, clients, staff, history
   // Helper para añadir al carrito
   const addToCart = (item: any, type: "SERVICE" | "PRODUCT") => {
     if (type === "PRODUCT" && parseFloat(item.currentStock) <= 0) {
-      alert("No puedes agregar este producto. Stock agotado (0).");
+      toast.error("No puedes agregar este producto. Stock agotado (0).");
       return;
     }
 
@@ -97,7 +98,7 @@ export default function POSManager({ services, products, clients, staff, history
       const existing = prev.find(i => i.id === item.id);
       if (existing) {
         if (type === "PRODUCT" && existing.quantity >= parseFloat(item.currentStock)) {
-          alert("No puedes agregar más unidades de las disponibles en stock.");
+          toast.error("No puedes agregar más unidades de las disponibles en stock.");
           return prev;
         }
         return prev.map(i => i.id === item.id ? { ...i, quantity: i.quantity + 1 } : i);
@@ -122,7 +123,7 @@ export default function POSManager({ services, products, clients, staff, history
           if (i.type === "PRODUCT" && delta > 0) {
             const product = products.find(p => p.id === id);
             if (product && newQty > parseFloat(product.currentStock)) {
-              alert("No puedes agregar más unidades de las disponibles en stock.");
+              toast.error("No puedes agregar más unidades de las disponibles en stock.");
               return i;
             }
           }
@@ -148,7 +149,7 @@ export default function POSManager({ services, products, clients, staff, history
   const handleCheckout = () => {
     if (cart.length === 0) return;
     if (paymentMethod === 'CREDIT' && !selectedClientId) {
-      alert("Debe seleccionar un cliente para fiados.");
+      toast.error("Debe seleccionar un cliente para fiados.");
       return;
     }
     const parsedInitialPaid = parseFloat(initialPaidAmount) || 0;
@@ -163,7 +164,7 @@ export default function POSManager({ services, products, clients, staff, history
         setSuccessTxId(result.transactionId); // Abrir modal de éxito
         setActiveTab("HISTORY");
       } else {
-        alert(result.error);
+        toast.error(result.error || "Error al procesar la venta");
       }
     });
   };
@@ -180,8 +181,9 @@ export default function POSManager({ services, products, clients, staff, history
         setIsPaymentModalOpen(false);
         setSelectedTxId("");
         setPaymentAmount("");
+        toast.success("Abono registrado");
       } else {
-        alert(result.error);
+        toast.error(result.error || "Error al registrar el abono");
       }
     });
   };
@@ -206,7 +208,7 @@ export default function POSManager({ services, products, clients, staff, history
       a.click();
       window.URL.revokeObjectURL(url);
     } else {
-      alert(result.error || "Error exportando");
+      toast.error(result.error || "Error exportando el reporte");
     }
   };
 
@@ -220,9 +222,10 @@ export default function POSManager({ services, products, clients, staff, history
     startTransition(async () => {
       const result = await registerExpense(amount, description, method);
       if (result.success) {
+        toast.success("Gasto registrado");
         setActiveTab("HISTORY");
       } else {
-        alert(result.error);
+        toast.error(result.error || "Error al registrar gasto");
       }
     });
   };

@@ -2,6 +2,8 @@
 
 import { useState, useTransition } from "react";
 import { createCustomer, updateCustomer, deleteCustomer } from "@/modules/clients/actions";
+import { toast } from "react-hot-toast";
+import ConfirmModal from "@/components/shared/ConfirmModal";
 
 type ClientType = {
   id: string;
@@ -18,6 +20,7 @@ export default function ClientManager({ initialClients }: { initialClients: Clie
   const [searchTerm, setSearchTerm] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<ClientType | null>(null);
+  const [clientToDelete, setClientToDelete] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   const filteredClients = initialClients.filter(c => {
@@ -55,20 +58,23 @@ export default function ClientManager({ initialClients }: { initialClients: Clie
 
       if (result.success) {
         closeModal();
+        toast.success(editingClient ? "Cliente actualizado" : "Cliente creado");
       } else {
-        alert(result.error);
+        toast.error(result.error || "Error al guardar el cliente");
       }
     });
   };
 
-  const handleDelete = (id: string) => {
-    if (!confirm("¿Estás seguro de eliminar este cliente?")) return;
-    
+  const confirmDeleteClient = () => {
+    if (!clientToDelete) return;
     startTransition(async () => {
-      const result = await deleteCustomer(id);
+      const result = await deleteCustomer(clientToDelete);
       if (!result.success) {
-        alert(result.error);
+        toast.error(result.error || "Error al eliminar el cliente");
+      } else {
+        toast.success("Cliente eliminado exitosamente");
       }
+      setClientToDelete(null);
     });
   };
 
@@ -135,7 +141,7 @@ export default function ClientManager({ initialClients }: { initialClients: Clie
                         Editar
                       </button>
                       <button 
-                        onClick={() => handleDelete(client.id)}
+                        onClick={() => setClientToDelete(client.id)}
                         className="text-red-400 hover:text-red-300 text-sm font-medium transition-colors"
                         disabled={isPending}
                       >
@@ -204,6 +210,15 @@ export default function ClientManager({ initialClients }: { initialClients: Clie
           </div>
         </div>
       )}
+
+      <ConfirmModal 
+        isOpen={!!clientToDelete}
+        title="Eliminar Cliente"
+        message="¿Estás seguro que deseas eliminar este cliente permanentemente? Se eliminarán también sus citas pendientes asociadas."
+        onConfirm={confirmDeleteClient}
+        onCancel={() => setClientToDelete(null)}
+        isLoading={isPending}
+      />
     </div>
   );
 }

@@ -2,6 +2,8 @@
 
 import { useState, useTransition } from "react";
 import { inviteCollaborator, removeCollaborator, cancelInvitation, updateCollaboratorRole } from "@/modules/collaborators/actions";
+import { toast } from "react-hot-toast";
+import ConfirmModal from "@/components/shared/ConfirmModal";
 
 type Member = {
   id: string;
@@ -27,41 +29,44 @@ type Props = {
 export default function TeamManager({ members, invitations }: Props) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
-  const [msg, setMsg] = useState({ text: "", type: "" });
+  
+  const [memberToDelete, setMemberToDelete] = useState<string | null>(null);
+  const [inviteToCancel, setInviteToCancel] = useState<string | null>(null);
 
   const handleInvite = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setMsg({ text: "", type: "" });
     const formData = new FormData(e.currentTarget);
     
     startTransition(async () => {
       const res = await inviteCollaborator(formData);
       if (res.success) {
         setIsModalOpen(false);
-        // Toast could go here
+        toast.success("Invitación enviada exitosamente");
       } else {
-        setMsg({ text: res.error || "Error al invitar", type: "error" });
+        toast.error(res.error || "Error al invitar");
       }
     });
   };
 
-  const handleRemoveMember = (userId: string) => {
-    if (!confirm("¿Estás seguro de eliminar a este miembro de la organización?")) return;
-    
+  const confirmRemoveMember = () => {
+    if (!memberToDelete) return;
     startTransition(async () => {
       const formData = new FormData();
-      formData.append("userId", userId);
+      formData.append("userId", memberToDelete);
       await removeCollaborator(formData);
+      toast.success("Miembro eliminado");
+      setMemberToDelete(null);
     });
   };
 
-  const handleCancelInvite = (invitationId: string) => {
-    if (!confirm("¿Cancelar esta invitación?")) return;
-    
+  const confirmCancelInvite = () => {
+    if (!inviteToCancel) return;
     startTransition(async () => {
       const formData = new FormData();
-      formData.append("invitationId", invitationId);
+      formData.append("invitationId", inviteToCancel);
       await cancelInvitation(formData);
+      toast.success("Invitación cancelada");
+      setInviteToCancel(null);
     });
   };
 
@@ -137,7 +142,7 @@ export default function TeamManager({ members, invitations }: Props) {
                   <td className="p-4 text-right">
                     {!member.isCurrentUser && (
                       <button 
-                        onClick={() => handleRemoveMember(member.userId)}
+                        onClick={() => setMemberToDelete(member.userId)}
                         disabled={isPending}
                         className="text-red-400 hover:text-red-300 font-medium px-3 py-1.5 rounded-lg hover:bg-red-500/10 transition-colors disabled:opacity-50"
                       >
@@ -187,7 +192,7 @@ export default function TeamManager({ members, invitations }: Props) {
                     </td>
                     <td className="p-4 text-right">
                       <button 
-                        onClick={() => handleCancelInvite(inv.id)}
+                        onClick={() => setInviteToCancel(inv.id)}
                         disabled={isPending}
                         className="text-red-400 hover:text-red-300 font-medium px-3 py-1.5 rounded-lg hover:bg-red-500/10 transition-colors disabled:opacity-50"
                       >
@@ -238,12 +243,6 @@ export default function TeamManager({ members, invitations }: Props) {
                 </select>
               </div>
 
-              {msg.text && (
-                <div className={`p-3 rounded-lg text-sm border ${msg.type === 'success' ? 'bg-green-500/10 border-green-500/20 text-green-400' : 'bg-red-500/10 border-red-500/20 text-red-400'}`}>
-                  {msg.text}
-                </div>
-              )}
-
               <div className="pt-4 flex justify-end gap-3">
                 <button 
                   type="button" 
@@ -265,6 +264,23 @@ export default function TeamManager({ members, invitations }: Props) {
         </div>
       )}
 
+      <ConfirmModal 
+        isOpen={!!memberToDelete}
+        title="Eliminar Miembro"
+        message="¿Estás seguro de eliminar a este miembro de la organización?"
+        onConfirm={confirmRemoveMember}
+        onCancel={() => setMemberToDelete(null)}
+        isLoading={isPending}
+      />
+
+      <ConfirmModal 
+        isOpen={!!inviteToCancel}
+        title="Cancelar Invitación"
+        message="¿Estás seguro de cancelar esta invitación pendiente?"
+        onConfirm={confirmCancelInvite}
+        onCancel={() => setInviteToCancel(null)}
+        isLoading={isPending}
+      />
     </div>
   );
 }
