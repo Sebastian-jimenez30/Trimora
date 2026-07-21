@@ -1,9 +1,9 @@
 "use server"
 
 import { db } from "@/core/database/db";
-import { transactions, transactionItems, products, inventoryMovements, serviceMaterials, auditLogs, transactionPayments } from "@/core/database/schema";
+import { transactions, transactionItems, products, services, inventoryMovements, serviceMaterials, auditLogs, transactionPayments } from "@/core/database/schema";
 import { createClient } from "@/core/database/server";
-import { eq, and, sql, gte, lte } from "drizzle-orm";
+import { eq, and, sql, gte, lte, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
 async function getOrganizationId() {
@@ -222,16 +222,56 @@ export async function exportFinancialReport(startDate: string, endDate: string) 
       lte(transactions.createdAt, end)
     ));
     
-    // Formatear CSV con escaping seguro
-    let csv = "ID,Fecha,Tipo,MetodoPago,Estado,Total,Abonado\n";
+    const txIds = txs.map(t => t.id);
+    let items: any[] = [];
+    if (txIds.length > 0) {
+      items = await db.select().from(transactionItems).where(
+        inArray(transactionItems.transactionId, txIds)
+      );
+    }
+    
+    // Fetch catalogs for naming
+    const orgProducts = await db.select().from(products).where(eq(products.organizationId, orgId));
+    const orgServices = await db.select().from(services).where(eq(services.organizationId, orgId));
+    const orgAuditLogs = await db.select().from(auditLogs).where(
+      and(eq(auditLogs.organizationId, orgId), eq(auditLogs.action, 'REGISTER_EXPENSE'))
+    );
+
+    // Formatear CSV con escaping seguro y detalle por item
+    let csv = "ID_Transaccion,Fecha,Hora,Tipo,MetodoPago,Estado,Total_Tx,Abonado_Tx,Item_Nombre,Cantidad,Precio_Unitario,Subtotal\n";
     for (const tx of txs) {
-      // Escaping CSV Injection
       const safeId = `"${tx.id.replace(/"/g, '""')}"`;
-      const safeType = `"${tx.type.replace(/"/g, '""')}"`;
+      const txType = tx.type === "INCOME" ? "VENTA" : "GASTO";
       const safeMethod = `"${(tx.paymentMethod || '').replace(/"/g, '""')}"`;
       const safeStatus = `"${tx.status.replace(/"/g, '""')}"`;
+      const dateStr = new Date(tx.createdAt).toLocaleDateString();
+      const timeStr = new Date(tx.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
       
-      csv += `${safeId},${new Date(tx.createdAt).toLocaleDateString()},${safeType},${safeMethod},${safeStatus},${tx.totalAmount},${tx.paidAmount}\n`;
+      const txItems = items.filter(i => i.transactionId === tx.id);
+      
+      if (tx.type === "EXPENSE" || txItems.length === 0) {
+        let itemName = "Transacción General";
+        if (tx.type === "EXPENSE") {
+          const log = orgAuditLogs.find(l => l.entityId === tx.id);
+          itemName = log?.details || "Gasto sin descripción";
+        }
+        const safeItemName = `"${itemName.replace(/"/g, '""')}"`;
+        csv += `${safeId},${dateStr},${timeStr},${txType},${safeMethod},${safeStatus},${tx.totalAmount},${tx.paidAmount},${safeItemName},1,${tx.totalAmount},${tx.totalAmount}\n`;
+      } else {
+        for (const item of txItems) {
+          let itemName = "Item Desconocido";
+          if (item.itemType === "PRODUCT") {
+            const p = orgProducts.find(x => x.id === item.itemId);
+            if (p) itemName = p.name;
+          } else if (item.itemType === "SERVICE") {
+            const s = orgServices.find(x => x.id === item.itemId);
+            if (s) itemName = s.name;
+          }
+          
+          const safeItemName = `"${itemName.replace(/"/g, '""')}"`;
+          csv += `${safeId},${dateStr},${timeStr},${txType},${safeMethod},${safeStatus},${tx.totalAmount},${tx.paidAmount},${safeItemName},${item.quantity},${item.unitPrice},${item.subtotal}\n`;
+        }
+      }
     }
 
     return { success: true, csv };

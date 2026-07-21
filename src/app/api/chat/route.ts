@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { generateText } from 'ai';
+import { generateText, isStepCount } from 'ai';
 import { openai } from '@ai-sdk/openai';
 import { db } from '@/core/database/db';
 import { chatMessages, organizationMembers, organizations, services } from '@/core/database/schema';
@@ -146,6 +146,7 @@ CAPACIDADES Y ROLES:
         system: systemPrompt,
         messages: coreMessages,
         tools: tools,
+        stopWhen: isStepCount(5),
       });
     } catch (error: any) {
       console.error("Error from OpenAI API:", error);

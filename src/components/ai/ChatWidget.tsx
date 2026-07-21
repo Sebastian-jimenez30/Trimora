@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react";
+import { usePathname } from "next/navigation";
 import { getWebChatHistory, clearWebChatHistory } from "@/modules/ai/actions";
 
 type Message = {
@@ -117,21 +118,21 @@ export default function ChatWidget() {
     "📋 Servicios disponibles",
   ];
 
+  const pathname = usePathname();
+  const isAgenda = pathname === "/agenda";
+
   return (
     <>
-      {/* Botón Flotante (Burbuja) */}
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="fixed bottom-24 right-6 z-50 bg-cognac hover:brightness-110 text-white p-3.5 rounded-full shadow-2xl transition-all duration-300 transform hover:scale-105 flex items-center justify-center border border-white/20 active:scale-95 group"
-        title="Asistente de Trimora"
-        aria-label="Abrir asistente de IA"
-      >
-        {isOpen ? (
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="18" y1="6" x2="6" y2="18"></line>
-            <line x1="6" y1="6" x2="18" y2="18"></line>
-          </svg>
-        ) : (
+      {/* Botón Flotante (Burbuja) - Oculto si el chat está abierto */}
+      {!isOpen && (
+        <button
+          onClick={() => setIsOpen(!isOpen)}
+          className={`fixed right-6 z-50 bg-cognac hover:brightness-110 text-white p-3.5 rounded-full shadow-2xl transition-all duration-300 transform hover:scale-105 flex items-center justify-center border border-white/20 active:scale-95 group ${
+            isAgenda ? "bottom-24" : "bottom-6"
+          }`}
+          title="Asistente de Trimora"
+          aria-label="Abrir asistente de IA"
+        >
           <div className="relative flex items-center justify-center">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
@@ -141,12 +142,14 @@ export default function ChatWidget() {
             </svg>
             <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-green-400 rounded-full border-2 border-[#0f0f0f] animate-pulse"></span>
           </div>
-        )}
-      </button>
+        </button>
+      )}
 
       {/* Ventana Emergente del Chatbot */}
       {isOpen && (
-        <div className="fixed bottom-40 right-4 sm:right-6 z-50 w-[calc(100vw-2rem)] sm:w-[380px] h-[520px] max-h-[80vh] bg-[#141414] border border-white/10 rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-5 fade-in duration-200 backdrop-blur-md">
+        <div className={`fixed right-4 sm:right-6 z-50 w-[calc(100vw-2rem)] sm:w-[380px] h-[520px] max-h-[80vh] bg-[#141414] border border-white/10 rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-5 fade-in duration-200 backdrop-blur-md ${
+          isAgenda ? "bottom-24" : "bottom-6"
+        }`}>
           {/* Header */}
           <div className="p-4 bg-pitch border-b border-white/10 flex items-center justify-between shrink-0">
             <div className="flex items-center gap-3">

@@ -17,14 +17,7 @@ export default async function LoginPage(props: { searchParams: Promise<{ message
           
           <div className="text-center mb-8">
             <div className="flex justify-center mb-4">
-              <svg width="50" height="50" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M40 60 L10 30 L20 20 L50 50" stroke="white" strokeWidth="4" strokeLinecap="round"/>
-                  <path d="M60 60 L90 30 L80 20 L50 50" stroke="white" strokeWidth="4" strokeLinecap="round"/>
-                  <circle cx="35" cy="75" r="8" stroke="white" strokeWidth="4"/>
-                  <circle cx="65" cy="75" r="8" stroke="white" strokeWidth="4"/>
-                  <path d="M41 69 L50 50 L59 69" stroke="white" strokeWidth="4" strokeLinecap="round"/>
-                  <circle cx="50" cy="50" r="3" fill="white"/>
-              </svg>
+              <img src="/trimora-logo-white.png" alt="Trimora Logo" className="w-[50px] h-[50px] object-contain" />
             </div>
             <h1 className="text-3xl font-bold tracking-widest font-serif text-white uppercase">
               Trimora

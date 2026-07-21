@@ -57,12 +57,7 @@ export default function DashboardNavigation({ username, avatarUrl, pendingAppoin
       <aside className={`fixed md:relative z-50 w-[260px] h-full bg-gradient-to-b from-pitch to-[#111] border-r border-white/10 flex flex-col py-6 shrink-0 transition-transform duration-300 ease-in-out ${isOpen ? "translate-x-0" : "-translate-x-full"} md:translate-x-0`}>
         <div className="px-6 pb-[30px] flex items-center gap-3 border-b border-white/10 mb-5 justify-between md:justify-start">
           <div className="flex items-center gap-3">
-            <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-[30px] h-[30px]">
-              <path d="M40 60 L10 30 L20 20 L50 50" stroke="white" strokeWidth="6" strokeLinecap="round"/>
-              <path d="M60 60 L90 30 L80 20 L50 50" stroke="white" strokeWidth="6" strokeLinecap="round"/>
-              <circle cx="35" cy="75" r="8" stroke="white" strokeWidth="6"/>
-              <circle cx="65" cy="75" r="8" stroke="white" strokeWidth="6"/>
-            </svg>
+            <img src="/trimora-logo-white.png" alt="Trimora Logo" className="w-[30px] h-[30px] object-contain" />
             <span className="font-serif text-[22px] font-bold tracking-[1.5px]">TRIMORA</span>
           </div>
           <button className="md:hidden text-white/50 hover:text-white" onClick={closeMenu}>
