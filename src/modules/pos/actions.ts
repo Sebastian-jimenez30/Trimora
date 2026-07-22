@@ -180,8 +180,15 @@ export async function registerPayment(transactionId: string, amount: number, pay
     if (!tx) throw new Error("Transacción no encontrada");
     if (tx.status === 'COMPLETED') throw new Error("La transacción ya está pagada por completo");
 
-    const newPaidAmount = parseFloat(tx.paidAmount) + amount;
+    if (amount <= 0) throw new Error("El monto a abonar debe ser mayor a 0");
+
+    const currentPaid = parseFloat(tx.paidAmount);
     const totalAmount = parseFloat(tx.totalAmount);
+    const newPaidAmount = currentPaid + amount;
+
+    if (newPaidAmount > totalAmount) {
+      throw new Error("El abono supera la deuda restante");
+    }
     
     // Registrar el abono
     await db.insert(transactionPayments).values({
