@@ -70,23 +70,28 @@ export default function POSManager({ services, products, clients, staff, history
   useEffect(() => {
     const urlAppId = searchParams?.get("appointmentId");
     if (urlAppId && pendingAppointments) {
-      loadAppointment(urlAppId);
-      // Limpiar la URL para evitar recargas raras
-      router.replace("/pos");
+      setTimeout(() => {
+        loadAppointment(urlAppId);
+        router.replace("/pos");
+      }, 0);
     }
 
     const tab = searchParams?.get("tab");
     if (tab === "HISTORY" || tab === "VENTA" || tab === "COMPRA") {
-      setActiveTab(tab as any);
+      setTimeout(() => {
+        setActiveTab(tab as any);
+      }, 0);
     }
     
     const payTx = searchParams?.get("payTx");
     const payAmountParam = searchParams?.get("payAmount");
     if (payTx && payAmountParam) {
-      setSelectedTxId(payTx);
-      setPaymentAmount(payAmountParam);
-      setIsPaymentModalOpen(true);
-      router.replace("/pos");
+      setTimeout(() => {
+        setSelectedTxId(payTx);
+        setPaymentAmount(payAmountParam);
+        setIsPaymentModalOpen(true);
+        router.replace("/pos");
+      }, 0);
     }
   }, [searchParams, pendingAppointments, services, router]);
 

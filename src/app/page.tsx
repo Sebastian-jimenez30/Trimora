@@ -83,7 +83,7 @@ export default function Home() {
 
               <div className="mt-12 pt-8 border-t border-white/10">
                 <p className="text-sterling italic text-lg">
-                  "Menos tiempo administrando, más tiempo creando tu arte."
+                  &quot;Menos tiempo administrando, más tiempo creando tu arte.&quot;
                 </p>
               </div>
             </div>

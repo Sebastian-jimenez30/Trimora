@@ -23,19 +23,7 @@ export default function ChatWidget() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  useEffect(() => {
-    if (isOpen && !isInitialLoaded) {
-      loadHistory();
-    }
-  }, [isOpen, isInitialLoaded]);
-
-  useEffect(() => {
-    if (isOpen) {
-      scrollToBottom();
-    }
-  }, [messages, isOpen, isLoading]);
-
-  const loadHistory = async () => {
+  async function loadHistory() {
     setIsLoading(true);
     const res = await getWebChatHistory();
     if (res.success && res.data.length > 0) {
@@ -49,9 +37,22 @@ export default function ChatWidget() {
         }
       ]);
     }
-    setIsLoading(false);
     setIsInitialLoaded(true);
-  };
+    setIsLoading(false);
+  }
+
+  useEffect(() => {
+    if (isOpen && !isInitialLoaded) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      loadHistory();
+    }
+  }, [isOpen, isInitialLoaded]);
+
+  useEffect(() => {
+    if (isOpen) {
+      scrollToBottom();
+    }
+  }, [messages, isOpen, isLoading]);
 
   const handleSend = async (textToSend?: string) => {
     const query = (textToSend || input).trim();
