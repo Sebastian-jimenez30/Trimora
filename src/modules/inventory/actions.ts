@@ -75,21 +75,45 @@ export async function deleteProduct(id: string) {
   }
 }
 
+import { z } from "zod";
+
+const ProductImportSchema = z.object({
+  name: z.string().min(1, "El nombre es requerido").max(255),
+  description: z.string().optional().nullable(),
+  category: z.enum(["VENTA", "CONSUMO"]),
+  currentStock: z.union([z.string(), z.number()]).optional().transform(v => v?.toString() || '0'),
+  minimumStock: z.union([z.string(), z.number()]).optional().transform(v => v?.toString() || '0'),
+  salePrice: z.union([z.string(), z.number()]).optional().nullable().transform(v => v ? v.toString() : null),
+  costPrice: z.union([z.string(), z.number()]).optional().nullable().transform(v => v ? v.toString() : null),
+});
+
 export async function batchImportProducts(items: any[]) {
   try {
     const orgId = await getOrganizationId();
     
-    if (!items || items.length === 0) return { success: false, error: "No hay productos para importar" };
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return { success: false, error: "No hay productos para importar o formato inválido" };
+    }
 
-    const inserts = items.map(item => ({
+    // Validar y sanear los datos de entrada
+    const parsedItems = [];
+    for (const item of items) {
+      const parsed = ProductImportSchema.safeParse(item);
+      if (!parsed.success) {
+        throw new Error(`Error validando el producto "${item?.name || 'Desconocido'}": ${parsed.error.issues[0].message}`);
+      }
+      parsedItems.push(parsed.data);
+    }
+
+    const inserts = parsedItems.map(item => ({
       organizationId: orgId,
       name: item.name,
-      description: item.description || null,
+      description: item.description,
       category: item.category,
-      currentStock: item.currentStock?.toString() || '0',
-      minimumStock: item.minimumStock?.toString() || '0',
-      salePrice: item.salePrice?.toString() || null,
-      costPrice: item.costPrice?.toString() || null,
+      currentStock: item.currentStock,
+      minimumStock: item.minimumStock,
+      salePrice: item.salePrice,
+      costPrice: item.costPrice,
       isActive: true,
     }));
     
