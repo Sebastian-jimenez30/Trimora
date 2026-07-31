@@ -38,12 +38,24 @@ export default async function POSPage() {
   // Mapear historial incluyendo descripción si es gasto
   const history = await Promise.all(recentTx.map(async (tx) => {
     let description = "";
+    let itemDetails: { name: string; quantity: string; unitPrice: string; subtotal: string }[] = [];
     if (tx.type === "EXPENSE") {
       const logs = await db.select().from(auditLogs).where(eq(auditLogs.entityId, tx.id)).limit(1);
       description = logs[0]?.details || "Gasto sin descripción";
     } else {
       // Venta: traer nombres de los items
       const items = await db.select().from(transactionItems).where(eq(transactionItems.transactionId, tx.id));
+      itemDetails = items.map((item) => {
+        const catalogItem = item.itemType === "SERVICE"
+          ? activeServices.find((service) => service.id === item.itemId)
+          : activeProducts.find((product) => product.id === item.itemId);
+        return {
+          name: catalogItem?.name || (item.itemType === "SERVICE" ? "Servicio" : "Producto"),
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          subtotal: item.subtotal,
+        };
+      });
       const count = items.length;
       if (count === 1) {
         if (items[0].itemType === "SERVICE") {
@@ -68,9 +80,11 @@ export default async function POSPage() {
       paidAmount: tx.paidAmount,
       status: tx.status,
       paymentMethod: tx.paymentMethod,
+      clientId: tx.clientId,
       createdAt: tx.createdAt.toISOString(),
       description,
-      clientName: tx.type === "INCOME" ? clientName : "---"
+      clientName: tx.type === "INCOME" ? clientName : "---",
+      itemDetails,
     };
   }));
 

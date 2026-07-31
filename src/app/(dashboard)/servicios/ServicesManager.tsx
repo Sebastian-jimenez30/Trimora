@@ -9,6 +9,7 @@ import ConfirmModal from "@/components/shared/ConfirmModal";
 type Product = {
   id: string;
   name: string;
+  category: string;
   currentStock: string;
 };
 
@@ -313,18 +314,16 @@ export default function ServicesManager({ services, products: initialProducts }:
 
                 <div>
                   <label className="block text-sm font-medium text-sterling mb-1.5">Duración</label>
-                  <select 
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
                     value={duration}
-                    onChange={(e) => setDuration(Number(e.target.value))}
+                    onChange={(e) => setDuration(Math.max(1, Number(e.target.value) || 1))}
                     className="w-full px-4 py-2.5 bg-pitch/80 border border-charcoal/30 rounded-xl focus:outline-none focus:border-cognac focus:ring-1 focus:ring-cognac text-white"
-                  >
-                    <option value={15}>15 minutos</option>
-                    <option value={30}>30 minutos</option>
-                    <option value={45}>45 minutos</option>
-                    <option value={60}>1 hora</option>
-                    <option value={90}>1.5 horas</option>
-                    <option value={120}>2 horas</option>
-                  </select>
+                    required
+                  />
+                  <p className="mt-1.5 text-xs text-charcoal">Ingresa la duración exacta en minutos. Agenda aplicará este tiempo al distribuir las citas.</p>
                 </div>
               </div>
 
@@ -357,7 +356,7 @@ export default function ServicesManager({ services, products: initialProducts }:
                           required
                         >
                           <option value="">Selecciona un producto...</option>
-                          {products.map(p => (
+                          {products.filter(p => p.category === "CONSUMO").map(p => (
                             <option key={p.id} value={p.id}>{p.name} (Stock: {Number(p.currentStock)})</option>
                           ))}
                         </select>

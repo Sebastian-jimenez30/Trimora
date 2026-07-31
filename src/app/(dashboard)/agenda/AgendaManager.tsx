@@ -227,6 +227,13 @@ export default function AgendaManager({
     });
   };
 
+  const getEffectiveEndTime = (appointment: Appointment) => {
+    const service = services.find((item) => item.id === appointment.serviceId);
+    if (!service) return appointment.endTime;
+
+    return new Date(Date.parse(appointment.startTime) + service.durationMinutes * 60 * 1000).toISOString();
+  };
+
   // 09:00 = 0px, 1 hora = 60px.
   const getAppointmentLayouts = (apps: Appointment[]) => {
     const layouts = new Map<string, AppointmentLayout>();
@@ -239,7 +246,7 @@ export default function AgendaManager({
       const lanes = new Map<string, number>();
       for (const appointment of cluster) {
         const start = Date.parse(appointment.startTime);
-        const end = Date.parse(appointment.endTime);
+        const end = Date.parse(getEffectiveEndTime(appointment));
         let lane = laneEnds.findIndex((laneEnd) => laneEnd <= start);
         if (lane === -1) {
           lane = laneEnds.length;
@@ -256,7 +263,7 @@ export default function AgendaManager({
 
     for (const appointment of sortedApps) {
       const start = Date.parse(appointment.startTime);
-      const end = Date.parse(appointment.endTime);
+      const end = Date.parse(getEffectiveEndTime(appointment));
       if (cluster.length > 0 && start >= clusterEnd) {
         saveCluster();
         cluster = [];
@@ -273,7 +280,7 @@ export default function AgendaManager({
   const getAppointmentStyle = (app: Appointment, layout?: AppointmentLayout) => {
     const normalizedLayout = layout || { lane: 0, lanes: 1 };
     const [startHour, startMinute] = getBogotaTimeValue(app.startTime).split(":").map(Number);
-    const [endHour, endMinute] = getBogotaTimeValue(app.endTime).split(":").map(Number);
+    const [endHour, endMinute] = getBogotaTimeValue(getEffectiveEndTime(app)).split(":").map(Number);
     const startMins = ((startHour - 5) * 60) + startMinute;
     const endMins = ((endHour - 5) * 60) + endMinute;
     
