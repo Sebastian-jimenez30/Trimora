@@ -1,7 +1,7 @@
 import { tool } from 'ai';
 import { z } from 'zod';
 import { db } from "@/core/database/db";
-import { appointments, clients, services, products, transactions, transactionItems, organizationMembers } from "@/core/database/schema";
+import { appointments, clients, services, products, transactions, transactionItems, inventoryMovements, organizationMembers } from "@/core/database/schema";
 import { eq, ilike, and, gte, lte } from "drizzle-orm";
 import { createAppointmentFromAI } from '@/modules/appointments/actions';
 import { revalidatePath } from 'next/cache';
@@ -220,7 +220,7 @@ export function getAiTools(context: { organizationId: string; telegramUserId: st
       description: 'ADMIN: Registra la venta de uno o más productos consultando automáticamente el precio en la base de datos y calculando el total. Úsalo cuando digan "registra la venta de X unidades de [producto]", "vendí 2 lociones", "registra venta de X [producto]", etc. NO necesitas saber el precio de antemano, lo busca solo.',
       inputSchema: z.object({
         nombreProducto: z.string().describe('Nombre del producto vendido (búsqueda parcial, ej. "loción", "pomade", "shampoo").'),
-        cantidad: z.number().describe('Cantidad de unidades vendidas.'),
+        cantidad: z.number().int().positive().describe('Cantidad de unidades vendidas.'),
         paymentMethod: z.string().optional().describe('Método de pago: CASH, CARD o TRANSFER. Por defecto CASH.'),
         clienteNombre: z.string().optional().describe('Nombre del cliente si se menciona.'),
       }),
@@ -251,14 +251,58 @@ export function getAiTools(context: { organizationId: string; telegramUserId: st
           const clienteTexto = args.clienteNombre ? ` para ${args.clienteNombre}` : '';
           const descripcion = `Venta de ${args.cantidad} ${producto.name}${clienteTexto}`;
 
-          // 2. Registrar la transacción
-          await db.insert(transactions).values({
-            organizationId: context.organizationId,
-            type: 'INCOME',
-            totalAmount: totalVenta.toString(),
-            paymentMethod: metodo,
-            status: 'COMPLETED',
-            notes: descripcion,
+          await db.transaction(async (databaseTransaction) => {
+            const [lockedProduct] = await databaseTransaction.select()
+              .from(products)
+              .where(and(
+                eq(products.id, producto.id),
+                eq(products.organizationId, context.organizationId),
+              ))
+              .for('update');
+
+            if (!lockedProduct) throw new Error(`El producto "${producto.name}" ya no está disponible.`);
+
+            const previousStock = Number(lockedProduct.currentStock);
+            if (previousStock < args.cantidad) {
+              throw new Error(`Stock insuficiente para ${lockedProduct.name}. Disponible: ${previousStock}.`);
+            }
+            const newStock = previousStock - args.cantidad;
+
+            const [sale] = await databaseTransaction.insert(transactions).values({
+              organizationId: context.organizationId,
+              type: 'INCOME',
+              totalAmount: totalVenta.toFixed(2),
+              paidAmount: totalVenta.toFixed(2),
+              paymentMethod: metodo,
+              status: 'COMPLETED',
+              notes: descripcion,
+            }).returning();
+
+            await databaseTransaction.insert(transactionItems).values({
+              transactionId: sale.id,
+              itemType: 'PRODUCT',
+              itemId: lockedProduct.id,
+              quantity: args.cantidad.toString(),
+              unitPrice: precioUnitario.toFixed(2),
+              subtotal: totalVenta.toFixed(2),
+            });
+
+            await databaseTransaction.update(products)
+              .set({ currentStock: newStock.toString() })
+              .where(and(
+                eq(products.id, lockedProduct.id),
+                eq(products.organizationId, context.organizationId),
+              ));
+
+            await databaseTransaction.insert(inventoryMovements).values({
+              organizationId: context.organizationId,
+              productId: lockedProduct.id,
+              type: 'OUT',
+              quantity: args.cantidad,
+              previousStock: Math.round(previousStock),
+              newStock: Math.round(newStock),
+              notes: `SALE transaction ${sale.id}`,
+            });
           });
 
           revalidatePath('/', 'layout');

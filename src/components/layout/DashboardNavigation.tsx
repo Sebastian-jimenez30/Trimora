@@ -45,6 +45,7 @@ export default function DashboardNavigation({ username, avatarUrl, pendingAppoin
     { href: "/dashboard", label: "Inicio" },
     { href: "/agenda", label: "Agenda y Citas" },
     { href: "/pos", label: "Caja" },
+    { href: "/analitica", label: "Analítica" },
     { href: "/clientes", label: "Clientes" },
     { href: "/inventario", label: "Inventario" },
   ];
