@@ -5,7 +5,7 @@ import { createAppointment, updateAppointment, updateAppointmentStatus, deleteAp
 import { createCustomer } from "@/modules/clients/actions";
 import { toast } from "react-hot-toast";
 import ConfirmModal from "@/components/shared/ConfirmModal";
-import { formatInTimeZone, toDate } from "date-fns-tz";
+import { formatInTimeZone, fromZonedTime, toDate } from "date-fns-tz";
 import { 
   addDays, 
   subDays, 
@@ -38,11 +38,28 @@ type Appointment = {
 type Client = { id: string; firstName: string; lastName: string | null; phone: string | null };
 type Service = { id: string; name: string; durationMinutes: number; price: string };
 type Staff = { id: string; name: string; role: string };
+type AppointmentLayout = { lane: number; lanes: number };
 
 function getBogotaToday() {
   const now = new Date();
   const bogotaDateStr = formatInTimeZone(now, TIMEZONE, 'yyyy-MM-dd');
   return toDate(`${bogotaDateStr}T00:00:00.000`, { timeZone: TIMEZONE });
+}
+
+function getClientLabel(client: Client) {
+  return `${client.firstName} ${client.lastName || ""}`.trim();
+}
+
+function getBogotaTimeValue(date: string | Date) {
+  return formatInTimeZone(date, TIMEZONE, "HH:mm");
+}
+
+function getBogotaTime(date: string | Date) {
+  return formatInTimeZone(date, TIMEZONE, "h:mm a");
+}
+
+function getHourLabel(hour: number) {
+  return `${hour % 12 || 12} ${hour < 12 ? "AM" : "PM"}`;
 }
 
 export default function AgendaManager({ 
@@ -67,6 +84,8 @@ export default function AgendaManager({
   const [defaultTime, setDefaultTime] = useState("09:00");
   const [selectedDateForNew, setSelectedDateForNew] = useState<Date | null>(null);
   const [selectedClientId, setSelectedClientId] = useState<string>("");
+  const [clientSearch, setClientSearch] = useState("");
+  const [isClientPickerOpen, setIsClientPickerOpen] = useState(false);
   const [appointmentToDelete, setAppointmentToDelete] = useState<string | null>(null);
   
   const [isPending, startTransition] = useTransition();
@@ -110,10 +129,8 @@ export default function AgendaManager({
   };
 
   const getAppointmentsForDate = (date: Date) => {
-    return initialAppointments.filter(app => {
-      const d = toDate(app.startTime, { timeZone: TIMEZONE });
-      return isSameDay(d, date);
-    });
+    const dateKey = formatInTimeZone(date, TIMEZONE, "yyyy-MM-dd");
+    return initialAppointments.filter((app) => formatInTimeZone(app.startTime, TIMEZONE, "yyyy-MM-dd") === dateKey);
   };
 
   const openCreateModal = (timeStr?: string, date?: Date) => {
@@ -121,12 +138,15 @@ export default function AgendaManager({
     setDefaultTime(timeStr || "09:00");
     setSelectedDateForNew(date || currentDate);
     setSelectedClientId("");
+    setClientSearch("");
     setIsModalOpen(true);
   };
 
   const openEditModal = (app: Appointment) => {
     setEditingAppointment(app);
     setSelectedClientId(app.clientId);
+    const client = clients.find((item) => item.id === app.clientId);
+    setClientSearch(client ? getClientLabel(client) : "");
     setIsModalOpen(true);
   };
 
@@ -137,6 +157,10 @@ export default function AgendaManager({
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (!selectedClientId) {
+      toast.error("Selecciona un cliente de la lista antes de guardar la cita");
+      return;
+    }
     const formData = new FormData(e.currentTarget);
     
     const timeStr = formData.get("timeStr") as string;
@@ -147,9 +171,9 @@ export default function AgendaManager({
 
     const [hours, minutes] = timeStr.split(":").map(Number);
     
-    const baseDate = editingAppointment ? toDate(editingAppointment.startTime, { timeZone: TIMEZONE }) : (selectedDateForNew || currentDate);
-    const start = new Date(baseDate);
-    start.setHours(hours, minutes, 0, 0);
+    const baseDate = editingAppointment ? editingAppointment.startTime : (selectedDateForNew || currentDate);
+    const datePart = formatInTimeZone(baseDate, TIMEZONE, "yyyy-MM-dd");
+    const start = fromZonedTime(`${datePart}T${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}:00`, TIMEZONE);
 
     const end = new Date(start);
     end.setMinutes(end.getMinutes() + durationMinutes);
@@ -204,12 +228,54 @@ export default function AgendaManager({
   };
 
   // 09:00 = 0px, 1 hora = 60px.
-  const getAppointmentStyle = (app: Appointment) => {
-    const start = toDate(app.startTime, { timeZone: TIMEZONE });
-    const end = toDate(app.endTime, { timeZone: TIMEZONE });
-    
-    const startMins = ((start.getHours() - 5) * 60) + start.getMinutes();
-    const endMins = ((end.getHours() - 5) * 60) + end.getMinutes();
+  const getAppointmentLayouts = (apps: Appointment[]) => {
+    const layouts = new Map<string, AppointmentLayout>();
+    const sortedApps = [...apps].sort((a, b) => Date.parse(a.startTime) - Date.parse(b.startTime));
+    let cluster: Appointment[] = [];
+    let clusterEnd = -Infinity;
+
+    const saveCluster = () => {
+      const laneEnds: number[] = [];
+      const lanes = new Map<string, number>();
+      for (const appointment of cluster) {
+        const start = Date.parse(appointment.startTime);
+        const end = Date.parse(appointment.endTime);
+        let lane = laneEnds.findIndex((laneEnd) => laneEnd <= start);
+        if (lane === -1) {
+          lane = laneEnds.length;
+          laneEnds.push(end);
+        } else {
+          laneEnds[lane] = end;
+        }
+        lanes.set(appointment.id, lane);
+      }
+      for (const appointment of cluster) {
+        layouts.set(appointment.id, { lane: lanes.get(appointment.id) || 0, lanes: laneEnds.length });
+      }
+    };
+
+    for (const appointment of sortedApps) {
+      const start = Date.parse(appointment.startTime);
+      const end = Date.parse(appointment.endTime);
+      if (cluster.length > 0 && start >= clusterEnd) {
+        saveCluster();
+        cluster = [];
+        clusterEnd = -Infinity;
+      }
+      cluster.push(appointment);
+      clusterEnd = Math.max(clusterEnd, end);
+    }
+    if (cluster.length > 0) saveCluster();
+
+    return layouts;
+  };
+
+  const getAppointmentStyle = (app: Appointment, layout?: AppointmentLayout) => {
+    const normalizedLayout = layout || { lane: 0, lanes: 1 };
+    const [startHour, startMinute] = getBogotaTimeValue(app.startTime).split(":").map(Number);
+    const [endHour, endMinute] = getBogotaTimeValue(app.endTime).split(":").map(Number);
+    const startMins = ((startHour - 5) * 60) + startMinute;
+    const endMins = ((endHour - 5) * 60) + endMinute;
     
     // Si la cita termina antes de las 5am o empieza después de las 10pm, la altura puede ser extraña,
     // pero Math.max lo mantendrá en su lugar visualmente.
@@ -223,8 +289,10 @@ export default function AgendaManager({
     return {
       top: `${offset}px`,
       height: `${height}px`,
+      left: `calc(${(normalizedLayout.lane / normalizedLayout.lanes) * 100}% + 3px)`,
+      width: `calc(${100 / normalizedLayout.lanes}% - 6px)`,
       minHeight: '30px', // Prevent text cutoff on very short appointments
-      className: `absolute w-[95%] left-[2.5%] rounded-md px-2 py-1 cursor-pointer shadow-lg transition-transform hover:scale-[1.02] hover:z-20 z-10 overflow-hidden flex flex-col justify-center ${bgClass}`
+      className: `absolute rounded-md px-2 py-1 cursor-pointer shadow-lg transition-transform hover:scale-[1.02] hover:z-20 z-10 overflow-hidden flex flex-col justify-center ${bgClass}`
     };
   };
 
@@ -235,6 +303,11 @@ export default function AgendaManager({
   // Render Día
   const renderDayView = () => {
     const dayApps = getAppointmentsForDate(currentDate);
+    const visibleDayApps = dayApps.filter((app) => {
+      const client = clients.find((item) => item.id === app.clientId);
+      return searchTerm && client ? client.firstName.toLowerCase().includes(searchTerm.toLowerCase()) : true;
+    });
+    const dayLayouts = getAppointmentLayouts(visibleDayApps);
     const now = new Date();
     const isToday = isSameDay(currentDate, getBogotaToday());
     
@@ -242,13 +315,13 @@ export default function AgendaManager({
       <div className="flex-1 flex flex-col bg-[#141414] overflow-hidden relative">
         {/* Time Grid */}
         <div className="flex-1 overflow-y-auto relative pt-3">
-          <div className="grid grid-cols-[60px_1fr]">
+          <div className="grid grid-cols-[86px_1fr]">
             {/* Hours Column */}
             <div className="border-r border-white/10 shrink-0 sticky left-0 bg-[#141414] z-20">
               {hours.map(h => (
-                <div key={h} className="h-[60px] flex justify-end pr-2 pt-0 relative">
-                  <span className="text-[10px] text-[#888] relative -top-[8px] pr-1">
-                    {h === 0 ? '12 a.m.' : h < 12 ? `${h} a.m.` : h === 12 ? '12 p.m.' : `${h-12} p.m.`}
+                <div key={h} className="h-[60px] flex justify-end pr-3 pt-0 relative">
+                  <span className="text-[11px] text-[#aaa] relative -top-[8px] pr-1 whitespace-nowrap">
+                    {getHourLabel(h)}
                   </span>
                 </div>
               ))}
@@ -268,18 +341,14 @@ export default function AgendaManager({
               )}
 
               {/* Appointments */}
-              {dayApps.filter(app => {
-                const client = clients.find(c => c.id === app.clientId);
-                return searchTerm && client ? client.firstName.toLowerCase().includes(searchTerm.toLowerCase()) : true;
-              }).map(app => {
-                const style = getAppointmentStyle(app);
+              {visibleDayApps.map(app => {
+                const style = getAppointmentStyle(app, dayLayouts.get(app.id));
                 const client = clients.find(c => c.id === app.clientId);
                 const service = services.find(s => s.id === app.serviceId);
-                const start = toDate(app.startTime, { timeZone: TIMEZONE });
                 return (
-                  <div key={app.id} className={style.className} style={{ top: style.top, height: style.height, minHeight: style.minHeight }} onClick={(e) => { e.stopPropagation(); openEditModal(app); }}>
+                  <div key={app.id} className={style.className} style={{ top: style.top, left: style.left, width: style.width, height: style.height, minHeight: style.minHeight }} onClick={(e) => { e.stopPropagation(); openEditModal(app); }}>
                     <div className="font-bold text-white text-[12px] truncate leading-tight">{client?.firstName} {client?.lastName}</div>
-                    <div className="text-[10px] text-[#ccc] truncate mt-0.5">{service?.name} • {start.getHours()}:{start.getMinutes().toString().padStart(2, '0')}</div>
+                    <div className="text-[10px] text-[#ccc] truncate mt-0.5">{service?.name} • {getBogotaTime(app.startTime)}</div>
                   </div>
                 );
               })}
@@ -296,7 +365,7 @@ export default function AgendaManager({
     return (
       <div className="flex-1 flex flex-col bg-[#141414] overflow-hidden relative">
         <div className="flex items-center border-b border-white/10 pb-2 pt-2 bg-[#1a1a1a] shrink-0 z-20 shadow-sm overflow-x-auto">
-          <div className="w-[60px] shrink-0 sticky left-0 bg-[#1a1a1a] border-r border-white/10 z-30"></div>
+          <div className="w-[86px] shrink-0 sticky left-0 bg-[#1a1a1a] border-r border-white/10 z-30"></div>
           <div className="flex-1 grid grid-cols-7 min-w-[500px]">
             {weekDays.map(d => {
               const isToday = isSameDay(d, getBogotaToday());
@@ -315,13 +384,13 @@ export default function AgendaManager({
         </div>
         
         <div className="flex-1 overflow-y-auto overflow-x-auto relative pt-3">
-          <div className="grid grid-cols-[60px_1fr] min-w-[560px]">
+          <div className="grid grid-cols-[86px_1fr] min-w-[600px]">
             {/* Hours Column */}
             <div className="border-r border-white/10 shrink-0 sticky left-0 bg-[#141414] z-20">
               {hours.map(h => (
-                <div key={h} className="h-[60px] flex justify-end pr-2 pt-0 relative">
-                  <span className="text-[10px] text-[#888] relative -top-[8px] pr-1">
-                    {h === 0 ? '12 a.m.' : h < 12 ? `${h} a.m.` : h === 12 ? '12 p.m.' : `${h-12} p.m.`}
+                <div key={h} className="h-[60px] flex justify-end pr-3 pt-0 relative">
+                  <span className="text-[11px] text-[#aaa] relative -top-[8px] pr-1 whitespace-nowrap">
+                    {getHourLabel(h)}
                   </span>
                 </div>
               ))}
@@ -331,6 +400,7 @@ export default function AgendaManager({
             <div className="grid grid-cols-7 relative" style={{ backgroundImage: 'linear-gradient(to bottom, rgba(255,255,255,0.06) 1px, transparent 1px)', backgroundSize: '100% 60px' }}>
               {weekDays.map((d, index) => {
                 const apps = getAppointmentsForDate(d);
+                const layouts = getAppointmentLayouts(apps);
                 const isToday = isSameDay(d, getBogotaToday());
                 return (
                   <div key={`col-${d.toString()}`} className="relative border-r border-white/10 last:border-0">
@@ -345,10 +415,10 @@ export default function AgendaManager({
                     )}
                     
                     {apps.map(app => {
-                      const style = getAppointmentStyle(app);
+                      const style = getAppointmentStyle(app, layouts.get(app.id));
                       const client = clients.find(c => c.id === app.clientId);
                       return (
-                        <div key={app.id} className={`${style.className} !left-0 !w-full !rounded-sm !border-l-[3px]`} style={{ top: style.top, height: style.height, minHeight: style.minHeight }} onClick={(e) => { e.stopPropagation(); openEditModal(app); }}>
+                        <div key={app.id} className={`${style.className} !rounded-sm !border-l-[3px]`} style={{ top: style.top, left: style.left, width: style.width, height: style.height, minHeight: style.minHeight }} onClick={(e) => { e.stopPropagation(); openEditModal(app); }}>
                           <div className="font-bold text-white text-[10px] truncate leading-tight">{client?.firstName}</div>
                         </div>
                       );
@@ -403,10 +473,9 @@ export default function AgendaManager({
                 <div className="flex-1 overflow-y-auto space-y-1 mt-1 px-1">
                   {apps.slice(0, 3).map(app => {
                     const client = clients.find(c => c.id === app.clientId);
-                    const start = toDate(app.startTime, { timeZone: TIMEZONE });
                     return (
                       <div key={app.id} className="text-[9px] bg-cognac text-white rounded-[4px] px-1.5 py-0.5 truncate shadow-sm">
-                        {start.getHours()}:{start.getMinutes().toString().padStart(2, '0')} {client?.firstName}
+                        {getBogotaTime(app.startTime)} {client?.firstName}
                       </div>
                     )
                   })}
@@ -507,18 +576,54 @@ export default function AgendaManager({
                       + Nuevo Cliente
                     </button>
                   </div>
-                  <select 
-                    name="clientId" 
-                    required 
-                    value={selectedClientId} 
-                    onChange={(e) => setSelectedClientId(e.target.value)}
-                    className="bg-pitch border border-white/10 text-sterling px-3 py-2.5 rounded-lg text-sm focus:outline-none focus:border-[#8B4513]"
-                  >
-                    <option value="" disabled>Seleccionar cliente...</option>
-                    {clients.map(c => (
-                      <option key={c.id} value={c.id}>{c.firstName} {c.lastName}</option>
-                    ))}
-                  </select>
+                  <input type="hidden" name="clientId" value={selectedClientId} />
+                  <div className="relative">
+                    <input
+                      type="search"
+                      value={clientSearch}
+                      onChange={(event) => {
+                        const value = event.target.value;
+                        setClientSearch(value);
+                        setIsClientPickerOpen(true);
+                        if (clients.find((client) => getClientLabel(client) === value)?.id !== selectedClientId) {
+                          setSelectedClientId("");
+                        }
+                      }}
+                      onFocus={() => setIsClientPickerOpen(true)}
+                      onBlur={() => window.setTimeout(() => setIsClientPickerOpen(false), 150)}
+                      placeholder="Escribe o selecciona un cliente..."
+                      role="combobox"
+                      aria-expanded={isClientPickerOpen}
+                      aria-controls="appointment-client-options"
+                      className="w-full bg-pitch border border-white/10 text-sterling px-3 py-2.5 rounded-lg text-sm focus:outline-none focus:border-[#8B4513]"
+                    />
+                    {isClientPickerOpen && (
+                      <div id="appointment-client-options" role="listbox" className="absolute z-20 mt-1 max-h-48 w-full overflow-y-auto rounded-lg border border-white/10 bg-[#1a1a1a] shadow-xl">
+                        {clients
+                          .filter((client) => getClientLabel(client).toLocaleLowerCase().includes(clientSearch.toLocaleLowerCase()))
+                          .map((client) => (
+                            <button
+                              key={client.id}
+                              type="button"
+                              role="option"
+                              aria-selected={selectedClientId === client.id}
+                              onMouseDown={(event) => event.preventDefault()}
+                              onClick={() => {
+                                setSelectedClientId(client.id);
+                                setClientSearch(getClientLabel(client));
+                                setIsClientPickerOpen(false);
+                              }}
+                              className="block w-full px-3 py-2.5 text-left text-sm text-sterling hover:bg-white/10"
+                            >
+                              {getClientLabel(client)}
+                            </button>
+                          ))}
+                        {clients.filter((client) => getClientLabel(client).toLocaleLowerCase().includes(clientSearch.toLocaleLowerCase())).length === 0 && (
+                          <p className="px-3 py-2.5 text-sm text-charcoal">No hay clientes que coincidan.</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -549,19 +654,12 @@ export default function AgendaManager({
                   <input 
                     type="time" 
                     name="timeStr" 
-                    list="time-options"
+                    step="60"
                     required 
-                    defaultValue={editingAppointment ? new Date(editingAppointment.startTime).toTimeString().substring(0,5) : defaultTime} 
+                    defaultValue={editingAppointment ? getBogotaTime(editingAppointment.startTime) : defaultTime}
                     className="bg-pitch border border-white/10 text-sterling px-3 py-2.5 rounded-lg text-sm focus:outline-none focus:border-[#8B4513]" 
                   />
-                  <datalist id="time-options">
-                    {hours.map(h => (
-                      <option key={h} value={`${h.toString().padStart(2, '0')}:00`} />
-                    ))}
-                    {hours.map(h => (
-                      <option key={`half-${h}`} value={`${h.toString().padStart(2, '0')}:30`} />
-                    ))}
-                  </datalist>
+                  <p className="text-[11px] text-charcoal">Abre el selector para elegir una hora y minuto exactos.</p>
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <label className="text-xs text-charcoal uppercase tracking-wider">Estado de la Cita</label>
