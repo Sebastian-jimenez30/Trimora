@@ -1,7 +1,7 @@
 "use server"
 
 import { db } from "@/core/database/db";
-import { transactions, transactionItems, products, services, inventoryMovements, serviceMaterials, auditLogs, transactionPayments } from "@/core/database/schema";
+import { transactions, transactionItems, products, services, inventoryMovements, serviceMaterials, auditLogs, transactionPayments, clients } from "@/core/database/schema";
 import { createClient } from "@/core/database/server";
 import { eq, and, sql, gte, lte, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -56,6 +56,12 @@ export async function processSale(cart: CartItem[], clientId: string | null, pay
       status,
       paidAmount: paidAmount.toFixed(2)
     }).returning();
+
+    if (clientId) {
+      await db.update(clients)
+        .set({ totalSpent: sql`${clients.totalSpent} + ${totalAmount}` })
+        .where(and(eq(clients.id, clientId), eq(clients.organizationId, orgId)));
+    }
 
     // 1.5 Si hay un abono inicial en un fiado
     if (paymentMethod === 'CREDIT' && paidAmount > 0) {
@@ -132,6 +138,7 @@ export async function processSale(cart: CartItem[], clientId: string | null, pay
     revalidatePath("/inventario");
     revalidatePath("/dashboard");
     revalidatePath("/agenda"); // Revalidar la agenda porque se completó la cita
+    revalidatePath("/clientes");
     return { success: true, transactionId: transaction.id };
   } catch (error: any) {
     console.error("Error processSale:", error);
@@ -211,6 +218,117 @@ export async function registerPayment(transactionId: string, amount: number, pay
     return { success: true, newStatus };
   } catch (error: any) {
     console.error("Error registerPayment:", error);
+    return { success: false, error: error.message };
+  }
+}
+
+export async function updateTransaction(transactionId: string, formData: FormData) {
+  try {
+    const orgId = await getOrganizationId();
+    const totalAmount = parseFloat(formData.get("totalAmount") as string);
+    const paymentMethod = formData.get("paymentMethod") as string;
+    const clientId = (formData.get("clientId") as string) || null;
+    const description = (formData.get("description") as string) || "";
+
+    if (!Number.isFinite(totalAmount) || totalAmount <= 0) {
+      throw new Error("El monto debe ser mayor a cero");
+    }
+    if (!["CASH", "CARD", "TRANSFER", "CREDIT"].includes(paymentMethod)) {
+      throw new Error("Método de pago inválido");
+    }
+
+    const [transaction] = await db.select().from(transactions).where(and(
+      eq(transactions.id, transactionId),
+      eq(transactions.organizationId, orgId)
+    ));
+    if (!transaction) throw new Error("Movimiento no encontrado");
+    if (transaction.type === "EXPENSE" && paymentMethod === "CREDIT") {
+      throw new Error("Un gasto no puede registrarse como fiado");
+    }
+    if (transaction.type === "INCOME" && paymentMethod === "CREDIT" && !clientId) {
+      throw new Error("Las ventas fiadas deben tener un cliente asignado");
+    }
+    if (transaction.type === "INCOME" && clientId) {
+      const [client] = await db.select({ id: clients.id }).from(clients).where(and(
+        eq(clients.id, clientId),
+        eq(clients.organizationId, orgId)
+      ));
+      if (!client) throw new Error("Cliente no encontrado");
+    }
+
+    const paidAmount = parseFloat(transaction.paidAmount);
+    if (transaction.status === "PENDING" && totalAmount < paidAmount) {
+      throw new Error("El monto no puede ser menor que los abonos registrados");
+    }
+
+    const nextPaidAmount = transaction.status === "COMPLETED" ? totalAmount : paidAmount;
+    const nextStatus = nextPaidAmount >= totalAmount ? "COMPLETED" : "PENDING";
+    await db.update(transactions).set({
+      totalAmount: totalAmount.toFixed(2),
+      paidAmount: nextPaidAmount.toFixed(2),
+      paymentMethod,
+      status: nextStatus,
+      clientId: transaction.type === "INCOME" ? clientId : null,
+    }).where(and(eq(transactions.id, transactionId), eq(transactions.organizationId, orgId)));
+
+    if (transaction.type === "EXPENSE") {
+      await db.update(auditLogs).set({ details: description }).where(and(
+        eq(auditLogs.organizationId, orgId),
+        eq(auditLogs.entityId, transactionId),
+        eq(auditLogs.entityType, "TRANSACTION")
+      ));
+    }
+
+    revalidatePath("/pos");
+    revalidatePath("/dashboard");
+    revalidatePath("/clientes");
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+export async function deleteTransaction(transactionId: string) {
+  try {
+    const orgId = await getOrganizationId();
+    const [transaction] = await db.select().from(transactions).where(and(
+      eq(transactions.id, transactionId),
+      eq(transactions.organizationId, orgId)
+    ));
+    if (!transaction) throw new Error("Movimiento no encontrado");
+
+    const movements = await db.select().from(inventoryMovements).where(and(
+      eq(inventoryMovements.organizationId, orgId),
+      sql`${inventoryMovements.notes} like ${`%transaction ${transactionId}%`}`
+    ));
+
+    for (const movement of movements) {
+      const [product] = await db.select().from(products).where(and(
+        eq(products.id, movement.productId),
+        eq(products.organizationId, orgId)
+      ));
+      if (!product) continue;
+
+      const stockToReverse = movement.previousStock - movement.newStock;
+      await db.update(products).set({
+        currentStock: (parseFloat(product.currentStock) + stockToReverse).toString()
+      }).where(eq(products.id, product.id));
+    }
+
+    if (movements.length > 0) {
+      await db.delete(inventoryMovements).where(inArray(inventoryMovements.id, movements.map((movement) => movement.id)));
+    }
+    await db.delete(transactionPayments).where(eq(transactionPayments.transactionId, transactionId));
+    await db.delete(transactionItems).where(eq(transactionItems.transactionId, transactionId));
+    await db.delete(auditLogs).where(and(eq(auditLogs.organizationId, orgId), eq(auditLogs.entityId, transactionId)));
+    await db.delete(transactions).where(and(eq(transactions.id, transactionId), eq(transactions.organizationId, orgId)));
+
+    revalidatePath("/pos");
+    revalidatePath("/inventario");
+    revalidatePath("/dashboard");
+    revalidatePath("/clientes");
+    return { success: true };
+  } catch (error: any) {
     return { success: false, error: error.message };
   }
 }

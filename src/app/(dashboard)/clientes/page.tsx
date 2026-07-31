@@ -1,7 +1,7 @@
 import { createClient } from "@/core/database/server";
 import { db } from "@/core/database/db";
-import { organizationMembers, clients } from "@/core/database/schema";
-import { eq, desc } from "drizzle-orm";
+import { organizationMembers, clients, transactions } from "@/core/database/schema";
+import { eq, desc, and } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import ClientManager from "./ClientManager";
 
@@ -27,6 +27,30 @@ export default async function ClientesPage() {
     .where(eq(clients.organizationId, orgId))
     .orderBy(desc(clients.createdAt));
 
+  const customerTransactions = await db.select({
+    clientId: transactions.clientId,
+    totalAmount: transactions.totalAmount,
+  })
+    .from(transactions)
+    .where(and(
+      eq(transactions.organizationId, orgId),
+      eq(transactions.type, "INCOME")
+    ));
+
+  const totalsByClient = new Map<string, number>();
+  for (const transaction of customerTransactions) {
+    if (!transaction.clientId) continue;
+    totalsByClient.set(
+      transaction.clientId,
+      (totalsByClient.get(transaction.clientId) || 0) + Number(transaction.totalAmount)
+    );
+  }
+
+  const customersWithTotals = customers.map((customer) => ({
+    ...customer,
+    totalSpent: (totalsByClient.get(customer.id) || 0).toFixed(2),
+  }));
+
   return (
     <div className="p-[30px] flex flex-col gap-6 h-full">
       <div className="flex justify-between items-center">
@@ -36,7 +60,7 @@ export default async function ClientesPage() {
         </div>
       </div>
       
-      <ClientManager initialClients={customers} />
+      <ClientManager initialClients={customersWithTotals} />
     </div>
   );
 }

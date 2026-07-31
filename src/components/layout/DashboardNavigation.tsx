@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { logout } from "@/modules/auth/actions";
@@ -19,7 +19,21 @@ export default function DashboardNavigation({ username, avatarUrl, pendingAppoin
   const [isPendingsOpen, setIsPendingsOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const pendingDropdownRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
+
+  useEffect(() => {
+    if (!isPendingsOpen) return;
+
+    const closePendingDropdown = (event: MouseEvent) => {
+      if (!pendingDropdownRef.current?.contains(event.target as Node)) {
+        setIsPendingsOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", closePendingDropdown);
+    return () => document.removeEventListener("mousedown", closePendingDropdown);
+  }, [isPendingsOpen]);
 
   const handleCancelAppointment = (id: string) => {
     startTransition(async () => {
@@ -28,17 +42,24 @@ export default function DashboardNavigation({ username, avatarUrl, pendingAppoin
   };
 
   const navLinks = [
-    { href: "/dashboard", label: "Dashboard" },
+    { href: "/dashboard", label: "Inicio" },
     { href: "/agenda", label: "Agenda y Citas" },
+    { href: "/pos", label: "Caja" },
     { href: "/clientes", label: "Clientes" },
-    { href: "/pos", label: "Punto de Venta (POS)" },
     { href: "/inventario", label: "Inventario" },
   ];
 
   if (isAdmin) {
-    navLinks.push({ href: "/equipo", label: "Equipo" });
     navLinks.push({ href: "/servicios", label: "Servicios" });
+    navLinks.push({ href: "/equipo", label: "Equipo" });
   }
+
+  const isHome = pathname === "/dashboard";
+  const pageTitle = [
+    ...navLinks,
+    { href: "/calendar", label: "Calendario" },
+    { href: "/perfil", label: "Perfil" },
+  ].find((link) => pathname === link.href || pathname.startsWith(`${link.href}/`))?.label ?? "Trimora";
 
   const closeMenu = () => setIsOpen(false);
 
@@ -111,14 +132,18 @@ export default function DashboardNavigation({ username, avatarUrl, pendingAppoin
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
             </button>
             <div className="flex flex-col">
-              <h2 className="text-base md:text-lg font-semibold text-sterling truncate max-w-[150px] md:max-w-xs">Hola, {username}</h2>
-              <p className="text-[10px] md:text-xs text-charcoal mt-0.5 hidden sm:block">Aquí tienes el resumen de tu negocio para hoy.</p>
+              <h2 className="text-base md:text-lg font-semibold text-sterling truncate max-w-[150px] md:max-w-xs">
+                {isHome ? `Hola, ${username}` : pageTitle}
+              </h2>
+              {isHome && (
+                <p className="text-[10px] md:text-xs text-charcoal mt-0.5 hidden sm:block">Aquí tienes el resumen de tu negocio para hoy.</p>
+              )}
             </div>
           </div>
           
           <div className="flex items-center gap-3 md:gap-5">
             {/* Bell Icon for Pending Appointments */}
-            <div className="relative">
+            <div className="relative" ref={pendingDropdownRef}>
               <button 
                 onClick={() => setIsPendingsOpen(!isPendingsOpen)}
                 className="relative p-2 text-[#888] hover:text-sterling transition-colors"

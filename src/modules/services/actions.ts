@@ -33,7 +33,7 @@ export async function createServiceWithMaterials(formData: FormData, materials: 
     const price = parseFloat(formData.get("price") as string);
     const isActive = formData.get("isActive") === "true";
 
-    if (!name || isNaN(durationMinutes) || isNaN(price)) {
+    if (!name || isNaN(durationMinutes) || durationMinutes < 1 || isNaN(price)) {
       throw new Error("Faltan datos obligatorios del servicio");
     }
 
@@ -75,7 +75,7 @@ export async function updateServiceWithMaterials(serviceId: string, formData: Fo
     const price = parseFloat(formData.get("price") as string);
     const isActive = formData.get("isActive") === "true";
 
-    if (!name || isNaN(durationMinutes) || isNaN(price)) {
+    if (!name || isNaN(durationMinutes) || durationMinutes < 1 || isNaN(price)) {
       throw new Error("Faltan datos obligatorios del servicio");
     }
 
@@ -109,6 +109,7 @@ export async function updateServiceWithMaterials(serviceId: string, formData: Fo
     }
 
     revalidatePath('/servicios');
+    revalidatePath('/agenda');
     return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message };
