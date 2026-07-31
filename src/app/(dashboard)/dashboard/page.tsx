@@ -202,7 +202,7 @@ export default async function DashboardPage() {
                   {upcomingAppointments.map((apt) => (
                     <tr key={apt.id} className="hover:bg-white/5 transition-colors border-b border-white/5">
                       <td className="py-3 px-2.5 text-sm text-sterling">
-                        {apt.startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        {formatInTimeZone(apt.startTime, TIMEZONE, 'h:mm a')}
                       </td>
                       <td className="py-3 px-2.5 text-sm text-sterling">
                         {apt.clientName} {apt.clientLastName || ''}
