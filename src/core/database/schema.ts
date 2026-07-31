@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, numeric, integer, boolean, varchar } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, timestamp, numeric, integer, boolean, varchar, index } from 'drizzle-orm/pg-core';
 
 // ----------------------------------------------------------------------
 // 1. NÚCLEO SAAS
@@ -87,7 +87,9 @@ export const appointments = pgTable('appointments', {
   status: text('status').default('PENDING').notNull(), // PENDING, CONFIRMED, COMPLETED, CANCELLED
   notes: text('notes'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-});
+}, (table) => [
+  index('appointments_org_start_idx').on(table.organizationId, table.startTime),
+]);
 
 // ----------------------------------------------------------------------
 // 4. POS Y FINANZAS
@@ -104,7 +106,9 @@ export const transactions = pgTable('transactions', {
   paidAmount: numeric('paid_amount', { precision: 10, scale: 2 }).default('0').notNull(),
   notes: text('notes'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-});
+}, (table) => [
+  index('transactions_org_created_idx').on(table.organizationId, table.createdAt),
+]);
 
 export const transactionItems = pgTable('transaction_items', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -114,7 +118,10 @@ export const transactionItems = pgTable('transaction_items', {
   quantity: numeric('quantity', { precision: 10, scale: 2 }).notNull().default('1'),
   unitPrice: numeric('unit_price', { precision: 10, scale: 2 }).notNull(),
   subtotal: numeric('subtotal', { precision: 10, scale: 2 }).notNull(),
-});
+}, (table) => [
+  index('transaction_items_transaction_idx').on(table.transactionId),
+  index('transaction_items_type_item_idx').on(table.itemType, table.itemId),
+]);
 
 export const transactionPayments = pgTable('transaction_payments', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -122,7 +129,9 @@ export const transactionPayments = pgTable('transaction_payments', {
   amount: numeric('amount', { precision: 10, scale: 2 }).notNull(),
   paymentMethod: text('payment_method').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-});
+}, (table) => [
+  index('transaction_payments_transaction_idx').on(table.transactionId),
+]);
 
 export const inventoryMovements = pgTable('inventory_movements', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -158,7 +167,9 @@ export const auditLogs = pgTable('audit_logs', {
   entityId: uuid('entity_id'),
   details: text('details'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-});
+}, (table) => [
+  index('audit_logs_entity_idx').on(table.organizationId, table.entityType, table.entityId),
+]);
 
 // ----------------------------------------------------------------------
 // 6. CHAT Y MEMORIA DE IA

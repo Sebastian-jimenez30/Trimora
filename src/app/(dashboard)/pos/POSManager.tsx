@@ -11,10 +11,15 @@ type POSProps = {
   clients: any[];
   staff: any[];
   history: any[];
+  historyRange: HistoryRange;
+  historyStart: string;
+  historyEnd: string;
   pendingAppointments?: any[];
 };
 
-export default function POSManager({ services, products, clients, staff, history, pendingAppointments }: POSProps) {
+type HistoryRange = "MONTH" | "WEEK" | "DAY" | "YEAR" | "CUSTOM" | "HISTORIC";
+
+export default function POSManager({ services, products, clients, staff, history, historyRange, historyStart, historyEnd, pendingAppointments }: POSProps) {
   const searchParams = useSearchParams();
   const router = useRouter();
   
@@ -40,9 +45,9 @@ export default function POSManager({ services, products, clients, staff, history
   const [editingTransaction, setEditingTransaction] = useState<any | null>(null);
   
   const [isExporting, setIsExporting] = useState(false);
-  const [exportRangeType, setExportRangeType] = useState<"MONTH" | "WEEK" | "DAY" | "CUSTOM">("MONTH");
-  const [customStartDate, setCustomStartDate] = useState("");
-  const [customEndDate, setCustomEndDate] = useState("");
+  const [exportRangeType, setExportRangeType] = useState<HistoryRange>(historyRange);
+  const [customStartDate, setCustomStartDate] = useState(historyStart);
+  const [customEndDate, setCustomEndDate] = useState(historyEnd);
 
   const [isPending, startTransition] = useTransition();
 
@@ -215,6 +220,10 @@ export default function POSManager({ services, products, clients, staff, history
       const day = start.getDay();
       const diff = start.getDate() - day + (day === 0 ? -6 : 1);
       start.setDate(diff);
+    } else if (exportRangeType === "YEAR") {
+      start.setMonth(0, 1);
+    } else if (exportRangeType === "HISTORIC") {
+      start = new Date(0);
     } else if (exportRangeType === "CUSTOM") {
       if (!customStartDate || !customEndDate) {
         toast.error("Seleccione ambas fechas para el rango personalizado.");
@@ -238,6 +247,25 @@ export default function POSManager({ services, products, clients, staff, history
     } else {
       toast.error(result.error || "Error exportando el reporte");
     }
+  };
+
+  const applyHistoryFilter = (range: HistoryRange, startDate = customStartDate, endDate = customEndDate) => {
+    if (range === "CUSTOM" && (!startDate || !endDate)) {
+      toast.error("Seleccione ambas fechas para filtrar el historial.");
+      return;
+    }
+
+    const params = new URLSearchParams(searchParams?.toString() || "");
+    params.set("tab", "HISTORY");
+    params.set("historyRange", range);
+    if (range === "CUSTOM") {
+      params.set("historyStart", startDate);
+      params.set("historyEnd", endDate);
+    } else {
+      params.delete("historyStart");
+      params.delete("historyEnd");
+    }
+    router.replace(`/pos?${params.toString()}`);
   };
 
   const handleExpenseSubmit = (e: React.FormEvent<HTMLFormElement>) => {
@@ -478,22 +506,31 @@ export default function POSManager({ services, products, clients, staff, history
           {/* HISTORIAL */}
           {activeTab === "HISTORY" && (
             <div className="bg-[#141414] border border-white/10 rounded-xl overflow-hidden max-w-5xl">
-              <div className="p-5 border-b border-white/10 flex justify-between items-center">
-                <h3 className="font-serif text-lg text-sterling">Transacciones Recientes</h3>
-                <div className="flex flex-col sm:flex-row items-center gap-3">
+              <div className="p-5 border-b border-white/10 flex flex-col xl:flex-row xl:justify-between xl:items-center gap-4">
+                <div>
+                  <h3 className="font-serif text-lg text-sterling">Historial de Caja</h3>
+                  <p className="text-xs text-charcoal mt-1">El período seleccionado filtra la lista y también se usa al exportar.</p>
+                </div>
+                <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                   <select 
                     value={exportRangeType} 
-                    onChange={(e) => setExportRangeType(e.target.value as any)}
+                    onChange={(e) => {
+                      const range = e.target.value as HistoryRange;
+                      setExportRangeType(range);
+                      if (range !== "CUSTOM") applyHistoryFilter(range);
+                    }}
                     className="bg-pitch border border-white/10 text-sterling px-3 py-1.5 rounded-lg text-xs focus:outline-none focus:border-[#8B4513]"
                   >
                     <option value="DAY">Hoy</option>
                     <option value="WEEK">Esta Semana</option>
                     <option value="MONTH">Este Mes</option>
+                    <option value="YEAR">Este Año</option>
                     <option value="CUSTOM">Personalizado</option>
+                    <option value="HISTORIC">Histórico</option>
                   </select>
                   
                   {exportRangeType === "CUSTOM" && (
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <input 
                         type="date" 
                         value={customStartDate} 
@@ -507,6 +544,13 @@ export default function POSManager({ services, products, clients, staff, history
                         onChange={(e) => setCustomEndDate(e.target.value)}
                         className="bg-pitch border border-white/10 text-sterling px-2 py-1 rounded text-xs focus:outline-none"
                       />
+                      <button
+                        type="button"
+                        onClick={() => applyHistoryFilter("CUSTOM")}
+                        className="bg-[#8B4513]/20 border border-[#8B4513]/50 hover:bg-[#8B4513]/30 text-[#c98a64] px-3 py-1.5 rounded text-xs font-bold transition-colors"
+                      >
+                        Aplicar
+                      </button>
                     </div>
                   )}
 
@@ -623,7 +667,7 @@ export default function POSManager({ services, products, clients, staff, history
                   )})}
                   {history.length === 0 && (
                     <tr>
-                      <td colSpan={5} className="py-10 text-center text-[#888] text-sm">No hay transacciones recientes.</td>
+                      <td colSpan={7} className="py-10 text-center text-[#888] text-sm">No hay transacciones en el período seleccionado.</td>
                     </tr>
                   )}
                 </tbody>
@@ -926,7 +970,14 @@ export default function POSManager({ services, products, clients, staff, history
               ) : (
                 <div>
                   <p className="text-[10px] uppercase tracking-wider text-charcoal mb-2">Descripción</p>
-                  <p className="text-sm text-sterling bg-pitch/70 rounded-lg p-3">{selectedTransaction.description}</p>
+                  <p className="text-sm text-sterling bg-pitch/70 rounded-lg p-3">{selectedTransaction.notes || selectedTransaction.description}</p>
+                </div>
+              )}
+
+              {selectedTransaction.itemDetails?.length > 0 && selectedTransaction.notes && (
+                <div>
+                  <p className="text-[10px] uppercase tracking-wider text-charcoal mb-2">Información adicional</p>
+                  <p className="text-sm text-sterling bg-pitch/70 rounded-lg p-3">{selectedTransaction.notes}</p>
                 </div>
               )}
             </div>

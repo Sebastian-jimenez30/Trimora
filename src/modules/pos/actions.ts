@@ -1,7 +1,7 @@
 "use server"
 
 import { db } from "@/core/database/db";
-import { transactions, transactionItems, products, services, inventoryMovements, serviceMaterials, auditLogs, transactionPayments, clients } from "@/core/database/schema";
+import { appointments, transactions, transactionItems, products, services, inventoryMovements, serviceMaterials, auditLogs, transactionPayments, clients } from "@/core/database/schema";
 import { createClient } from "@/core/database/server";
 import { eq, and, sql, gte, lte, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -46,93 +46,108 @@ export async function processSale(cart: CartItem[], clientId: string | null, pay
 
     const status = paidAmount < totalAmount ? 'PENDING' : 'COMPLETED';
 
-    // 1. Crear la transacción
-    const [transaction] = await db.insert(transactions).values({
-      organizationId: orgId,
-      clientId: clientId || null,
-      type: 'INCOME',
-      totalAmount: totalAmount.toFixed(2),
-      paymentMethod,
-      status,
-      paidAmount: paidAmount.toFixed(2)
-    }).returning();
+    const transaction = await db.transaction(async (databaseTransaction) => {
+      const [sale] = await databaseTransaction.insert(transactions).values({
+        organizationId: orgId,
+        clientId: clientId || null,
+        type: 'INCOME',
+        totalAmount: totalAmount.toFixed(2),
+        paymentMethod,
+        status,
+        paidAmount: paidAmount.toFixed(2)
+      }).returning();
 
-    if (clientId) {
-      await db.update(clients)
-        .set({ totalSpent: sql`${clients.totalSpent} + ${totalAmount}` })
-        .where(and(eq(clients.id, clientId), eq(clients.organizationId, orgId)));
-    }
+      if (clientId) {
+        await databaseTransaction.update(clients)
+          .set({ totalSpent: sql`${clients.totalSpent} + ${totalAmount}` })
+          .where(and(eq(clients.id, clientId), eq(clients.organizationId, orgId)));
+      }
 
-    // 1.5 Si hay un abono inicial en un fiado
-    if (paymentMethod === 'CREDIT' && paidAmount > 0) {
-      await db.insert(transactionPayments).values({
-        transactionId: transaction.id,
-        amount: paidAmount.toFixed(2),
-        paymentMethod: initialPaymentMethod || 'CASH'
-      });
-    }
+      if (paymentMethod === 'CREDIT' && paidAmount > 0) {
+        await databaseTransaction.insert(transactionPayments).values({
+          transactionId: sale.id,
+          amount: paidAmount.toFixed(2),
+          paymentMethod: initialPaymentMethod || 'CASH'
+        });
+      }
 
-    // 2. Procesar cada item
-    for (const item of cart) {
-      await db.insert(transactionItems).values({
-        transactionId: transaction.id,
-        itemType: item.type,
-        itemId: item.id,
-        quantity: item.quantity.toString(),
-        unitPrice: item.price.toFixed(2),
-        subtotal: (item.price * item.quantity).toFixed(2)
-      });
+      for (const item of cart) {
+        if (item.quantity <= 0) throw new Error(`La cantidad de ${item.name} debe ser mayor a cero.`);
 
-      if (item.type === "PRODUCT") {
-        // Reducir stock del producto
-        const [productData] = await db.select().from(products).where(and(eq(products.id, item.id), eq(products.organizationId, orgId)));
-        if (productData) {
-          const newStock = parseFloat(productData.currentStock) - item.quantity;
-          await db.update(products).set({ currentStock: newStock.toString() }).where(eq(products.id, item.id));
+        await databaseTransaction.insert(transactionItems).values({
+          transactionId: sale.id,
+          itemType: item.type,
+          itemId: item.id,
+          quantity: item.quantity.toString(),
+          unitPrice: item.price.toFixed(2),
+          subtotal: (item.price * item.quantity).toFixed(2)
+        });
 
-          await db.insert(inventoryMovements).values({
+        if (item.type === "PRODUCT") {
+          const [productData] = await databaseTransaction.select()
+            .from(products)
+            .where(and(eq(products.id, item.id), eq(products.organizationId, orgId)))
+            .for("update");
+          if (!productData) throw new Error(`El producto ${item.name} ya no está disponible.`);
+
+          const previousStock = parseFloat(productData.currentStock);
+          if (previousStock < item.quantity) {
+            throw new Error(`Stock insuficiente para ${productData.name}. Disponible: ${previousStock}.`);
+          }
+          const newStock = previousStock - item.quantity;
+
+          await databaseTransaction.update(products)
+            .set({ currentStock: newStock.toString() })
+            .where(and(eq(products.id, item.id), eq(products.organizationId, orgId)));
+          await databaseTransaction.insert(inventoryMovements).values({
             organizationId: orgId,
             productId: item.id,
             type: 'OUT',
             quantity: item.quantity,
-            previousStock: Math.round(parseFloat(productData.currentStock)),
+            previousStock: Math.round(previousStock),
             newStock: Math.round(newStock),
-            notes: `SALE transaction ${transaction.id}`
+            notes: `SALE transaction ${sale.id}`
           });
-        }
-      } else if (item.type === "SERVICE") {
-        // Descontar materiales ligados al servicio
-        const materials = await db.select().from(serviceMaterials).where(eq(serviceMaterials.serviceId, item.id));
-        
-        for (const mat of materials) {
-          const [productData] = await db.select().from(products).where(and(eq(products.id, mat.productId), eq(products.organizationId, orgId)));
-          if (productData) {
-            const qtyUsed = parseFloat(mat.quantityUsed) * item.quantity;
-            const newStock = parseFloat(productData.currentStock) - qtyUsed;
-            
-            await db.update(products).set({ currentStock: newStock.toString() }).where(eq(products.id, mat.productId));
+        } else {
+          const materials = await databaseTransaction.select()
+            .from(serviceMaterials)
+            .where(eq(serviceMaterials.serviceId, item.id));
 
-            await db.insert(inventoryMovements).values({
+          for (const material of materials) {
+            const [productData] = await databaseTransaction.select()
+              .from(products)
+              .where(and(eq(products.id, material.productId), eq(products.organizationId, orgId)))
+              .for("update");
+            if (!productData) continue;
+
+            const quantityUsed = parseFloat(material.quantityUsed) * item.quantity;
+            const previousStock = parseFloat(productData.currentStock);
+            const newStock = previousStock - quantityUsed;
+
+            await databaseTransaction.update(products)
+              .set({ currentStock: newStock.toString() })
+              .where(and(eq(products.id, material.productId), eq(products.organizationId, orgId)));
+            await databaseTransaction.insert(inventoryMovements).values({
               organizationId: orgId,
-              productId: mat.productId,
+              productId: material.productId,
               type: 'OUT',
-              quantity: Math.round(qtyUsed),
-              previousStock: Math.round(parseFloat(productData.currentStock)),
+              quantity: Math.round(quantityUsed),
+              previousStock: Math.round(previousStock),
               newStock: Math.round(newStock),
-              notes: `USAGE transaction ${transaction.id}`
+              notes: `USAGE transaction ${sale.id}`
             });
           }
         }
       }
-    }
 
-    // 3. Completar la cita si viene ligada
-    if (appointmentId) {
-      const { appointments } = await import("@/core/database/schema");
-      await db.update(appointments)
-        .set({ status: 'COMPLETED' })
-        .where(eq(appointments.id, appointmentId));
-    }
+      if (appointmentId) {
+        await databaseTransaction.update(appointments)
+          .set({ status: 'COMPLETED' })
+          .where(and(eq(appointments.id, appointmentId), eq(appointments.organizationId, orgId)));
+      }
+
+      return sale;
+    });
 
     revalidatePath("/pos");
     revalidatePath("/inventario");
