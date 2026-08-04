@@ -1,96 +1,107 @@
-'use server'
+"use server";
 
-import { createClient } from '@/core/database/server'
-import { revalidatePath } from 'next/cache'
+import { createClient } from "@/core/database/server";
+import { supabaseAdmin } from "@/core/database/admin";
+import { requireActor } from "@/core/auth/server/actor";
+import { revalidatePath } from "next/cache";
+import { z } from "zod";
+
+const fullNameSchema = z.string().trim().min(2).max(120);
+const passwordSchema = z.string().min(12).max(128);
+const avatarSchema = z
+  .custom<File>(
+    (value) => typeof File !== "undefined" && value instanceof File,
+    "Archivo no válido",
+  )
+  .refine((file) => file.size > 0 && file.size <= 5_000_000, "La imagen debe pesar máximo 5 MB")
+  .refine(
+    (file) => ["image/jpeg", "image/png", "image/webp"].includes(file.type),
+    "Formato de imagen no permitido",
+  );
 
 export async function updateProfileInfo(formData: FormData) {
-  const supabase = await createClient()
-  
-  const fullName = formData.get('fullName') as string;
-  if (!fullName) return { success: false, error: "El nombre es obligatorio" };
+  const supabase = await createClient();
+
+  await requireActor();
+  const parsedName = fullNameSchema.safeParse(formData.get("fullName"));
+  if (!parsedName.success) return { success: false, error: parsedName.error.issues[0].message };
 
   const { error } = await supabase.auth.updateUser({
-    data: { full_name: fullName }
-  })
+    data: { full_name: parsedName.data },
+  });
 
-  if (error) return { success: false, error: error.message }
-  
-  revalidatePath('/', 'layout')
-  return { success: true }
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath("/", "layout");
+  return { success: true };
 }
 
 export async function updatePassword(formData: FormData) {
-  const supabase = await createClient()
-  
-  const newPassword = formData.get('password') as string;
-  const confirmPassword = formData.get('confirmPassword') as string;
+  const supabase = await createClient();
 
-  if (!newPassword || newPassword.length < 6) {
-    return { success: false, error: "La contraseña debe tener al menos 6 caracteres" };
-  }
-  
+  await requireActor();
+  const newPassword = formData.get("password") as string;
+  const confirmPassword = formData.get("confirmPassword") as string;
+
+  const parsedPassword = passwordSchema.safeParse(newPassword);
+  if (!parsedPassword.success)
+    return { success: false, error: "La contraseña debe tener entre 12 y 128 caracteres" };
+
   if (newPassword !== confirmPassword) {
     return { success: false, error: "Las contraseñas no coinciden" };
   }
 
   const { error } = await supabase.auth.updateUser({
-    password: newPassword
-  })
+    password: parsedPassword.data,
+  });
 
-  if (error) return { success: false, error: error.message }
-  
-  return { success: true }
+  if (error) return { success: false, error: error.message };
+
+  return { success: true };
 }
 
 export async function uploadAvatar(formData: FormData) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  
-  if (!user) return { success: false, error: "No autorizado" }
+  const supabase = await createClient();
+  const actor = await requireActor();
 
-  const file = formData.get('avatar') as File
-  if (!file || file.size === 0) return { success: false, error: "No se seleccionó ningún archivo" }
+  const parsedFile = avatarSchema.safeParse(formData.get("avatar"));
+  if (!parsedFile.success) return { success: false, error: parsedFile.error.issues[0].message };
+  const file = parsedFile.data;
 
-  // Usar admin para subir sin RLS
-  const { createClient: createSupabaseAdmin } = await import('@supabase/supabase-js')
-  const adminAuth = createSupabaseAdmin(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SECRET_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } }
-  )
-
-  const fileExt = file.name.split('.').pop()
-  const fileName = `${user.id}-${Math.random()}.${fileExt}`
-  const filePath = `${fileName}`
+  const fileExt = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" }[file.type];
+  const fileName = `${actor.userId}-${crypto.randomUUID()}.${fileExt}`;
+  const filePath = `${fileName}`;
 
   // Convert File to ArrayBuffer for uploading
-  const arrayBuffer = await file.arrayBuffer()
-  const buffer = Buffer.from(arrayBuffer)
+  const arrayBuffer = await file.arrayBuffer();
+  const buffer = Buffer.from(arrayBuffer);
 
-  const { error: uploadError, data: uploadData } = await adminAuth.storage
-    .from('avatars')
+  const { error: uploadError } = await supabaseAdmin.storage
+    .from("avatars")
     .upload(filePath, buffer, {
       contentType: file.type,
-      upsert: true
-    })
+      upsert: true,
+    });
 
-  if (uploadError) return { success: false, error: uploadError.message }
+  if (uploadError) return { success: false, error: uploadError.message };
 
   // Get public URL
-  const { data: { publicUrl } } = adminAuth.storage.from('avatars').getPublicUrl(filePath)
+  const {
+    data: { publicUrl },
+  } = supabaseAdmin.storage.from("avatars").getPublicUrl(filePath);
 
   // Update user metadata
-  const { error: updateError } = await adminAuth.auth.admin.updateUserById(user.id, {
-    user_metadata: { ...user.user_metadata, avatar_url: publicUrl }
-  })
-  
-  if (updateError) return { success: false, error: updateError.message }
-  
+  const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(actor.userId, {
+    user_metadata: { avatar_url: publicUrl, full_name: actor.displayName },
+  });
+
+  if (updateError) return { success: false, error: updateError.message };
+
   // Update local session as well
   await supabase.auth.updateUser({
-    data: { avatar_url: publicUrl }
-  })
+    data: { avatar_url: publicUrl },
+  });
 
-  revalidatePath('/', 'layout')
-  return { success: true, avatarUrl: publicUrl }
+  revalidatePath("/", "layout");
+  return { success: true, avatarUrl: publicUrl };
 }

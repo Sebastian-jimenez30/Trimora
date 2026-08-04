@@ -1,22 +1,30 @@
-import { NextResponse } from 'next/server'
-import { createClient } from '@/core/database/server'
+import { NextResponse } from "next/server";
+import { createClient } from "@/core/database/server";
+import { getAuthenticatedHome } from "@/core/auth/server/destination";
 
 export async function GET(request: Request) {
-  const { searchParams, origin } = new URL(request.url)
-  const code = searchParams.get('code')
+  const { searchParams, origin } = new URL(request.url);
+  const code = searchParams.get("code");
   // if "next" is in param, use it as the redirect URL
-  const next = searchParams.get('next') ?? '/dashboard'
+  const requestedNext = searchParams.get("next");
+  const next =
+    requestedNext?.startsWith("/") &&
+    !requestedNext.startsWith("//") &&
+    !requestedNext.includes("\\")
+      ? requestedNext
+      : null;
 
   if (code) {
-    const supabase = await createClient()
-    const { data: sessionData, error } = await supabase.auth.exchangeCodeForSession(code)
-    
+    const supabase = await createClient();
+    const { data: sessionData, error } = await supabase.auth.exchangeCodeForSession(code);
+
     if (!error && sessionData.session) {
       // Si la URL contiene algo como next=/invite?token=XYZ, redigirá ahí
-      return NextResponse.redirect(`${origin}${next}`)
+      const destination = next ?? (await getAuthenticatedHome(sessionData.session.user.id));
+      return NextResponse.redirect(`${origin}${destination}`);
     }
   }
 
   // return the user to an error page with instructions
-  return NextResponse.redirect(`${origin}/login?message=No se pudo iniciar sesión con Google`)
+  return NextResponse.redirect(`${origin}/login?message=No se pudo iniciar sesión con Google`);
 }

@@ -3,8 +3,10 @@
   "components": {
     "auth-access": {
       "paths": [
+        "src/core/auth/",
         "src/modules/auth/",
         "src/modules/collaborators/",
+        "src/modules/invitations/",
         "src/modules/profile/",
         "src/modules/superadmin/",
         "src/core/services/email.ts",
@@ -19,8 +21,10 @@
         "src/app/(dashboard)/perfil/"
       ],
       "testRoots": [
+        "src/core/auth",
         "src/modules/auth",
         "src/modules/collaborators",
+        "src/modules/invitations",
         "src/modules/profile",
         "src/modules/superadmin",
         "src/app/(auth)",
@@ -29,8 +33,10 @@
         "src/app/(dashboard)/perfil"
       ],
       "coverage": [
+        "src/core/auth/**/*.ts",
         "src/modules/auth/**/*.ts",
         "src/modules/collaborators/**/*.ts",
+        "src/modules/invitations/**/*.ts",
         "src/modules/profile/**/*.ts",
         "src/modules/superadmin/**/*.ts"
       ],

@@ -1,59 +1,40 @@
 import { db } from "@/core/database/db";
 import { organizationMembers, invitations } from "@/core/database/schema";
-import { createClient } from "@/core/database/server";
+import { requireActor } from "@/core/auth/server/actor";
+import { supabaseAdmin } from "@/core/database/admin";
 import { eq, and } from "drizzle-orm";
-import { redirect } from "next/navigation";
 import TeamManager from "./TeamManager";
 
 export default async function TeamPage() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user || !user.user_metadata?.organization_id) {
-    redirect("/login");
-  }
-
-  const organizationId = user.user_metadata.organization_id;
-
-  // Verificar si es ADMIN
-  const [member] = await db.select().from(organizationMembers).where(and(
-    eq(organizationMembers.organizationId, organizationId),
-    eq(organizationMembers.userId, user.id)
-  ));
-
-  if (!member || member.role !== 'ADMIN') {
-    redirect("/dashboard"); // O mostrar un un-authorized
-  }
+  const actor = await requireActor({ roles: ["ADMIN"] });
+  const { organizationId } = actor;
 
   // Obtener invitaciones pendientes
-  const pendingInvites = await db.select().from(invitations).where(and(
-    eq(invitations.organizationId, organizationId),
-    eq(invitations.status, 'PENDING')
-  ));
+  const pendingInvites = await db
+    .select()
+    .from(invitations)
+    .where(and(eq(invitations.organizationId, organizationId), eq(invitations.status, "PENDING")));
 
   // Obtener miembros activos
-  const members = await db.select().from(organizationMembers).where(
-    eq(organizationMembers.organizationId, organizationId)
-  );
+  const members = await db
+    .select()
+    .from(organizationMembers)
+    .where(eq(organizationMembers.organizationId, organizationId));
 
   // Cruzar con auth.users usando la API de Admin
-  const { createClient: createSupabaseAdmin } = await import('@supabase/supabase-js');
-  const adminAuth = createSupabaseAdmin(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SECRET_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } }
-  ).auth.admin;
+  const { data: authUsers } = await supabaseAdmin.auth.admin.listUsers();
 
-  const { data: authUsers } = await adminAuth.listUsers();
-  
-  const enrichedMembers = members.map(m => {
-    const authUser = authUsers.users.find(u => u.id === m.userId);
+  const enrichedMembers = members.map((m) => {
+    const authUser = authUsers.users.find((u) => u.id === m.userId);
     return {
-      ...m,
+      id: m.id,
+      userId: m.userId,
+      role: m.role,
       email: authUser?.email || "Usuario Eliminado",
-      fullName: authUser?.user_metadata?.full_name || authUser?.email?.split('@')[0] || "Desconocido",
+      fullName:
+        authUser?.user_metadata?.full_name || authUser?.email?.split("@")[0] || "Desconocido",
       avatarUrl: authUser?.user_metadata?.avatar_url || null,
-      isCurrentUser: m.userId === user.id
+      isCurrentUser: m.userId === actor.userId,
     };
   });
 
@@ -64,9 +45,13 @@ export default async function TeamPage() {
         <p className="text-charcoal text-sm">Gestiona los colaboradores y accesos a tu barbería.</p>
       </div>
 
-      <TeamManager 
-        members={enrichedMembers} 
-        invitations={pendingInvites} 
+      <TeamManager
+        members={enrichedMembers}
+        invitations={pendingInvites.map((invitation) => ({
+          id: invitation.id,
+          email: invitation.email,
+          role: invitation.role,
+        }))}
       />
     </div>
   );

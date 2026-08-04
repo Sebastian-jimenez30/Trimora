@@ -1,21 +1,39 @@
-"use server"
+"use server";
 
 import { db } from "@/core/database/db";
-import { appointments, transactions, transactionItems, products, services, inventoryMovements, serviceMaterials, auditLogs, transactionPayments, clients } from "@/core/database/schema";
-import { createClient } from "@/core/database/server";
+import {
+  appointments,
+  transactions,
+  transactionItems,
+  products,
+  services,
+  inventoryMovements,
+  serviceMaterials,
+  auditLogs,
+  transactionPayments,
+  clients,
+  organizationMembers,
+} from "@/core/database/schema";
+import { requireActor } from "@/core/auth/server/actor";
 import { getCashEntries } from "@/modules/pos/cash-flow";
 import { asc, eq, and, sql, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { getErrorMessage } from "@/core/errors";
+import {
+  cartSchema,
+  descriptionSchema,
+  moneySchema,
+  nonNegativeMoneySchema,
+  optionalClientIdSchema,
+  paymentMethodSchema,
+  resourceIdSchema,
+  reportRangeSchema,
+  settledPaymentMethodSchema,
+  transactionUpdateSchema,
+} from "./domain/schemas";
 
 async function getOrganizationId() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("No autenticado");
-
-  const orgId = user.user_metadata?.organization_id;
-  if (!orgId) throw new Error("No tienes organización");
-
-  return orgId;
+  return (await requireActor()).organizationId;
 }
 
 export type CartItem = {
@@ -27,53 +45,130 @@ export type CartItem = {
   staffId?: string; // Solo para servicios
 };
 
-export async function processSale(cart: CartItem[], clientId: string | null, paymentMethod: string, appointmentId?: string, initialPaidAmount?: number, initialPaymentMethod?: string) {
+export async function processSale(
+  cart: CartItem[],
+  clientId: string | null,
+  paymentMethod: string,
+  appointmentId?: string,
+  initialPaidAmount?: number,
+  initialPaymentMethod?: string,
+) {
   try {
     const orgId = await getOrganizationId();
-    if (cart.length === 0) return { success: false, error: "El carrito está vacío." };
-    if (paymentMethod === 'CREDIT' && !clientId) {
-      return { success: false, error: "Debe seleccionar un cliente para las ventas a crédito (fiados)." };
+    const parsedCart = cartSchema.parse(cart);
+    const validClientId = optionalClientIdSchema.parse(clientId);
+    const validPaymentMethod = paymentMethodSchema.parse(paymentMethod);
+    const validAppointmentId = appointmentId ? resourceIdSchema.parse(appointmentId) : null;
+    const validInitialPaymentMethod = initialPaymentMethod
+      ? settledPaymentMethodSchema.parse(initialPaymentMethod)
+      : "CASH";
+    if (validPaymentMethod === "CREDIT" && !validClientId) {
+      return {
+        success: false,
+        error: "Debe seleccionar un cliente para las ventas a crédito (fiados).",
+      };
     }
 
-    let totalAmount = 0;
-    cart.forEach(item => totalAmount += item.price * item.quantity);
+    const staffIds = [
+      ...new Set(parsedCart.flatMap((item) => (item.staffId ? [item.staffId] : []))),
+    ];
+    const [validClient, validAppointment, validStaff] = await Promise.all([
+      validClientId
+        ? db.query.clients.findFirst({
+            where: and(eq(clients.id, validClientId), eq(clients.organizationId, orgId)),
+          })
+        : Promise.resolve(null),
+      validAppointmentId
+        ? db.query.appointments.findFirst({
+            where: and(
+              eq(appointments.id, validAppointmentId),
+              eq(appointments.organizationId, orgId),
+            ),
+          })
+        : Promise.resolve(null),
+      staffIds.length > 0
+        ? db
+            .select({ id: organizationMembers.id })
+            .from(organizationMembers)
+            .where(
+              and(
+                eq(organizationMembers.organizationId, orgId),
+                inArray(organizationMembers.id, staffIds),
+              ),
+            )
+        : Promise.resolve([]),
+    ]);
+    if (validClientId && !validClient) throw new Error("El cliente no pertenece a la organización");
+    if (validAppointmentId && !validAppointment)
+      throw new Error("La cita no pertenece a la organización");
+    if (validStaff.length !== staffIds.length)
+      throw new Error("El colaborador no pertenece a la organización");
+
+    const [catalogProducts, catalogServices] = await Promise.all([
+      db
+        .select({ id: products.id, name: products.name, price: products.salePrice })
+        .from(products)
+        .where(eq(products.organizationId, orgId)),
+      db
+        .select({ id: services.id, name: services.name, price: services.price })
+        .from(services)
+        .where(eq(services.organizationId, orgId)),
+    ]);
+    const productsById = new Map(catalogProducts.map((item) => [item.id, item]));
+    const servicesById = new Map(catalogServices.map((item) => [item.id, item]));
+    const trustedCart = parsedCart.map((item) => {
+      const catalogItem =
+        item.type === "PRODUCT" ? productsById.get(item.id) : servicesById.get(item.id);
+      if (!catalogItem?.price)
+        throw new Error("Uno de los artículos no pertenece a la organización");
+      return { ...item, name: catalogItem.name, price: Number(catalogItem.price) };
+    });
+    const totalAmount = trustedCart.reduce((total, item) => total + item.price * item.quantity, 0);
 
     let paidAmount = totalAmount;
-    if (paymentMethod === 'CREDIT') {
-      paidAmount = initialPaidAmount || 0;
-      if (paidAmount < 0) return { success: false, error: "El abono inicial no puede ser negativo." };
-      if (paidAmount > totalAmount) return { success: false, error: "El abono inicial no puede ser mayor al total de la venta." };
+    if (validPaymentMethod === "CREDIT") {
+      paidAmount = nonNegativeMoneySchema.parse(initialPaidAmount ?? 0);
+      if (paidAmount > totalAmount)
+        return {
+          success: false,
+          error: "El abono inicial no puede ser mayor al total de la venta.",
+        };
     }
 
-    const status = paidAmount < totalAmount ? 'PENDING' : 'COMPLETED';
+    const status = paidAmount < totalAmount ? "PENDING" : "COMPLETED";
 
     const transaction = await db.transaction(async (databaseTransaction) => {
-      const [sale] = await databaseTransaction.insert(transactions).values({
-        organizationId: orgId,
-        clientId: clientId || null,
-        type: 'INCOME',
-        totalAmount: totalAmount.toFixed(2),
-        paymentMethod,
-        status,
-        paidAmount: paidAmount.toFixed(2)
-      }).returning();
+      const [sale] = await databaseTransaction
+        .insert(transactions)
+        .values({
+          organizationId: orgId,
+          clientId: validClientId,
+          type: "INCOME",
+          totalAmount: totalAmount.toFixed(2),
+          paymentMethod: validPaymentMethod,
+          status,
+          paidAmount: paidAmount.toFixed(2),
+        })
+        .returning();
 
-      if (clientId) {
-        await databaseTransaction.update(clients)
+      if (validClientId) {
+        await databaseTransaction
+          .update(clients)
           .set({ totalSpent: sql`${clients.totalSpent} + ${totalAmount}` })
-          .where(and(eq(clients.id, clientId), eq(clients.organizationId, orgId)));
+          .where(and(eq(clients.id, validClientId), eq(clients.organizationId, orgId)));
       }
 
-      if (paymentMethod === 'CREDIT' && paidAmount > 0) {
+      if (validPaymentMethod === "CREDIT" && paidAmount > 0) {
         await databaseTransaction.insert(transactionPayments).values({
           transactionId: sale.id,
           amount: paidAmount.toFixed(2),
-          paymentMethod: initialPaymentMethod || 'CASH'
+          paymentMethod: validInitialPaymentMethod,
         });
       }
 
-      for (const item of cart) {
-        if (item.quantity <= 0) throw new Error(`La cantidad de ${item.name} debe ser mayor a cero.`);
+      for (const item of trustedCart) {
+        if (item.quantity <= 0)
+          throw new Error(`La cantidad de ${item.name} debe ser mayor a cero.`);
 
         await databaseTransaction.insert(transactionItems).values({
           transactionId: sale.id,
@@ -81,11 +176,12 @@ export async function processSale(cart: CartItem[], clientId: string | null, pay
           itemId: item.id,
           quantity: item.quantity.toString(),
           unitPrice: item.price.toFixed(2),
-          subtotal: (item.price * item.quantity).toFixed(2)
+          subtotal: (item.price * item.quantity).toFixed(2),
         });
 
         if (item.type === "PRODUCT") {
-          const [productData] = await databaseTransaction.select()
+          const [productData] = await databaseTransaction
+            .select()
             .from(products)
             .where(and(eq(products.id, item.id), eq(products.organizationId, orgId)))
             .for("update");
@@ -93,29 +189,34 @@ export async function processSale(cart: CartItem[], clientId: string | null, pay
 
           const previousStock = parseFloat(productData.currentStock);
           if (previousStock < item.quantity) {
-            throw new Error(`Stock insuficiente para ${productData.name}. Disponible: ${previousStock}.`);
+            throw new Error(
+              `Stock insuficiente para ${productData.name}. Disponible: ${previousStock}.`,
+            );
           }
           const newStock = previousStock - item.quantity;
 
-          await databaseTransaction.update(products)
+          await databaseTransaction
+            .update(products)
             .set({ currentStock: newStock.toString() })
             .where(and(eq(products.id, item.id), eq(products.organizationId, orgId)));
           await databaseTransaction.insert(inventoryMovements).values({
             organizationId: orgId,
             productId: item.id,
-            type: 'OUT',
+            type: "OUT",
             quantity: item.quantity,
             previousStock: Math.round(previousStock),
             newStock: Math.round(newStock),
-            notes: `SALE transaction ${sale.id}`
+            notes: `SALE transaction ${sale.id}`,
           });
         } else {
-          const materials = await databaseTransaction.select()
+          const materials = await databaseTransaction
+            .select()
             .from(serviceMaterials)
             .where(eq(serviceMaterials.serviceId, item.id));
 
           for (const material of materials) {
-            const [productData] = await databaseTransaction.select()
+            const [productData] = await databaseTransaction
+              .select()
               .from(products)
               .where(and(eq(products.id, material.productId), eq(products.organizationId, orgId)))
               .for("update");
@@ -125,26 +226,30 @@ export async function processSale(cart: CartItem[], clientId: string | null, pay
             const previousStock = parseFloat(productData.currentStock);
             const newStock = previousStock - quantityUsed;
 
-            await databaseTransaction.update(products)
+            await databaseTransaction
+              .update(products)
               .set({ currentStock: newStock.toString() })
               .where(and(eq(products.id, material.productId), eq(products.organizationId, orgId)));
             await databaseTransaction.insert(inventoryMovements).values({
               organizationId: orgId,
               productId: material.productId,
-              type: 'OUT',
+              type: "OUT",
               quantity: Math.round(quantityUsed),
               previousStock: Math.round(previousStock),
               newStock: Math.round(newStock),
-              notes: `USAGE transaction ${sale.id}`
+              notes: `USAGE transaction ${sale.id}`,
             });
           }
         }
       }
 
-      if (appointmentId) {
-        await databaseTransaction.update(appointments)
-          .set({ status: 'COMPLETED' })
-          .where(and(eq(appointments.id, appointmentId), eq(appointments.organizationId, orgId)));
+      if (validAppointmentId) {
+        await databaseTransaction
+          .update(appointments)
+          .set({ status: "COMPLETED" })
+          .where(
+            and(eq(appointments.id, validAppointmentId), eq(appointments.organizationId, orgId)),
+          );
       }
 
       return sale;
@@ -157,81 +262,91 @@ export async function processSale(cart: CartItem[], clientId: string | null, pay
     revalidatePath("/clientes");
     revalidatePath("/analitica");
     return { success: true, transactionId: transaction.id };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error processSale:", error);
-    return { success: false, error: error.message };
+    return { success: false, error: getErrorMessage(error) };
   }
 }
 
 export async function registerExpense(amount: number, description: string, paymentMethod: string) {
   try {
-    const orgId = await getOrganizationId();
-    
+    const actor = await requireActor();
+    const orgId = actor.organizationId;
+    const validAmount = moneySchema.parse(amount);
+    const validDescription = descriptionSchema.parse(description);
+    const validPaymentMethod = settledPaymentMethodSchema.parse(paymentMethod);
+
     // Crear la transacción de gasto
-    const [transaction] = await db.insert(transactions).values({
-      organizationId: orgId,
-      type: 'EXPENSE',
-      totalAmount: amount.toFixed(2),
-      paymentMethod,
-      status: 'COMPLETED'
-    }).returning();
+    const [transaction] = await db
+      .insert(transactions)
+      .values({
+        organizationId: orgId,
+        type: "EXPENSE",
+        totalAmount: validAmount.toFixed(2),
+        paymentMethod: validPaymentMethod,
+        status: "COMPLETED",
+      })
+      .returning();
 
     // Guardar la descripción en AuditLogs ya que no tenemos campo notes en transactions ni item asociado
     await db.insert(auditLogs).values({
       organizationId: orgId,
-      userId: orgId, // Usamos orgId como fallback si no tenemos el UUID del user exacto a mano aquí, pero lo ideal es el user
-      action: 'REGISTER_EXPENSE',
-      entityType: 'TRANSACTION',
+      userId: actor.userId,
+      action: "REGISTER_EXPENSE",
+      entityType: "TRANSACTION",
       entityId: transaction.id,
-      details: description
+      details: validDescription,
     });
 
     revalidatePath("/pos");
     revalidatePath("/dashboard");
     revalidatePath("/analitica");
     return { success: true };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error registerExpense:", error);
-    return { success: false, error: error.message };
+    return { success: false, error: getErrorMessage(error) };
   }
 }
 
-export async function registerPayment(transactionId: string, amount: number, paymentMethod: string) {
+export async function registerPayment(
+  transactionId: string,
+  amount: number,
+  paymentMethod: string,
+) {
   try {
     const orgId = await getOrganizationId();
-    if (amount <= 0) throw new Error("El monto a abonar debe ser mayor a 0");
+    const validTransactionId = resourceIdSchema.parse(transactionId);
+    const validAmount = moneySchema.parse(amount);
+    const validPaymentMethod = settledPaymentMethodSchema.parse(paymentMethod);
 
     const newStatus = await db.transaction(async (databaseTransaction) => {
-      const [transaction] = await databaseTransaction.select()
+      const [transaction] = await databaseTransaction
+        .select()
         .from(transactions)
-        .where(and(
-          eq(transactions.id, transactionId),
-          eq(transactions.organizationId, orgId),
-        ))
+        .where(and(eq(transactions.id, validTransactionId), eq(transactions.organizationId, orgId)))
         .for("update");
       if (!transaction) throw new Error("Transacción no encontrada");
-      if (transaction.status === 'COMPLETED') throw new Error("La transacción ya está pagada por completo");
+      if (transaction.status === "COMPLETED")
+        throw new Error("La transacción ya está pagada por completo");
 
       const currentPaid = parseFloat(transaction.paidAmount);
       const totalAmount = parseFloat(transaction.totalAmount);
-      const newPaidAmount = currentPaid + amount;
+      const newPaidAmount = currentPaid + validAmount;
       if (newPaidAmount > totalAmount) throw new Error("El abono supera la deuda restante");
 
-      const nextStatus = newPaidAmount >= totalAmount ? 'COMPLETED' : 'PENDING';
+      const nextStatus = newPaidAmount >= totalAmount ? "COMPLETED" : "PENDING";
       await databaseTransaction.insert(transactionPayments).values({
         transactionId: transaction.id,
-        amount: amount.toFixed(2),
-        paymentMethod,
+        amount: validAmount.toFixed(2),
+        paymentMethod: validPaymentMethod,
       });
-      await databaseTransaction.update(transactions)
+      await databaseTransaction
+        .update(transactions)
         .set({
           paidAmount: newPaidAmount.toFixed(2),
           status: nextStatus,
         })
-        .where(and(
-          eq(transactions.id, transaction.id),
-          eq(transactions.organizationId, orgId),
-        ));
+        .where(and(eq(transactions.id, transaction.id), eq(transactions.organizationId, orgId)));
 
       return nextStatus;
     });
@@ -240,41 +355,51 @@ export async function registerPayment(transactionId: string, amount: number, pay
     revalidatePath("/dashboard");
     revalidatePath("/analitica");
     return { success: true, newStatus };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error registerPayment:", error);
-    return { success: false, error: error.message };
+    return { success: false, error: getErrorMessage(error) };
   }
 }
 
-export async function registerClientPayment(clientId: string, amount: number, paymentMethod: string) {
+export async function registerClientPayment(
+  clientId: string,
+  amount: number,
+  paymentMethod: string,
+) {
   try {
     const orgId = await getOrganizationId();
-    if (!clientId) throw new Error("Cliente no válido");
-    if (!Number.isFinite(amount) || amount <= 0) throw new Error("El monto a abonar debe ser mayor a 0");
-    if (!["CASH", "CARD", "TRANSFER"].includes(paymentMethod)) throw new Error("Método de pago inválido");
+    const validClientId = resourceIdSchema.parse(clientId);
+    const validAmount = moneySchema.parse(amount);
+    const validPaymentMethod = settledPaymentMethodSchema.parse(paymentMethod);
 
     const allocationCount = await db.transaction(async (databaseTransaction) => {
-      const pendingTransactions = await databaseTransaction.select()
+      const pendingTransactions = await databaseTransaction
+        .select()
         .from(transactions)
-        .where(and(
-          eq(transactions.organizationId, orgId),
-          eq(transactions.clientId, clientId),
-          eq(transactions.type, "INCOME"),
-          eq(transactions.status, "PENDING"),
-        ))
+        .where(
+          and(
+            eq(transactions.organizationId, orgId),
+            eq(transactions.clientId, validClientId),
+            eq(transactions.type, "INCOME"),
+            eq(transactions.status, "PENDING"),
+          ),
+        )
         .orderBy(asc(transactions.createdAt), asc(transactions.id))
         .for("update");
 
-      if (pendingTransactions.length === 0) throw new Error("El cliente no tiene cuentas pendientes");
+      if (pendingTransactions.length === 0)
+        throw new Error("El cliente no tiene cuentas pendientes");
 
       const totalOutstanding = pendingTransactions.reduce(
-        (total, transaction) => total + Math.max(0, Number(transaction.totalAmount) - Number(transaction.paidAmount)),
+        (total, transaction) =>
+          total + Math.max(0, Number(transaction.totalAmount) - Number(transaction.paidAmount)),
         0,
       );
-      if (amount > totalOutstanding + 0.001) throw new Error("El abono supera la deuda total del cliente");
+      if (validAmount > totalOutstanding + 0.001)
+        throw new Error("El abono supera la deuda total del cliente");
 
       const paidAt = new Date();
-      let remainingPayment = amount;
+      let remainingPayment = validAmount;
       let allocations = 0;
 
       for (const transaction of pendingTransactions) {
@@ -292,18 +417,16 @@ export async function registerClientPayment(clientId: string, amount: number, pa
         await databaseTransaction.insert(transactionPayments).values({
           transactionId: transaction.id,
           amount: allocatedAmount.toFixed(2),
-          paymentMethod,
+          paymentMethod: validPaymentMethod,
           createdAt: paidAt,
         });
-        await databaseTransaction.update(transactions)
+        await databaseTransaction
+          .update(transactions)
           .set({
             paidAmount: nextPaidAmount.toFixed(2),
             status: nextStatus,
           })
-          .where(and(
-            eq(transactions.id, transaction.id),
-            eq(transactions.organizationId, orgId),
-          ));
+          .where(and(eq(transactions.id, transaction.id), eq(transactions.organizationId, orgId)));
 
         remainingPayment -= allocatedAmount;
         allocations += 1;
@@ -317,31 +440,28 @@ export async function registerClientPayment(clientId: string, amount: number, pa
     revalidatePath("/dashboard");
     revalidatePath("/analitica");
     return { success: true, allocationCount };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error registerClientPayment:", error);
-    return { success: false, error: error.message };
+    return { success: false, error: getErrorMessage(error) };
   }
 }
 
 export async function updateTransaction(transactionId: string, formData: FormData) {
   try {
     const orgId = await getOrganizationId();
-    const totalAmount = parseFloat(formData.get("totalAmount") as string);
-    const paymentMethod = formData.get("paymentMethod") as string;
-    const clientId = (formData.get("clientId") as string) || null;
-    const description = (formData.get("description") as string) || "";
+    const input = transactionUpdateSchema.parse({
+      transactionId,
+      totalAmount: Number(formData.get("totalAmount")),
+      paymentMethod: formData.get("paymentMethod"),
+      clientId: formData.get("clientId") || null,
+      description: formData.get("description") || "",
+    });
+    const { totalAmount, paymentMethod, clientId, description } = input;
 
-    if (!Number.isFinite(totalAmount) || totalAmount <= 0) {
-      throw new Error("El monto debe ser mayor a cero");
-    }
-    if (!["CASH", "CARD", "TRANSFER", "CREDIT"].includes(paymentMethod)) {
-      throw new Error("Método de pago inválido");
-    }
-
-    const [transaction] = await db.select().from(transactions).where(and(
-      eq(transactions.id, transactionId),
-      eq(transactions.organizationId, orgId)
-    ));
+    const [transaction] = await db
+      .select()
+      .from(transactions)
+      .where(and(eq(transactions.id, input.transactionId), eq(transactions.organizationId, orgId)));
     if (!transaction) throw new Error("Movimiento no encontrado");
     if (transaction.type === "EXPENSE" && paymentMethod === "CREDIT") {
       throw new Error("Un gasto no puede registrarse como fiado");
@@ -350,10 +470,10 @@ export async function updateTransaction(transactionId: string, formData: FormDat
       throw new Error("Las ventas fiadas deben tener un cliente asignado");
     }
     if (transaction.type === "INCOME" && clientId) {
-      const [client] = await db.select({ id: clients.id }).from(clients).where(and(
-        eq(clients.id, clientId),
-        eq(clients.organizationId, orgId)
-      ));
+      const [client] = await db
+        .select({ id: clients.id })
+        .from(clients)
+        .where(and(eq(clients.id, clientId), eq(clients.organizationId, orgId)));
       if (!client) throw new Error("Cliente no encontrado");
     }
 
@@ -364,20 +484,28 @@ export async function updateTransaction(transactionId: string, formData: FormDat
 
     const nextPaidAmount = transaction.status === "COMPLETED" ? totalAmount : paidAmount;
     const nextStatus = nextPaidAmount >= totalAmount ? "COMPLETED" : "PENDING";
-    await db.update(transactions).set({
-      totalAmount: totalAmount.toFixed(2),
-      paidAmount: nextPaidAmount.toFixed(2),
-      paymentMethod,
-      status: nextStatus,
-      clientId: transaction.type === "INCOME" ? clientId : null,
-    }).where(and(eq(transactions.id, transactionId), eq(transactions.organizationId, orgId)));
+    await db
+      .update(transactions)
+      .set({
+        totalAmount: totalAmount.toFixed(2),
+        paidAmount: nextPaidAmount.toFixed(2),
+        paymentMethod,
+        status: nextStatus,
+        clientId: transaction.type === "INCOME" ? clientId : null,
+      })
+      .where(and(eq(transactions.id, input.transactionId), eq(transactions.organizationId, orgId)));
 
     if (transaction.type === "EXPENSE") {
-      await db.update(auditLogs).set({ details: description }).where(and(
-        eq(auditLogs.organizationId, orgId),
-        eq(auditLogs.entityId, transactionId),
-        eq(auditLogs.entityType, "TRANSACTION")
-      ));
+      await db
+        .update(auditLogs)
+        .set({ details: description })
+        .where(
+          and(
+            eq(auditLogs.organizationId, orgId),
+            eq(auditLogs.entityId, input.transactionId),
+            eq(auditLogs.entityType, "TRANSACTION"),
+          ),
+        );
     }
 
     revalidatePath("/pos");
@@ -385,45 +513,65 @@ export async function updateTransaction(transactionId: string, formData: FormDat
     revalidatePath("/clientes");
     revalidatePath("/analitica");
     return { success: true };
-  } catch (error: any) {
-    return { success: false, error: error.message };
+  } catch (error: unknown) {
+    return { success: false, error: getErrorMessage(error) };
   }
 }
 
 export async function deleteTransaction(transactionId: string) {
   try {
     const orgId = await getOrganizationId();
-    const [transaction] = await db.select().from(transactions).where(and(
-      eq(transactions.id, transactionId),
-      eq(transactions.organizationId, orgId)
-    ));
+    const validTransactionId = resourceIdSchema.parse(transactionId);
+    const [transaction] = await db
+      .select()
+      .from(transactions)
+      .where(and(eq(transactions.id, validTransactionId), eq(transactions.organizationId, orgId)));
     if (!transaction) throw new Error("Movimiento no encontrado");
 
-    const movements = await db.select().from(inventoryMovements).where(and(
-      eq(inventoryMovements.organizationId, orgId),
-      sql`${inventoryMovements.notes} like ${`%transaction ${transactionId}%`}`
-    ));
+    const movements = await db
+      .select()
+      .from(inventoryMovements)
+      .where(
+        and(
+          eq(inventoryMovements.organizationId, orgId),
+          sql`${inventoryMovements.notes} like ${`%transaction ${validTransactionId}%`}`,
+        ),
+      );
 
     for (const movement of movements) {
-      const [product] = await db.select().from(products).where(and(
-        eq(products.id, movement.productId),
-        eq(products.organizationId, orgId)
-      ));
+      const [product] = await db
+        .select()
+        .from(products)
+        .where(and(eq(products.id, movement.productId), eq(products.organizationId, orgId)));
       if (!product) continue;
 
       const stockToReverse = movement.previousStock - movement.newStock;
-      await db.update(products).set({
-        currentStock: (parseFloat(product.currentStock) + stockToReverse).toString()
-      }).where(eq(products.id, product.id));
+      await db
+        .update(products)
+        .set({
+          currentStock: (parseFloat(product.currentStock) + stockToReverse).toString(),
+        })
+        .where(eq(products.id, product.id));
     }
 
     if (movements.length > 0) {
-      await db.delete(inventoryMovements).where(inArray(inventoryMovements.id, movements.map((movement) => movement.id)));
+      await db.delete(inventoryMovements).where(
+        inArray(
+          inventoryMovements.id,
+          movements.map((movement) => movement.id),
+        ),
+      );
     }
-    await db.delete(transactionPayments).where(eq(transactionPayments.transactionId, transactionId));
-    await db.delete(transactionItems).where(eq(transactionItems.transactionId, transactionId));
-    await db.delete(auditLogs).where(and(eq(auditLogs.organizationId, orgId), eq(auditLogs.entityId, transactionId)));
-    await db.delete(transactions).where(and(eq(transactions.id, transactionId), eq(transactions.organizationId, orgId)));
+    await db
+      .delete(transactionPayments)
+      .where(eq(transactionPayments.transactionId, validTransactionId));
+    await db.delete(transactionItems).where(eq(transactionItems.transactionId, validTransactionId));
+    await db
+      .delete(auditLogs)
+      .where(and(eq(auditLogs.organizationId, orgId), eq(auditLogs.entityId, validTransactionId)));
+    await db
+      .delete(transactions)
+      .where(and(eq(transactions.id, validTransactionId), eq(transactions.organizationId, orgId)));
 
     revalidatePath("/pos");
     revalidatePath("/inventario");
@@ -431,58 +579,64 @@ export async function deleteTransaction(transactionId: string) {
     revalidatePath("/clientes");
     revalidatePath("/analitica");
     return { success: true };
-  } catch (error: any) {
-    return { success: false, error: error.message };
+  } catch (error: unknown) {
+    return { success: false, error: getErrorMessage(error) };
   }
 }
 
 export async function exportFinancialReport(startDate: string, endDate: string) {
   try {
     const orgId = await getOrganizationId();
-    const start = new Date(startDate);
-    const end = new Date(endDate);
+    const { start, end } = reportRangeSchema.parse({ start: startDate, end: endDate });
 
     const cashEntries = await getCashEntries(orgId, start, new Date(end.getTime() + 1));
-    const txIds = [...new Set(cashEntries.map(entry => entry.transactionId))];
-    const txs = txIds.length > 0
-      ? await db.select().from(transactions).where(and(
-          eq(transactions.organizationId, orgId),
-          inArray(transactions.id, txIds),
-        ))
-      : [];
-    const transactionsById = new Map(txs.map(transaction => [transaction.id, transaction]));
-    let items: any[] = [];
+    const txIds = [...new Set(cashEntries.map((entry) => entry.transactionId))];
+    const txs =
+      txIds.length > 0
+        ? await db
+            .select()
+            .from(transactions)
+            .where(and(eq(transactions.organizationId, orgId), inArray(transactions.id, txIds)))
+        : [];
+    const transactionsById = new Map(txs.map((transaction) => [transaction.id, transaction]));
+    let items: (typeof transactionItems.$inferSelect)[] = [];
     if (txIds.length > 0) {
-      items = await db.select().from(transactionItems).where(
-        inArray(transactionItems.transactionId, txIds)
-      );
+      items = await db
+        .select()
+        .from(transactionItems)
+        .where(inArray(transactionItems.transactionId, txIds));
     }
-    
+
     // Fetch catalogs for naming
     const orgProducts = await db.select().from(products).where(eq(products.organizationId, orgId));
     const orgServices = await db.select().from(services).where(eq(services.organizationId, orgId));
-    const orgAuditLogs = await db.select().from(auditLogs).where(
-      and(eq(auditLogs.organizationId, orgId), eq(auditLogs.action, 'REGISTER_EXPENSE'))
-    );
+    const orgAuditLogs = await db
+      .select()
+      .from(auditLogs)
+      .where(and(eq(auditLogs.organizationId, orgId), eq(auditLogs.action, "REGISTER_EXPENSE")));
 
     // Formatear CSV con escaping seguro y detalle por item
-    let csv = "ID_Transaccion,Fecha,Hora,Tipo,MetodoPago,Estado,Total_Tx,Abonado_Tx,Item_Nombre,Cantidad,Precio_Unitario,Subtotal\n";
+    let csv =
+      "ID_Transaccion,Fecha,Hora,Tipo,MetodoPago,Estado,Total_Tx,Abonado_Tx,Item_Nombre,Cantidad,Precio_Unitario,Subtotal\n";
     for (const entry of cashEntries) {
       const tx = transactionsById.get(entry.transactionId);
       if (!tx) continue;
       const safeId = `"${tx.id.replace(/"/g, '""')}"`;
       const txType = tx.type === "INCOME" ? "VENTA" : "GASTO";
-      const safeMethod = `"${(entry.paymentMethod || '').replace(/"/g, '""')}"`;
+      const safeMethod = `"${(entry.paymentMethod || "").replace(/"/g, '""')}"`;
       const safeStatus = `"${tx.status.replace(/"/g, '""')}"`;
       const dateStr = entry.createdAt.toLocaleDateString();
-      const timeStr = entry.createdAt.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-      
-      const txItems = items.filter(i => i.transactionId === tx.id);
-      
+      const timeStr = entry.createdAt.toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+
+      const txItems = items.filter((i) => i.transactionId === tx.id);
+
       if (tx.type === "EXPENSE" || txItems.length === 0) {
         let itemName = "Transacción General";
         if (tx.type === "EXPENSE") {
-          const log = orgAuditLogs.find(l => l.entityId === tx.id);
+          const log = orgAuditLogs.find((l) => l.entityId === tx.id);
           itemName = log?.details || "Gasto sin descripción";
         }
         const safeItemName = `"${itemName.replace(/"/g, '""')}"`;
@@ -491,13 +645,13 @@ export async function exportFinancialReport(startDate: string, endDate: string) 
         for (const item of txItems) {
           let itemName = "Item Desconocido";
           if (item.itemType === "PRODUCT") {
-            const p = orgProducts.find(x => x.id === item.itemId);
+            const p = orgProducts.find((x) => x.id === item.itemId);
             if (p) itemName = p.name;
           } else if (item.itemType === "SERVICE") {
-            const s = orgServices.find(x => x.id === item.itemId);
+            const s = orgServices.find((x) => x.id === item.itemId);
             if (s) itemName = s.name;
           }
-          
+
           const safeItemName = `"${itemName.replace(/"/g, '""')}"`;
           csv += `${safeId},${dateStr},${timeStr},${txType},${safeMethod},${safeStatus},${tx.totalAmount},${entry.amount},${safeItemName},${item.quantity},${item.unitPrice},${item.subtotal}\n`;
         }
@@ -505,8 +659,8 @@ export async function exportFinancialReport(startDate: string, endDate: string) 
     }
 
     return { success: true, csv };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error exportFinancialReport:", error);
-    return { success: false, error: error.message };
+    return { success: false, error: getErrorMessage(error) };
   }
 }
