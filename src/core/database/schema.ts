@@ -131,6 +131,7 @@ export const transactionPayments = pgTable('transaction_payments', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [
   index('transaction_payments_transaction_idx').on(table.transactionId),
+  index('transaction_payments_created_transaction_idx').on(table.createdAt, table.transactionId),
 ]);
 
 export const inventoryMovements = pgTable('inventory_movements', {

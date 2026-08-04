@@ -11,8 +11,9 @@ import {
   transactionPayments,
   transactions,
 } from "@/core/database/schema";
-import { and, desc, eq, gte, inArray, lt, ne, or, sql, type SQL } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, lt, ne, sql } from "drizzle-orm";
 import { fromZonedTime } from "date-fns-tz";
+import { getCashEntriesPage, getCashFlowSummary } from "@/modules/pos/cash-flow";
 import type {
   AnalyticsData,
   AnalyticsMovement,
@@ -20,7 +21,6 @@ import type {
   AnalyticsPeriodType,
   DemandPoint,
   RankingItem,
-  TrendPoint,
 } from "./types";
 
 const TIMEZONE = "America/Bogota";
@@ -115,9 +115,18 @@ function toRanking(rows: { id: string; label: string; value: string | number; se
 
 async function getMovementTrace(organizationId: string, start: Date, end: Date, cursorValue?: string) {
   const cursor = decodeCursor(cursorValue);
-  const cursorCondition = cursor
-    ? or(lt(transactions.createdAt, cursor.date), and(eq(transactions.createdAt, cursor.date), lt(transactions.id, cursor.id)))
-    : undefined;
+  const cashEntries = await getCashEntriesPage(
+    organizationId,
+    start,
+    end,
+    cursor ? { createdAt: cursor.date, id: cursor.id } : undefined,
+    PAGE_SIZE + 1,
+  );
+  const hasNextPage = cashEntries.length > PAGE_SIZE;
+  const pageEntries = cashEntries.slice(0, PAGE_SIZE);
+  const transactionIds = [...new Set(pageEntries.map(entry => entry.transactionId))];
+  if (transactionIds.length === 0) return { movements: [] as AnalyticsMovement[], nextCursor: null };
+
   const rows = await db.select({
     id: transactions.id,
     type: transactions.type,
@@ -133,17 +142,8 @@ async function getMovementTrace(organizationId: string, start: Date, end: Date, 
     .leftJoin(clients, eq(transactions.clientId, clients.id))
     .where(and(
       eq(transactions.organizationId, organizationId),
-      gte(transactions.createdAt, start),
-      lt(transactions.createdAt, end),
-      cursorCondition,
-    ))
-    .orderBy(desc(transactions.createdAt), desc(transactions.id))
-    .limit(PAGE_SIZE + 1);
-
-  const hasNextPage = rows.length > PAGE_SIZE;
-  const pageRows = rows.slice(0, PAGE_SIZE);
-  const transactionIds = pageRows.map((row) => row.id);
-  if (transactionIds.length === 0) return { movements: [] as AnalyticsMovement[], nextCursor: null };
+      inArray(transactions.id, transactionIds),
+    ));
 
   const [itemRows, paymentRows, logRows] = await Promise.all([
     db.select().from(transactionItems).where(inArray(transactionItems.transactionId, transactionIds)),
@@ -164,7 +164,10 @@ async function getMovementTrace(organizationId: string, start: Date, end: Date, 
   const itemNames = new Map([...serviceRows, ...productRows].map((item) => [item.id, item.name]));
   const expenseDescriptions = new Map(logRows.filter((log) => log.entityId).map((log) => [log.entityId as string, log.details]));
 
-  const movements = pageRows.map((row): AnalyticsMovement => {
+  const rowsById = new Map(rows.map(row => [row.id, row]));
+  const movements = pageEntries.flatMap((entry): AnalyticsMovement[] => {
+    const row = rowsById.get(entry.transactionId);
+    if (!row) return [];
     const items = itemRows.filter((item) => item.transactionId === row.id).map((item) => ({
       name: itemNames.get(item.itemId) || (item.itemType === "SERVICE" ? "Servicio" : "Producto"),
       type: item.itemType,
@@ -174,55 +177,48 @@ async function getMovementTrace(organizationId: string, start: Date, end: Date, 
     }));
     const description = row.type === "EXPENSE"
       ? row.notes || expenseDescriptions.get(row.id) || "Gasto sin descripción"
-      : items.length === 1 ? items[0].name : `Venta de ${items.length} conceptos`;
+      : items.length > 0
+        ? items.map(item => item.quantity === 1 ? item.name : `${item.quantity} × ${item.name}`).join(", ")
+        : row.notes?.replace(/\s+para\s+.+$/i, "").trim() || "Venta sin detalle registrado";
 
-    return {
-      id: row.id,
+    return [{
+      id: `${entry.source.toLowerCase()}:${entry.id}`,
       type: row.type,
-      amount: Number(row.amount),
-      paidAmount: Number(row.paidAmount),
-      status: row.status,
-      paymentMethod: row.paymentMethod,
+      amount: Number(entry.amount),
+      paidAmount: Number(entry.amount),
+      status: "COMPLETED",
+      paymentMethod: entry.paymentMethod,
       clientName: row.type === "EXPENSE" ? "No aplica" : row.clientFirstName ? `${row.clientFirstName} ${row.clientLastName || ""}`.trim() : "Cliente general",
       description,
-      createdAt: row.createdAt.toISOString(),
+      createdAt: entry.createdAt.toISOString(),
       items,
       payments: paymentRows.filter((payment) => payment.transactionId === row.id).map((payment) => ({
         amount: Number(payment.amount),
         method: payment.paymentMethod,
         createdAt: payment.createdAt.toISOString(),
       })),
-    };
+    }];
   });
-  const lastRow = pageRows[pageRows.length - 1];
-  return { movements, nextCursor: hasNextPage && lastRow ? encodeCursor(lastRow.createdAt, lastRow.id) : null };
+  const lastEntry = pageEntries[pageEntries.length - 1];
+  return { movements, nextCursor: hasNextPage && lastEntry ? encodeCursor(lastEntry.createdAt, lastEntry.id) : null };
 }
 
 export async function getAnalyticsData(organizationId: string, filters: AnalyticsFilters): Promise<AnalyticsData> {
   const resolved = resolveAnalyticsPeriod(filters);
   const periodCondition = and(eq(transactions.organizationId, organizationId), gte(transactions.createdAt, resolved.start), lt(transactions.createdAt, resolved.end));
-  const previousCondition = and(eq(transactions.organizationId, organizationId), gte(transactions.createdAt, resolved.previousStart), lt(transactions.createdAt, resolved.previousEnd));
-  const bucketExpression = resolved.granularity === "day"
-    ? sql<string>`to_char(date_trunc('day', timezone('America/Bogota', ${transactions.createdAt})), 'YYYY-MM-DD')`
-    : sql<string>`to_char(date_trunc('month', timezone('America/Bogota', ${transactions.createdAt})), 'YYYY-MM')`;
   const expenseDescription = sql<string>`coalesce(${transactions.notes}, ${auditLogs.details}, 'Gasto sin descripción')`;
 
-  const metricsQuery = (condition: SQL | undefined) => db.select({
-    income: sql<string>`coalesce(sum(case when ${transactions.type} = 'INCOME' then ${transactions.totalAmount} else 0 end), 0)`,
-    expenses: sql<string>`coalesce(sum(case when ${transactions.type} = 'EXPENSE' then ${transactions.totalAmount} else 0 end), 0)`,
-    transactionCount: sql<number>`count(*)::int`,
-    averageTicket: sql<string>`coalesce(avg(case when ${transactions.type} = 'INCOME' then ${transactions.totalAmount} end), 0)`,
+  const outstandingQuery = db.select({
     outstanding: sql<string>`coalesce(sum(case when ${transactions.type} = 'INCOME' and ${transactions.status} = 'PENDING' then ${transactions.totalAmount} - ${transactions.paidAmount} else 0 end), 0)`,
-  }).from(transactions).where(condition);
+  }).from(transactions).where(periodCondition);
 
-  const [currentMetricRows, previousMetricRows, trendRows, serviceRows, productRows, clientRows, expenseRows, demandRows, yearRows, trace] = await Promise.all([
-    metricsQuery(periodCondition),
-    metricsQuery(previousCondition),
-    db.select({
-      bucket: bucketExpression,
-      income: sql<string>`coalesce(sum(case when ${transactions.type} = 'INCOME' then ${transactions.totalAmount} else 0 end), 0)`,
-      expenses: sql<string>`coalesce(sum(case when ${transactions.type} = 'EXPENSE' then ${transactions.totalAmount} else 0 end), 0)`,
-    }).from(transactions).where(periodCondition).groupBy(bucketExpression).orderBy(bucketExpression),
+  const [currentCashSummary, previousCashSummary] = await Promise.all([
+    getCashFlowSummary(organizationId, resolved.start, resolved.end, resolved.granularity),
+    getCashFlowSummary(organizationId, resolved.previousStart, resolved.previousEnd, resolved.granularity),
+  ]);
+
+  const [outstandingRows, serviceRows, productRows, clientRows, expenseRows, demandRows, yearRows, trace] = await Promise.all([
+    outstandingQuery,
     db.select({
       id: transactionItems.itemId,
       label: sql<string>`coalesce(${services.name}, 'Servicio eliminado')`,
@@ -289,18 +285,9 @@ export async function getAnalyticsData(organizationId: string, filters: Analytic
     getMovementTrace(organizationId, resolved.start, resolved.end, filters.cursor),
   ]);
 
-  const current = currentMetricRows[0];
-  const previous = previousMetricRows[0];
-  const income = Number(current?.income || 0);
-  const expenses = Number(current?.expenses || 0);
-  const previousIncome = Number(previous?.income || 0);
-  const previousExpenses = Number(previous?.expenses || 0);
-  const trend: TrendPoint[] = trendRows.map((row) => ({
-    label: row.bucket,
-    income: Number(row.income),
-    expenses: Number(row.expenses),
-    net: Number(row.income) - Number(row.expenses),
-  }));
+  const { income, expenses, movements, incomeMovements, trend } = currentCashSummary;
+  const previousIncome = previousCashSummary.income;
+  const previousExpenses = previousCashSummary.expenses;
 
   return {
     period: {
@@ -317,9 +304,9 @@ export async function getAnalyticsData(organizationId: string, filters: Analytic
       income,
       expenses,
       net: income - expenses,
-      transactions: Number(current?.transactionCount || 0),
-      averageTicket: Number(current?.averageTicket || 0),
-      outstanding: Number(current?.outstanding || 0),
+      transactions: movements,
+      averageTicket: incomeMovements > 0 ? income / incomeMovements : 0,
+      outstanding: Number(outstandingRows[0]?.outstanding || 0),
       incomeChange: percentChange(income, previousIncome),
       expenseChange: percentChange(expenses, previousExpenses),
       netChange: percentChange(income - expenses, previousIncome - previousExpenses),
