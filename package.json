@@ -6,10 +6,17 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint",
+    "format:check": "node scripts/ci/check-changed-files.mjs format",
+    "lint": "eslint --max-warnings=0",
+    "lint:changed": "node scripts/ci/check-changed-files.mjs lint",
+    "typecheck": "tsc --noEmit",
     "test": "vitest",
     "test:ci": "vitest run",
-    "test:coverage": "vitest run --coverage"
+    "test:server": "vitest run --project server",
+    "test:client": "vitest run --project client",
+    "test:component": "node scripts/ci/run-component-tests.mjs",
+    "test:coverage": "vitest run --coverage",
+    "ci:detect": "node scripts/ci/detect-affected-components.mjs"
   },
   "dependencies": {
     "@ai-sdk/google": "^4.0.17",
@@ -45,6 +52,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.10",
     "jsdom": "^29.1.1",
+    "prettier": "3.9.6",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^4.1.10"

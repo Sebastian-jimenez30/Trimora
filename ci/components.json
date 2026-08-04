@@ -1,0 +1,212 @@
+{
+  "version": 1,
+  "components": {
+    "auth-access": {
+      "paths": [
+        "src/modules/auth/",
+        "src/modules/collaborators/",
+        "src/modules/profile/",
+        "src/modules/superadmin/",
+        "src/core/services/email.ts",
+        "src/core/database/server.ts",
+        "src/core/database/admin.ts",
+        "src/proxy.ts",
+        "src/app/(auth)/",
+        "src/app/auth/",
+        "src/app/invite/",
+        "src/app/superadmin/",
+        "src/app/(dashboard)/equipo/",
+        "src/app/(dashboard)/perfil/"
+      ],
+      "testRoots": [
+        "src/modules/auth",
+        "src/modules/collaborators",
+        "src/modules/profile",
+        "src/modules/superadmin",
+        "src/app/(auth)",
+        "src/app/superadmin",
+        "src/app/(dashboard)/equipo",
+        "src/app/(dashboard)/perfil"
+      ],
+      "coverage": [
+        "src/modules/auth/**/*.ts",
+        "src/modules/collaborators/**/*.ts",
+        "src/modules/profile/**/*.ts",
+        "src/modules/superadmin/**/*.ts"
+      ],
+      "triggers": [
+        "pos-finance",
+        "inventory-services",
+        "agenda-appointments",
+        "clients",
+        "analytics",
+        "ai-integrations",
+        "shared-ui"
+      ]
+    },
+    "pos-finance": {
+      "paths": ["src/modules/pos/", "src/modules/cash/", "src/app/(dashboard)/pos/"],
+      "testRoots": ["src/modules/pos", "src/modules/cash", "src/app/(dashboard)/pos"],
+      "coverage": [
+        "src/modules/pos/**/*.ts",
+        "src/modules/cash/**/*.ts",
+        "src/app/(dashboard)/pos/**/*.tsx"
+      ],
+      "triggers": ["inventory-services", "clients", "analytics"]
+    },
+    "inventory-services": {
+      "paths": [
+        "src/modules/inventory/",
+        "src/modules/services/",
+        "src/app/inventario/",
+        "src/app/(dashboard)/inventario/",
+        "src/app/(dashboard)/servicios/"
+      ],
+      "testRoots": [
+        "src/modules/inventory",
+        "src/modules/services",
+        "src/app/inventario",
+        "src/app/(dashboard)/inventario",
+        "src/app/(dashboard)/servicios"
+      ],
+      "coverage": [
+        "src/modules/inventory/**/*.ts",
+        "src/modules/services/**/*.ts",
+        "src/app/(dashboard)/inventario/**/*.tsx",
+        "src/app/(dashboard)/servicios/**/*.tsx"
+      ],
+      "triggers": ["pos-finance", "agenda-appointments", "analytics"]
+    },
+    "agenda-appointments": {
+      "paths": [
+        "src/modules/agenda/",
+        "src/modules/appointments/",
+        "src/app/agenda/",
+        "src/app/(dashboard)/agenda/",
+        "src/app/(dashboard)/calendar/"
+      ],
+      "testRoots": [
+        "src/modules/agenda",
+        "src/modules/appointments",
+        "src/app/(dashboard)/agenda",
+        "src/app/(dashboard)/calendar"
+      ],
+      "coverage": [
+        "src/modules/agenda/**/*.ts",
+        "src/modules/appointments/**/*.ts",
+        "src/app/(dashboard)/agenda/**/*.tsx",
+        "src/app/(dashboard)/calendar/**/*.tsx"
+      ],
+      "triggers": ["pos-finance", "shared-ui"]
+    },
+    "clients": {
+      "paths": ["src/modules/clients/", "src/app/clientes/", "src/app/(dashboard)/clientes/"],
+      "testRoots": ["src/modules/clients", "src/app/clientes", "src/app/(dashboard)/clientes"],
+      "coverage": ["src/modules/clients/**/*.ts", "src/app/(dashboard)/clientes/**/*.tsx"],
+      "triggers": ["agenda-appointments", "pos-finance", "analytics"]
+    },
+    "analytics": {
+      "paths": [
+        "src/modules/analytics/",
+        "src/app/(dashboard)/analitica/",
+        "src/app/(dashboard)/dashboard/"
+      ],
+      "testRoots": [
+        "src/modules/analytics",
+        "src/app/(dashboard)/analitica",
+        "src/app/(dashboard)/dashboard"
+      ],
+      "coverage": [
+        "src/modules/analytics/**/*.ts",
+        "src/app/(dashboard)/analitica/**/*.tsx",
+        "src/app/(dashboard)/dashboard/**/*.tsx"
+      ],
+      "triggers": ["shared-ui"]
+    },
+    "ai-integrations": {
+      "paths": [
+        "src/modules/ai/",
+        "src/modules/whatsapp/",
+        "src/components/ai/",
+        "src/app/api/chat/",
+        "src/app/api/import/",
+        "src/app/api/whatsapp/",
+        "src/app/api/webhooks/"
+      ],
+      "testRoots": [
+        "src/modules/ai",
+        "src/modules/whatsapp",
+        "src/components/ai",
+        "src/app/api/chat",
+        "src/app/api/import",
+        "src/app/api/whatsapp",
+        "src/app/api/webhooks"
+      ],
+      "coverage": [
+        "src/modules/ai/**/*.ts",
+        "src/modules/whatsapp/**/*.ts",
+        "src/components/ai/**/*.tsx",
+        "src/app/api/**/*.ts"
+      ],
+      "triggers": ["agenda-appointments", "pos-finance", "inventory-services", "clients"]
+    },
+    "shared-ui": {
+      "paths": [
+        "src/components/shared/",
+        "src/components/layout/",
+        "src/components/FeaturesCarousel.tsx",
+        "src/app/globals.css",
+        "src/app/layout.tsx",
+        "src/app/page.tsx"
+      ],
+      "testRoots": ["src/components/shared", "src/components/layout", "src/components", "src/app"],
+      "coverage": ["src/components/**/*.tsx"],
+      "triggers": []
+    },
+    "database": {
+      "paths": ["src/core/database/", "drizzle.config.ts", "supabase/"],
+      "testRoots": ["src/core/database", "supabase/tests"],
+      "coverage": ["src/core/database/**/*.ts"],
+      "triggers": [
+        "auth-access",
+        "pos-finance",
+        "inventory-services",
+        "agenda-appointments",
+        "clients",
+        "analytics",
+        "ai-integrations"
+      ]
+    },
+    "tooling": {
+      "paths": [
+        ".github/workflows/",
+        "ci/",
+        "scripts/ci/",
+        "package.json",
+        "package-lock.json",
+        "eslint.config.mjs",
+        "next.config.mjs",
+        "next.config.ts",
+        "tsconfig.json",
+        "vitest.config.ts",
+        ".prettierrc.json",
+        ".prettierignore",
+        ".nvmrc",
+        ".env.test.example"
+      ],
+      "testRoots": ["scripts/ci"],
+      "coverage": ["scripts/ci/**/*.mjs"],
+      "triggers": [
+        "auth-access",
+        "pos-finance",
+        "inventory-services",
+        "agenda-appointments",
+        "clients",
+        "analytics",
+        "ai-integrations",
+        "shared-ui",
+        "database"
+      ]
+    }
+  }
+}
