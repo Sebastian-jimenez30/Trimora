@@ -330,3 +330,50 @@ export const chatMessages = pgTable(
     ),
   ],
 );
+
+// ----------------------------------------------------------------------
+// 7. INTEGRACIONES EXTERNAS
+// ----------------------------------------------------------------------
+export const webhookEvents = pgTable(
+  "webhook_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .references(() => organizations.id, { onDelete: "cascade" })
+      .notNull(),
+    provider: varchar("provider", { length: 20 }).notNull(), // TELEGRAM, KAPSO
+    externalEventId: varchar("external_event_id", { length: 255 }).notNull(),
+    payloadHash: varchar("payload_hash", { length: 64 }).notNull(),
+    status: varchar("status", { length: 20 }).notNull().default("PROCESSING"),
+    failureCode: varchar("failure_code", { length: 64 }),
+    receivedAt: timestamp("received_at", { withTimezone: true }).defaultNow().notNull(),
+    processedAt: timestamp("processed_at", { withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex("webhook_events_provider_external_uidx").on(table.provider, table.externalEventId),
+    index("webhook_events_org_received_idx").on(table.organizationId, table.receivedAt),
+    index("webhook_events_status_received_idx").on(table.status, table.receivedAt),
+  ],
+);
+
+export const webhookRateLimits = pgTable(
+  "webhook_rate_limits",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .references(() => organizations.id, { onDelete: "cascade" })
+      .notNull(),
+    provider: varchar("provider", { length: 20 }).notNull(),
+    bucketStart: timestamp("bucket_start", { withTimezone: true }).notNull(),
+    requestCount: integer("request_count").notNull().default(1),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("webhook_rate_limits_org_provider_bucket_uidx").on(
+      table.organizationId,
+      table.provider,
+      table.bucketStart,
+    ),
+    index("webhook_rate_limits_bucket_idx").on(table.bucketStart),
+  ],
+);

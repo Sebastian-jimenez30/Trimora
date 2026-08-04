@@ -285,6 +285,8 @@ Todo cambio en esquema, migraciones, RLS o conexión activará `database`, las i
 
 **Rama:** `architecture/04-webhook-hardening`
 
+**Estado:** implementada; pendiente de pipeline y aceptación del propietario.
+
 **Cambios previstos:**
 
 - validar firma o secreto de Telegram y WhatsApp/Kapso;

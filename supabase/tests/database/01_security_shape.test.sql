@@ -1,6 +1,6 @@
 BEGIN;
 
-SELECT plan(12);
+SELECT plan(13);
 
 SELECT is(
   (
@@ -22,10 +22,12 @@ SELECT is(
       'public.daily_summaries'::regclass,
       'public.audit_logs'::regclass,
       'public.chat_messages'::regclass,
-      'public.platform_admins'::regclass
+      'public.platform_admins'::regclass,
+      'public.webhook_events'::regclass,
+      'public.webhook_rate_limits'::regclass
     ]) AND relrowsecurity
   ),
-  16::bigint,
+  18::bigint,
   'todas las tablas privadas expuestas tienen RLS habilitado'
 );
 
@@ -49,10 +51,12 @@ SELECT is(
       'public.daily_summaries'::regclass,
       'public.audit_logs'::regclass,
       'public.chat_messages'::regclass,
-      'public.platform_admins'::regclass
+      'public.platform_admins'::regclass,
+      'public.webhook_events'::regclass,
+      'public.webhook_rate_limits'::regclass
     ]) AND relforcerowsecurity
   ),
-  16::bigint,
+  18::bigint,
   'RLS también se fuerza para propietarios sin BYPASSRLS'
 );
 
@@ -65,7 +69,7 @@ SELECT is(
         'organizations', 'organization_members', 'invitations', 'services', 'products',
         'service_materials', 'clients', 'appointments', 'transactions', 'transaction_items',
         'transaction_payments', 'inventory_movements', 'daily_summaries', 'audit_logs',
-        'chat_messages', 'platform_admins'
+        'chat_messages', 'platform_admins', 'webhook_events', 'webhook_rate_limits'
       ])
       AND has_table_privilege('anon', format('%I.%I', table_schema, table_name), 'SELECT')
   ),
@@ -77,6 +81,18 @@ SELECT is(
   has_table_privilege('authenticated', 'public.platform_admins', 'SELECT'),
   false,
   'authenticated no puede consultar concesiones de plataforma'
+);
+
+SELECT is(
+  (
+    SELECT count(*)
+    FROM information_schema.tables
+    WHERE table_schema = 'public'
+      AND table_name = ANY (ARRAY['webhook_events', 'webhook_rate_limits'])
+      AND has_table_privilege('authenticated', format('%I.%I', table_schema, table_name), 'SELECT')
+  ),
+  0::bigint,
+  'las tablas de seguridad de webhooks solo son accesibles desde el servidor'
 );
 
 SELECT is(
