@@ -11,9 +11,10 @@ import {
   auditLogs,
   transactionItems
 } from "@/core/database/schema";
-import { eq, and, gte, lt, desc, asc, lte, sql } from "drizzle-orm";
+import { eq, and, gte, lt, asc, lte, sql } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import { getCashEntries } from "@/modules/pos/cash-flow";
 
 import { formatInTimeZone, toDate } from 'date-fns-tz';
 
@@ -40,18 +41,12 @@ export default async function DashboardPage() {
   const tomorrow = new Date(today.getTime() + 24 * 60 * 60 * 1000);
 
   // 2. Obtener KPIs Diarios (Dinámicos)
-  // Ingresos del día
-  const todaysTransactions = await db.select({ totalAmount: transactions.totalAmount })
-    .from(transactions)
-    .where(
-      and(
-        eq(transactions.organizationId, orgId),
-        eq(transactions.type, 'INCOME'),
-        gte(transactions.createdAt, today)
-      )
-    );
-  
-  const ingresosDia = todaysTransactions.reduce((acc, curr) => acc + parseFloat(curr.totalAmount), 0).toFixed(2);
+  // Solo cuenta el dinero que efectivamente entró hoy, incluyendo abonos de deudas anteriores.
+  const todaysCashEntries = await getCashEntries(orgId, today, tomorrow);
+  const ingresosDia = todaysCashEntries
+    .filter(entry => entry.type === "INCOME")
+    .reduce((total, entry) => total + Number(entry.amount), 0)
+    .toFixed(2);
 
   // Citas agendadas hoy
   const todaysAppointmentsQuery = await db.select({ count: sql<number>`count(*)` })
@@ -82,22 +77,47 @@ export default async function DashboardPage() {
 
   // Lista de deudores (Cuentas por cobrar detalladas)
   const pendingDebts = await db.select({
-    id: transactions.id,
+    clientId: transactions.clientId,
     totalAmount: transactions.totalAmount,
     paidAmount: transactions.paidAmount,
     clientName: clients.firstName,
     clientLastName: clients.lastName,
-    createdAt: transactions.createdAt
   })
   .from(transactions)
   .leftJoin(clients, eq(transactions.clientId, clients.id))
   .where(
     and(
       eq(transactions.organizationId, orgId),
+      eq(transactions.type, 'INCOME'),
       eq(transactions.status, 'PENDING')
     )
-  )
-  .orderBy(desc(transactions.createdAt));
+  );
+
+  const pendingAccountsByClient = new Map<string, {
+    clientId: string;
+    clientName: string;
+    clientLastName: string | null;
+    remaining: number;
+    movements: number;
+  }>();
+  for (const debt of pendingDebts) {
+    if (!debt.clientId) continue;
+    const remaining = Math.max(0, Number(debt.totalAmount) - Number(debt.paidAmount));
+    if (remaining <= 0) continue;
+
+    const account = pendingAccountsByClient.get(debt.clientId) ?? {
+      clientId: debt.clientId,
+      clientName: debt.clientName || "Cliente",
+      clientLastName: debt.clientLastName,
+      remaining: 0,
+      movements: 0,
+    };
+    account.remaining += remaining;
+    account.movements += 1;
+    pendingAccountsByClient.set(debt.clientId, account);
+  }
+  const pendingAccounts = [...pendingAccountsByClient.values()]
+    .sort((first, second) => second.remaining - first.remaining);
 
   // 4. Próximas Citas Hoy
   const upcomingAppointments = await db.select({
@@ -253,29 +273,27 @@ export default async function DashboardPage() {
         <div className="flex flex-col gap-4 md:gap-6">
           <div className="bg-[#141414] border border-white/10 rounded-xl p-4 md:p-6">
             <h3 className="font-serif text-lg text-sterling mb-5 text-orange-400">Cuentas por Cobrar</h3>
-            {pendingDebts.length === 0 ? (
+            {pendingAccounts.length === 0 ? (
               <div className="py-6 text-center text-charcoal text-sm">
                 No hay cuentas pendientes por cobrar.
               </div>
             ) : (
               <ul className="flex flex-col gap-3">
-                {pendingDebts.map(debt => {
-                  const remaining = (parseFloat(debt.totalAmount) - parseFloat(debt.paidAmount || '0')).toFixed(2);
-                  return (
-                    <li key={debt.id} className="flex justify-between items-center bg-orange-500/10 border border-orange-500/20 p-3 rounded-lg">
+                {pendingAccounts.map(account => (
+                    <li key={account.clientId} className="flex justify-between items-center gap-3 bg-orange-500/10 border border-orange-500/20 p-3 rounded-lg">
                       <div>
-                        <h4 className="text-sm font-bold text-sterling">{debt.clientName} {debt.clientLastName || ''}</h4>
-                        <p className="text-xs text-orange-400 font-medium mt-0.5">Debe: ${remaining}</p>
+                        <h4 className="text-sm font-bold text-sterling">{account.clientName} {account.clientLastName || ''}</h4>
+                        <p className="text-xs text-orange-400 font-medium mt-0.5">Debe: ${account.remaining.toFixed(2)}</p>
+                        <p className="text-[10px] text-charcoal mt-0.5">{account.movements} {account.movements === 1 ? "movimiento" : "movimientos"}</p>
                       </div>
                       <Link 
-                        href={`/pos?tab=HISTORY&payTx=${debt.id}&payAmount=${remaining}`}
+                        href={`/pos?tab=RECEIVABLES&clientId=${account.clientId}`}
                         className="bg-orange-500/20 hover:bg-orange-500 text-orange-400 hover:text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-colors"
                       >
-                        Abonar
+                        Ver cuenta
                       </Link>
                     </li>
-                  )
-                })}
+                ))}
               </ul>
             )}
           </div>

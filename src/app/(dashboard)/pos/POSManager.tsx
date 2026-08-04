@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useTransition, useEffect } from "react";
-import { processSale, registerExpense, registerPayment, exportFinancialReport, updateTransaction, deleteTransaction, CartItem } from "@/modules/pos/actions";
+import { processSale, registerExpense, registerPayment, registerClientPayment, exportFinancialReport, updateTransaction, deleteTransaction, CartItem } from "@/modules/pos/actions";
 import { useSearchParams, useRouter } from "next/navigation";
 import { toast } from "react-hot-toast";
 
@@ -11,6 +11,7 @@ type POSProps = {
   clients: any[];
   staff: any[];
   history: any[];
+  receivables: any[];
   historyRange: HistoryRange;
   historyStart: string;
   historyEnd: string;
@@ -19,11 +20,11 @@ type POSProps = {
 
 type HistoryRange = "MONTH" | "WEEK" | "DAY" | "YEAR" | "CUSTOM" | "HISTORIC";
 
-export default function POSManager({ services, products, clients, staff, history, historyRange, historyStart, historyEnd, pendingAppointments }: POSProps) {
+export default function POSManager({ services, products, clients, staff, history, receivables, historyRange, historyStart, historyEnd, pendingAppointments }: POSProps) {
   const searchParams = useSearchParams();
   const router = useRouter();
   
-  const [activeTab, setActiveTab] = useState<"VENTA" | "HISTORY" | "COMPRA">("VENTA");
+  const [activeTab, setActiveTab] = useState<"VENTA" | "RECEIVABLES" | "HISTORY" | "COMPRA">("VENTA");
   const [isServicesOpen, setIsServicesOpen] = useState(true);
   const [isProductsOpen, setIsProductsOpen] = useState(true);
   const [isCartOpenMobile, setIsCartOpenMobile] = useState(false);
@@ -43,6 +44,10 @@ export default function POSManager({ services, products, clients, staff, history
   const [successTxId, setSuccessTxId] = useState("");
   const [selectedTransaction, setSelectedTransaction] = useState<any | null>(null);
   const [editingTransaction, setEditingTransaction] = useState<any | null>(null);
+  const [selectedReceivable, setSelectedReceivable] = useState<any | null>(null);
+  const [receivableToPay, setReceivableToPay] = useState<any | null>(null);
+  const [receivablePaymentAmount, setReceivablePaymentAmount] = useState("");
+  const [receivablePaymentMethod, setReceivablePaymentMethod] = useState("CASH");
   
   const [isExporting, setIsExporting] = useState(false);
   const [exportRangeType, setExportRangeType] = useState<HistoryRange>(historyRange);
@@ -85,9 +90,18 @@ export default function POSManager({ services, products, clients, staff, history
     }
 
     const tab = searchParams?.get("tab");
-    if (tab === "HISTORY" || tab === "VENTA" || tab === "COMPRA") {
+    if (tab === "HISTORY" || tab === "VENTA" || tab === "RECEIVABLES" || tab === "COMPRA") {
       setTimeout(() => {
         setActiveTab(tab as any);
+      }, 0);
+    }
+
+    const receivableClientId = searchParams?.get("clientId");
+    if (tab === "RECEIVABLES" && receivableClientId) {
+      const account = receivables.find(receivable => receivable.clientId === receivableClientId);
+      if (account) setTimeout(() => {
+        setSelectedReceivable(account);
+        router.replace("/pos?tab=RECEIVABLES");
       }, 0);
     }
     
@@ -102,7 +116,7 @@ export default function POSManager({ services, products, clients, staff, history
         router.replace("/pos");
       }, 0);
     }
-  }, [searchParams, pendingAppointments, services, router]);
+  }, [searchParams, pendingAppointments, services, receivables, router]);
 
   // Helper para añadir al carrito
   const addToCart = (item: any, type: "SERVICE" | "PRODUCT") => {
@@ -206,6 +220,39 @@ export default function POSManager({ services, products, clients, staff, history
     });
   };
 
+  const openReceivablePayment = (receivable: any, payInFull: boolean) => {
+    setSelectedReceivable(null);
+    setReceivableToPay(receivable);
+    setReceivablePaymentAmount(payInFull ? receivable.totalDebt : "");
+    setReceivablePaymentMethod("CASH");
+  };
+
+  const handleReceivablePayment = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!receivableToPay) return;
+
+    const amount = Number(receivablePaymentAmount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      toast.error("Ingrese un monto válido.");
+      return;
+    }
+    if (amount > Number(receivableToPay.totalDebt)) {
+      toast.error("El abono no puede superar la deuda total del cliente.");
+      return;
+    }
+
+    startTransition(async () => {
+      const result = await registerClientPayment(receivableToPay.clientId, amount, receivablePaymentMethod);
+      if (result.success) {
+        setReceivableToPay(null);
+        setReceivablePaymentAmount("");
+        toast.success(amount >= Number(receivableToPay.totalDebt) ? "Cuenta pagada completamente" : "Abono registrado");
+      } else {
+        toast.error(result.error || "Error al registrar el abono");
+      }
+    });
+  };
+
   const handleExport = async () => {
     setIsExporting(true);
     let start = new Date();
@@ -231,7 +278,7 @@ export default function POSManager({ services, products, clients, staff, history
         return;
       }
       start = new Date(customStartDate + "T00:00:00");
-      end = new Date(customEndDate + "T23:59:59");
+      end = new Date(customEndDate + "T23:59:59.999");
     }
     
     const result = await exportFinancialReport(start.toISOString(), end.toISOString());
@@ -292,7 +339,7 @@ export default function POSManager({ services, products, clients, staff, history
 
     const formData = new FormData(e.currentTarget);
     startTransition(async () => {
-      const result = await updateTransaction(editingTransaction.id, formData);
+      const result = await updateTransaction(editingTransaction.transactionId || editingTransaction.id, formData);
       if (result.success) {
         setEditingTransaction(null);
         toast.success("Movimiento actualizado");
@@ -306,7 +353,7 @@ export default function POSManager({ services, products, clients, staff, history
     if (!editingTransaction || !window.confirm("¿Eliminar este movimiento? Esta acción también revertirá el inventario asociado a la venta.")) return;
 
     startTransition(async () => {
-      const result = await deleteTransaction(editingTransaction.id);
+      const result = await deleteTransaction(editingTransaction.transactionId || editingTransaction.id);
       if (result.success) {
         setEditingTransaction(null);
         toast.success("Movimiento eliminado");
@@ -328,7 +375,7 @@ export default function POSManager({ services, products, clients, staff, history
         {/* Topbar */}
         <header className="border-b border-white/10 flex flex-col lg:flex-row items-start lg:items-center justify-between px-4 lg:px-8 bg-pitch shrink-0 gap-4 lg:gap-0 pt-4 lg:pt-0 min-h-[70px]">
           <div className="flex gap-6 overflow-x-auto whitespace-nowrap w-full lg:w-auto scrollbar-hide pb-0 lg:pb-0">
-            {(["VENTA", "COMPRA", "HISTORY"] as const).map(tab => (
+            {(["VENTA", "RECEIVABLES", "COMPRA", "HISTORY"] as const).map(tab => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
@@ -338,7 +385,7 @@ export default function POSManager({ services, products, clients, staff, history
                     : "text-[#888] border-transparent hover:text-[#ccc]"
                 }`}
               >
-                {tab === "VENTA" ? "Venta" : tab === "COMPRA" ? "Compra (Gastos)" : "Historial"}
+                {tab === "VENTA" ? "Venta" : tab === "RECEIVABLES" ? "Por cobrar" : tab === "COMPRA" ? "Compra (Gastos)" : "Historial"}
               </button>
             ))}
           </div>
@@ -503,6 +550,69 @@ export default function POSManager({ services, products, clients, staff, history
             </div>
           )}
 
+          {/* CUENTAS POR COBRAR AGRUPADAS POR CLIENTE */}
+          {activeTab === "RECEIVABLES" && (
+            <div className="bg-[#141414] border border-white/10 rounded-xl overflow-hidden max-w-5xl">
+              <div className="p-5 border-b border-white/10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div>
+                  <h3 className="font-serif text-lg text-sterling">Cuentas por cobrar</h3>
+                  <p className="text-xs text-charcoal mt-1">Cada cliente tiene una sola cuenta, aunque tenga varias ventas pendientes.</p>
+                </div>
+                <div className="text-left sm:text-right">
+                  <p className="text-[10px] uppercase tracking-wider text-charcoal">Saldo total pendiente</p>
+                  <p className="text-xl font-bold text-orange-400">${receivables.reduce((total, account) => total + Number(account.totalDebt), 0).toFixed(2)}</p>
+                </div>
+              </div>
+
+              {receivables.length === 0 ? (
+                <div className="py-14 px-5 text-center">
+                  <p className="text-sm text-sterling">No hay cuentas pendientes por cobrar.</p>
+                  <p className="text-xs text-charcoal mt-1">Las nuevas ventas fiadas aparecerán aquí agrupadas por cliente.</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-white/5">
+                  {receivables.map(receivable => (
+                    <div
+                      key={receivable.clientId}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setSelectedReceivable(receivable)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") setSelectedReceivable(receivable);
+                      }}
+                      className="p-5 flex flex-col lg:flex-row lg:items-center gap-4 hover:bg-white/5 cursor-pointer transition-colors"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <h4 className="text-sm font-bold text-sterling truncate">{receivable.clientName}</h4>
+                        <p className="text-xs text-charcoal mt-1">{receivable.movements.length} {receivable.movements.length === 1 ? "movimiento pendiente" : "movimientos pendientes"} · Ver detalle</p>
+                      </div>
+                      <div className="lg:text-right lg:min-w-[130px]">
+                        <p className="text-[10px] uppercase tracking-wider text-charcoal">Deuda acumulada</p>
+                        <p className="text-lg font-bold text-orange-400">${receivable.totalDebt}</p>
+                      </div>
+                      <div className="flex flex-wrap gap-2 lg:min-w-[210px] lg:justify-end" onClick={event => event.stopPropagation()}>
+                        <button
+                          type="button"
+                          onClick={() => openReceivablePayment(receivable, false)}
+                          className="bg-orange-500/15 hover:bg-orange-500/30 border border-orange-500/40 text-orange-400 px-3 py-2 rounded-lg text-xs font-bold transition-colors"
+                        >
+                          Abonar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openReceivablePayment(receivable, true)}
+                          className="bg-orange-500 hover:bg-orange-400 text-white px-3 py-2 rounded-lg text-xs font-bold transition-colors"
+                        >
+                          Pagar completo
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* HISTORIAL */}
           {activeTab === "HISTORY" && (
             <div className="bg-[#141414] border border-white/10 rounded-xl overflow-hidden max-w-5xl">
@@ -594,23 +704,25 @@ export default function POSManager({ services, products, clients, staff, history
                         <span className={`px-2 py-1 rounded text-[10px] uppercase font-bold tracking-wider ${
                           tx.type === "INCOME" ? "bg-green-900/30 text-green-500" : "bg-red-900/30 text-red-500"
                         }`}>
-                          {tx.type === "INCOME" ? "VENTA" : "GASTO"}
+                          {tx.movementKind === "PAYMENT" ? "ABONO" : tx.movementKind === "PENDING" ? "POR COBRAR" : tx.type === "INCOME" ? "VENTA" : "GASTO"}
                         </span>
                       </td>
                       <td className="py-3 px-5 text-sm text-sterling">
                         <div className="flex items-center gap-2">
                           <span className="truncate">{tx.description}</span>
-                          <button
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              setEditingTransaction(tx);
-                            }}
-                            className="shrink-0 p-1.5 text-charcoal hover:text-white transition-colors bg-white/5 hover:bg-white/10 rounded"
-                            title="Editar movimiento"
-                            aria-label="Editar movimiento"
-                          >
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
-                          </button>
+                          {tx.canEdit ? (
+                            <button
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                setEditingTransaction(tx);
+                              }}
+                              className="shrink-0 p-1.5 text-charcoal hover:text-white transition-colors bg-white/5 hover:bg-white/10 rounded"
+                              title="Editar movimiento"
+                              aria-label="Editar movimiento"
+                            >
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                            </button>
+                          ) : <span className="w-[26px] shrink-0" aria-hidden="true" />}
                         </div>
                       </td>
                       <td className="py-3 px-5 text-sm text-[#888]">{tx.clientName}</td>
@@ -634,7 +746,7 @@ export default function POSManager({ services, products, clients, staff, history
                           <button
                             onClick={(event) => {
                               event.stopPropagation();
-                              window.open(`/pos/receipt/${tx.id}`, '_blank');
+                              window.open(`/pos/receipt/${tx.transactionId || tx.id}`, '_blank');
                             }}
                             className="bg-white/5 hover:bg-white/10 text-sterling p-2 rounded transition-colors"
                             title="Imprimir factura"
@@ -649,7 +761,7 @@ export default function POSManager({ services, products, clients, staff, history
                            <button
                              onClick={(event) => {
                                event.stopPropagation();
-                               setSelectedTxId(tx.id);
+                               setSelectedTxId(tx.transactionId || tx.id);
                                setPaymentAmount(remaining);
                                setPaymentRemaining(remaining);
                                setIsPaymentModalOpen(true);
@@ -862,6 +974,99 @@ export default function POSManager({ services, products, clients, staff, history
         </div>
       )}
 
+      {/* MODAL DE CUENTA POR COBRAR DEL CLIENTE */}
+      {selectedReceivable && (
+        <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#141414] border border-white/10 rounded-xl w-full max-w-2xl max-h-[90vh] shadow-2xl animate-in zoom-in-95 overflow-hidden flex flex-col">
+            <div className="p-6 border-b border-white/10 flex items-start justify-between gap-4">
+              <div>
+                <span className="inline-flex px-2 py-1 rounded text-[10px] uppercase font-bold tracking-wider bg-orange-500/15 text-orange-400">Cuenta por cobrar</span>
+                <h3 className="text-xl font-serif text-sterling mt-3">{selectedReceivable.clientName}</h3>
+                <p className="text-xs text-charcoal mt-1">{selectedReceivable.movements.length} {selectedReceivable.movements.length === 1 ? "movimiento pendiente" : "movimientos pendientes"}</p>
+              </div>
+              <button type="button" onClick={() => setSelectedReceivable(null)} className="text-charcoal hover:text-white p-1" aria-label="Cerrar">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto space-y-3">
+              {selectedReceivable.movements.map((movement: any) => (
+                <div key={movement.transactionId} className="border border-white/10 rounded-lg p-4 bg-pitch/50">
+                  <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-sterling">{movement.description}</p>
+                      <p className="text-[11px] text-charcoal mt-1">{new Date(movement.createdAt).toLocaleDateString()} · {new Date(movement.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</p>
+                    </div>
+                    <div className="sm:text-right shrink-0">
+                      <p className="text-[10px] uppercase tracking-wider text-charcoal">Saldo de este movimiento</p>
+                      <p className="text-sm font-bold text-orange-400">${movement.remaining.toFixed(2)}</p>
+                      {Number(movement.paidAmount) > 0 && <p className="text-[10px] text-emerald-400 mt-0.5">Abonado: ${Number(movement.paidAmount).toFixed(2)}</p>}
+                    </div>
+                  </div>
+                  {movement.itemDetails?.length > 0 && (
+                    <div className="mt-3 pt-3 border-t border-white/5 flex flex-wrap gap-x-4 gap-y-1">
+                      {movement.itemDetails.map((item: any, index: number) => (
+                        <span key={`${item.name}-${index}`} className="text-[11px] text-[#888]">{Number(item.quantity)} × {item.name} (${item.subtotal})</span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <div className="p-5 border-t border-white/10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div>
+                <p className="text-[10px] uppercase tracking-wider text-charcoal">Deuda total del cliente</p>
+                <p className="text-2xl font-bold text-orange-400">${selectedReceivable.totalDebt}</p>
+              </div>
+              <div className="flex gap-2">
+                <button type="button" onClick={() => openReceivablePayment(selectedReceivable, false)} className="bg-orange-500/15 hover:bg-orange-500/30 border border-orange-500/40 text-orange-400 px-4 py-2.5 rounded-lg text-sm font-bold transition-colors">Abonar</button>
+                <button type="button" onClick={() => openReceivablePayment(selectedReceivable, true)} className="bg-orange-500 hover:bg-orange-400 text-white px-4 py-2.5 rounded-lg text-sm font-bold transition-colors">Pagar completo</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL PARA ABONAR A LA CUENTA ACUMULADA */}
+      {receivableToPay && (
+        <div className="fixed inset-0 z-[110] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#141414] border border-white/10 p-6 rounded-xl w-full max-w-sm shadow-2xl animate-in zoom-in-95">
+            <h3 className="text-lg font-serif text-sterling mb-1">Abonar a {receivableToPay.clientName}</h3>
+            <p className="text-xs text-[#888] mb-5">Saldo acumulado: <span className="text-orange-400 font-bold">${receivableToPay.totalDebt}</span>. El abono se aplicará primero a los movimientos más antiguos.</p>
+            <form onSubmit={handleReceivablePayment} className="flex flex-col gap-4">
+              <div>
+                <label className="text-xs text-charcoal uppercase tracking-wider block mb-1">Monto ($)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  max={receivableToPay.totalDebt}
+                  required
+                  autoFocus
+                  value={receivablePaymentAmount}
+                  onChange={event => setReceivablePaymentAmount(event.target.value)}
+                  className="bg-pitch border border-white/10 text-sterling px-4 py-3 rounded-lg text-sm focus:outline-none focus:border-orange-500 w-full"
+                />
+                <button type="button" onClick={() => setReceivablePaymentAmount(receivableToPay.totalDebt)} className="mt-2 text-xs font-bold text-orange-400 hover:text-orange-300 transition-colors">Usar saldo completo (${receivableToPay.totalDebt})</button>
+              </div>
+              <div>
+                <label className="text-xs text-charcoal uppercase tracking-wider block mb-1">Método de pago</label>
+                <select value={receivablePaymentMethod} onChange={event => setReceivablePaymentMethod(event.target.value)} className="bg-pitch border border-white/10 text-sterling px-4 py-3 rounded-lg text-sm focus:outline-none focus:border-orange-500 w-full">
+                  <option value="CASH">Efectivo</option>
+                  <option value="CARD">Tarjeta</option>
+                  <option value="TRANSFER">Transferencia</option>
+                </select>
+              </div>
+              <div className="flex gap-3 mt-2">
+                <button type="button" onClick={() => setReceivableToPay(null)} className="flex-1 bg-white/5 hover:bg-white/10 text-sterling py-2.5 rounded-lg text-sm font-bold transition-colors">Cancelar</button>
+                <button type="submit" disabled={isPending} className="flex-1 bg-orange-500 hover:bg-orange-400 text-white py-2.5 rounded-lg text-sm font-bold transition-colors disabled:opacity-50">{isPending ? "Procesando..." : "Confirmar"}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* MODAL PARA ABONAR */}
       {isPaymentModalOpen && (
         <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
@@ -919,7 +1124,7 @@ export default function POSManager({ services, products, clients, staff, history
                 <span className={`inline-flex px-2 py-1 rounded text-[10px] uppercase font-bold tracking-wider ${
                   selectedTransaction.type === "INCOME" ? "bg-green-900/30 text-green-500" : "bg-red-900/30 text-red-500"
                 }`}>
-                  {selectedTransaction.type === "INCOME" ? "Venta" : "Gasto"}
+                  {selectedTransaction.movementKind === "PAYMENT" ? "Abono recibido" : selectedTransaction.movementKind === "PENDING" ? "Cuenta por cobrar" : selectedTransaction.type === "INCOME" ? "Venta" : "Gasto"}
                 </span>
                 <h3 className="text-xl font-serif text-sterling mt-3">Detalle del movimiento</h3>
                 <p className="text-xs text-[#888] mt-1">{new Date(selectedTransaction.createdAt).toLocaleDateString()} · {new Date(selectedTransaction.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</p>
@@ -931,7 +1136,7 @@ export default function POSManager({ services, products, clients, staff, history
             <div className="p-6 space-y-5">
               <div className="grid grid-cols-2 gap-4">
                 <div className="bg-pitch/70 rounded-lg p-3">
-                  <p className="text-[10px] uppercase tracking-wider text-charcoal">Monto total</p>
+                  <p className="text-[10px] uppercase tracking-wider text-charcoal">{selectedTransaction.movementKind === "PAYMENT" ? "Monto recibido" : "Monto total"}</p>
                   <p className={`text-lg font-bold mt-1 ${selectedTransaction.type === "INCOME" ? "text-green-500" : "text-red-500"}`}>{selectedTransaction.type === "INCOME" ? "+" : "-"}${selectedTransaction.totalAmount}</p>
                 </div>
                 <div className="bg-pitch/70 rounded-lg p-3">
@@ -985,17 +1190,19 @@ export default function POSManager({ services, products, clients, staff, history
               {selectedTransaction.status === "PENDING" && (
                 <button type="button" onClick={() => {
                   const remaining = (parseFloat(selectedTransaction.totalAmount) - parseFloat(selectedTransaction.paidAmount || "0")).toFixed(2);
-                  setSelectedTxId(selectedTransaction.id);
+                  setSelectedTxId(selectedTransaction.transactionId || selectedTransaction.id);
                   setPaymentAmount(remaining);
                   setPaymentRemaining(remaining);
                   setSelectedTransaction(null);
                   setIsPaymentModalOpen(true);
                 }} className="bg-orange-500/20 hover:bg-orange-500/40 border border-orange-500/50 text-orange-400 px-4 py-2.5 rounded-lg text-sm font-bold transition-colors">Abonar</button>
               )}
-              <button type="button" onClick={() => {
-                setEditingTransaction(selectedTransaction);
-                setSelectedTransaction(null);
-              }} className="bg-cognac hover:brightness-110 text-white px-4 py-2.5 rounded-lg text-sm font-bold transition-colors">Editar</button>
+              {selectedTransaction.canEdit && (
+                <button type="button" onClick={() => {
+                  setEditingTransaction(selectedTransaction);
+                  setSelectedTransaction(null);
+                }} className="bg-cognac hover:brightness-110 text-white px-4 py-2.5 rounded-lg text-sm font-bold transition-colors">Editar</button>
+              )}
             </div>
           </div>
         </div>

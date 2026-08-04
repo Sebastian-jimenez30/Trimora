@@ -1,7 +1,8 @@
 import { db } from "@/core/database/db";
 import { services, products, clients, organizationMembers, transactions, transactionItems, auditLogs } from "@/core/database/schema";
 import { createClient } from "@/core/database/server";
-import { and, desc, eq, gte, inArray, lt } from "drizzle-orm";
+import { getCashEntries } from "@/modules/pos/cash-flow";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { addDays, format, startOfWeek } from "date-fns";
 import { fromZonedTime, toZonedTime } from "date-fns-tz";
 import { redirect } from "next/navigation";
@@ -87,30 +88,37 @@ export default async function POSPage({ searchParams }: POSPageProps) {
     name: `Staff ${s.id.substring(0, 4)} (${s.role})`
   }));
 
-  const historyWhere = historyBounds
-    ? and(
-        eq(transactions.organizationId, orgId),
-        gte(transactions.createdAt, historyBounds.start),
-        lt(transactions.createdAt, historyBounds.end),
-      )
-    : eq(transactions.organizationId, orgId);
+  const [cashEntries, allPendingTransactions] = await Promise.all([
+    getCashEntries(orgId, historyBounds?.start, historyBounds?.end),
+    db.select().from(transactions).where(and(
+      eq(transactions.organizationId, orgId),
+      eq(transactions.type, "INCOME"),
+      eq(transactions.status, "PENDING"),
+    )).orderBy(desc(transactions.createdAt)),
+  ]);
+  const pendingTransactions = historyBounds
+    ? allPendingTransactions.filter(transaction => transaction.createdAt >= historyBounds.start && transaction.createdAt < historyBounds.end)
+    : allPendingTransactions;
 
-  const historyTransactions = await db.select()
-    .from(transactions)
-    .where(historyWhere)
-    .orderBy(desc(transactions.createdAt));
-
-  const transactionIds = historyTransactions.map(transaction => transaction.id);
-  const [historyItems, historyLogs] = transactionIds.length > 0
+  const transactionIds = [...new Set([
+    ...cashEntries.map(entry => entry.transactionId),
+    ...allPendingTransactions.map(transaction => transaction.id),
+  ])];
+  const [relatedTransactions, historyItems, historyLogs] = transactionIds.length > 0
     ? await Promise.all([
+        db.select().from(transactions).where(and(
+          eq(transactions.organizationId, orgId),
+          inArray(transactions.id, transactionIds),
+        )),
         db.select().from(transactionItems).where(inArray(transactionItems.transactionId, transactionIds)),
         db.select().from(auditLogs).where(inArray(auditLogs.entityId, transactionIds)),
       ])
-    : [[], []];
+    : [[], [], []];
 
   const servicesById = new Map(activeServices.map(service => [service.id, service]));
   const productsById = new Map(activeProducts.map(product => [product.id, product]));
   const clientsById = new Map(orgClients.map(client => [client.id, client]));
+  const transactionsById = new Map(relatedTransactions.map(transaction => [transaction.id, transaction]));
   const itemsByTransaction = new Map<string, typeof historyItems>();
   const descriptionsByTransaction = new Map<string, string>();
 
@@ -125,7 +133,7 @@ export default async function POSPage({ searchParams }: POSPageProps) {
     }
   }
 
-  const history = historyTransactions.map(tx => {
+  const mapTransactionDetails = (tx: typeof relatedTransactions[number]) => {
     const items = itemsByTransaction.get(tx.id) ?? [];
     const itemDetails = items.map(item => {
       const catalogItem = item.itemType === "SERVICE"
@@ -155,20 +163,102 @@ export default async function POSPage({ searchParams }: POSPageProps) {
     const clientName = clientObj ? `${clientObj.firstName} ${clientObj.lastName || ""}`.trim() : "Cliente General";
 
     return {
-      id: tx.id,
-      type: tx.type,
-      totalAmount: tx.totalAmount,
-      paidAmount: tx.paidAmount,
-      status: tx.status,
-      paymentMethod: tx.paymentMethod,
-      clientId: tx.clientId,
-      createdAt: tx.createdAt.toISOString(),
       description,
       notes: tx.notes,
       clientName: tx.type === "INCOME" ? clientName : "---",
       itemDetails,
     };
+  };
+
+  const cashHistory = cashEntries.flatMap(entry => {
+    const tx = transactionsById.get(entry.transactionId);
+    if (!tx) return [];
+
+    return [{
+      id: `${entry.source.toLowerCase()}:${entry.id}`,
+      transactionId: tx.id,
+      movementKind: entry.source === "PAYMENT" ? "PAYMENT" : "TRANSACTION",
+      canEdit: entry.source === "TRANSACTION",
+      type: tx.type,
+      totalAmount: entry.amount,
+      originalTotalAmount: tx.totalAmount,
+      paidAmount: tx.paidAmount,
+      status: "COMPLETED",
+      transactionStatus: tx.status,
+      paymentMethod: entry.paymentMethod,
+      clientId: tx.clientId,
+      createdAt: entry.createdAt.toISOString(),
+      ...mapTransactionDetails(tx),
+    }];
   });
+
+  const pendingHistory = pendingTransactions.map(tx => ({
+    id: `pending:${tx.id}`,
+    transactionId: tx.id,
+    movementKind: "PENDING",
+    canEdit: true,
+    type: tx.type,
+    totalAmount: tx.totalAmount,
+    originalTotalAmount: tx.totalAmount,
+    paidAmount: tx.paidAmount,
+    status: tx.status,
+    transactionStatus: tx.status,
+    paymentMethod: tx.paymentMethod,
+    clientId: tx.clientId,
+    createdAt: tx.createdAt.toISOString(),
+    ...mapTransactionDetails(tx),
+  }));
+
+  const history = [...cashHistory, ...pendingHistory]
+    .sort((first, second) => new Date(second.createdAt).getTime() - new Date(first.createdAt).getTime());
+
+  const receivablesByClient = new Map<string, {
+    clientId: string;
+    clientName: string;
+    totalDebt: number;
+    movements: Array<{
+      transactionId: string;
+      createdAt: string;
+      description: string;
+      totalAmount: string;
+      paidAmount: string;
+      remaining: number;
+      itemDetails: ReturnType<typeof mapTransactionDetails>["itemDetails"];
+    }>;
+  }>();
+
+  for (const transaction of allPendingTransactions) {
+    if (!transaction.clientId) continue;
+    const remaining = Math.max(0, Number(transaction.totalAmount) - Number(transaction.paidAmount));
+    if (remaining <= 0) continue;
+
+    const details = mapTransactionDetails(transaction);
+    const account = receivablesByClient.get(transaction.clientId) ?? {
+      clientId: transaction.clientId,
+      clientName: details.clientName,
+      totalDebt: 0,
+      movements: [],
+    };
+    account.totalDebt += remaining;
+    account.movements.push({
+      transactionId: transaction.id,
+      createdAt: transaction.createdAt.toISOString(),
+      description: details.description,
+      totalAmount: transaction.totalAmount,
+      paidAmount: transaction.paidAmount,
+      remaining,
+      itemDetails: details.itemDetails,
+    });
+    receivablesByClient.set(transaction.clientId, account);
+  }
+
+  const receivables = [...receivablesByClient.values()]
+    .map(account => ({
+      ...account,
+      totalDebt: account.totalDebt.toFixed(2),
+      movements: account.movements.sort((first, second) => new Date(first.createdAt).getTime() - new Date(second.createdAt).getTime()),
+    }))
+    .sort((first, second) => Number(second.totalDebt) - Number(first.totalDebt));
 
   const pendingRes = await import("@/modules/agenda/actions").then(m => m.getPendingAppointmentsForToday());
   const pendingAppointments = pendingRes.success ? pendingRes.data : [];
@@ -182,6 +272,7 @@ export default async function POSPage({ searchParams }: POSPageProps) {
         clients={orgClients}
         staff={staffFormatted}
         history={history}
+        receivables={receivables}
         historyRange={historyRange}
         historyStart={historyStart}
         historyEnd={historyEnd}

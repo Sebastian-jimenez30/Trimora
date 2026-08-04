@@ -3,7 +3,8 @@
 import { db } from "@/core/database/db";
 import { appointments, transactions, transactionItems, products, services, inventoryMovements, serviceMaterials, auditLogs, transactionPayments, clients } from "@/core/database/schema";
 import { createClient } from "@/core/database/server";
-import { eq, and, sql, gte, lte, inArray } from "drizzle-orm";
+import { getCashEntries } from "@/modules/pos/cash-flow";
+import { asc, eq, and, sql, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
 async function getOrganizationId() {
@@ -154,6 +155,7 @@ export async function processSale(cart: CartItem[], clientId: string | null, pay
     revalidatePath("/dashboard");
     revalidatePath("/agenda"); // Revalidar la agenda porque se completó la cita
     revalidatePath("/clientes");
+    revalidatePath("/analitica");
     return { success: true, transactionId: transaction.id };
   } catch (error: any) {
     console.error("Error processSale:", error);
@@ -186,6 +188,7 @@ export async function registerExpense(amount: number, description: string, payme
 
     revalidatePath("/pos");
     revalidatePath("/dashboard");
+    revalidatePath("/analitica");
     return { success: true };
   } catch (error: any) {
     console.error("Error registerExpense:", error);
@@ -195,44 +198,127 @@ export async function registerExpense(amount: number, description: string, payme
 
 export async function registerPayment(transactionId: string, amount: number, paymentMethod: string) {
   try {
-    await getOrganizationId(); // Verifica autenticación
-
-    // Buscar transacción
-    const [tx] = await db.select().from(transactions).where(eq(transactions.id, transactionId));
-    if (!tx) throw new Error("Transacción no encontrada");
-    if (tx.status === 'COMPLETED') throw new Error("La transacción ya está pagada por completo");
-
+    const orgId = await getOrganizationId();
     if (amount <= 0) throw new Error("El monto a abonar debe ser mayor a 0");
 
-    const currentPaid = parseFloat(tx.paidAmount);
-    const totalAmount = parseFloat(tx.totalAmount);
-    const newPaidAmount = currentPaid + amount;
+    const newStatus = await db.transaction(async (databaseTransaction) => {
+      const [transaction] = await databaseTransaction.select()
+        .from(transactions)
+        .where(and(
+          eq(transactions.id, transactionId),
+          eq(transactions.organizationId, orgId),
+        ))
+        .for("update");
+      if (!transaction) throw new Error("Transacción no encontrada");
+      if (transaction.status === 'COMPLETED') throw new Error("La transacción ya está pagada por completo");
 
-    if (newPaidAmount > totalAmount) {
-      throw new Error("El abono supera la deuda restante");
-    }
-    
-    // Registrar el abono
-    await db.insert(transactionPayments).values({
-      transactionId: tx.id,
-      amount: amount.toFixed(2),
-      paymentMethod
+      const currentPaid = parseFloat(transaction.paidAmount);
+      const totalAmount = parseFloat(transaction.totalAmount);
+      const newPaidAmount = currentPaid + amount;
+      if (newPaidAmount > totalAmount) throw new Error("El abono supera la deuda restante");
+
+      const nextStatus = newPaidAmount >= totalAmount ? 'COMPLETED' : 'PENDING';
+      await databaseTransaction.insert(transactionPayments).values({
+        transactionId: transaction.id,
+        amount: amount.toFixed(2),
+        paymentMethod,
+      });
+      await databaseTransaction.update(transactions)
+        .set({
+          paidAmount: newPaidAmount.toFixed(2),
+          status: nextStatus,
+        })
+        .where(and(
+          eq(transactions.id, transaction.id),
+          eq(transactions.organizationId, orgId),
+        ));
+
+      return nextStatus;
     });
-
-    // Actualizar la transacción atómicamente
-    const newStatus = (parseFloat(tx.paidAmount) + amount) >= parseFloat(tx.totalAmount) ? 'COMPLETED' : 'PENDING';
-    await db.update(transactions)
-      .set({ 
-        paidAmount: sql`${transactions.paidAmount} + ${amount}`,
-        status: newStatus 
-      })
-      .where(eq(transactions.id, tx.id));
 
     revalidatePath("/pos");
     revalidatePath("/dashboard");
+    revalidatePath("/analitica");
     return { success: true, newStatus };
   } catch (error: any) {
     console.error("Error registerPayment:", error);
+    return { success: false, error: error.message };
+  }
+}
+
+export async function registerClientPayment(clientId: string, amount: number, paymentMethod: string) {
+  try {
+    const orgId = await getOrganizationId();
+    if (!clientId) throw new Error("Cliente no válido");
+    if (!Number.isFinite(amount) || amount <= 0) throw new Error("El monto a abonar debe ser mayor a 0");
+    if (!["CASH", "CARD", "TRANSFER"].includes(paymentMethod)) throw new Error("Método de pago inválido");
+
+    const allocationCount = await db.transaction(async (databaseTransaction) => {
+      const pendingTransactions = await databaseTransaction.select()
+        .from(transactions)
+        .where(and(
+          eq(transactions.organizationId, orgId),
+          eq(transactions.clientId, clientId),
+          eq(transactions.type, "INCOME"),
+          eq(transactions.status, "PENDING"),
+        ))
+        .orderBy(asc(transactions.createdAt), asc(transactions.id))
+        .for("update");
+
+      if (pendingTransactions.length === 0) throw new Error("El cliente no tiene cuentas pendientes");
+
+      const totalOutstanding = pendingTransactions.reduce(
+        (total, transaction) => total + Math.max(0, Number(transaction.totalAmount) - Number(transaction.paidAmount)),
+        0,
+      );
+      if (amount > totalOutstanding + 0.001) throw new Error("El abono supera la deuda total del cliente");
+
+      const paidAt = new Date();
+      let remainingPayment = amount;
+      let allocations = 0;
+
+      for (const transaction of pendingTransactions) {
+        if (remainingPayment <= 0.001) break;
+
+        const currentPaid = Number(transaction.paidAmount);
+        const totalAmount = Number(transaction.totalAmount);
+        const outstanding = Math.max(0, totalAmount - currentPaid);
+        if (outstanding <= 0) continue;
+
+        const allocatedAmount = Math.min(remainingPayment, outstanding);
+        const nextPaidAmount = currentPaid + allocatedAmount;
+        const nextStatus = nextPaidAmount >= totalAmount - 0.001 ? "COMPLETED" : "PENDING";
+
+        await databaseTransaction.insert(transactionPayments).values({
+          transactionId: transaction.id,
+          amount: allocatedAmount.toFixed(2),
+          paymentMethod,
+          createdAt: paidAt,
+        });
+        await databaseTransaction.update(transactions)
+          .set({
+            paidAmount: nextPaidAmount.toFixed(2),
+            status: nextStatus,
+          })
+          .where(and(
+            eq(transactions.id, transaction.id),
+            eq(transactions.organizationId, orgId),
+          ));
+
+        remainingPayment -= allocatedAmount;
+        allocations += 1;
+      }
+
+      if (remainingPayment > 0.001) throw new Error("No fue posible distribuir todo el abono");
+      return allocations;
+    });
+
+    revalidatePath("/pos");
+    revalidatePath("/dashboard");
+    revalidatePath("/analitica");
+    return { success: true, allocationCount };
+  } catch (error: any) {
+    console.error("Error registerClientPayment:", error);
     return { success: false, error: error.message };
   }
 }
@@ -297,6 +383,7 @@ export async function updateTransaction(transactionId: string, formData: FormDat
     revalidatePath("/pos");
     revalidatePath("/dashboard");
     revalidatePath("/clientes");
+    revalidatePath("/analitica");
     return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message };
@@ -342,6 +429,7 @@ export async function deleteTransaction(transactionId: string) {
     revalidatePath("/inventario");
     revalidatePath("/dashboard");
     revalidatePath("/clientes");
+    revalidatePath("/analitica");
     return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message };
@@ -351,18 +439,18 @@ export async function deleteTransaction(transactionId: string) {
 export async function exportFinancialReport(startDate: string, endDate: string) {
   try {
     const orgId = await getOrganizationId();
-    // Extraer transacciones (INCOME y EXPENSE) en el rango de fechas
-    // El frontend enviará fechas en formato ISO
     const start = new Date(startDate);
     const end = new Date(endDate);
-    
-    const txs = await db.select().from(transactions).where(and(
-      eq(transactions.organizationId, orgId),
-      gte(transactions.createdAt, start),
-      lte(transactions.createdAt, end)
-    ));
-    
-    const txIds = txs.map(t => t.id);
+
+    const cashEntries = await getCashEntries(orgId, start, new Date(end.getTime() + 1));
+    const txIds = [...new Set(cashEntries.map(entry => entry.transactionId))];
+    const txs = txIds.length > 0
+      ? await db.select().from(transactions).where(and(
+          eq(transactions.organizationId, orgId),
+          inArray(transactions.id, txIds),
+        ))
+      : [];
+    const transactionsById = new Map(txs.map(transaction => [transaction.id, transaction]));
     let items: any[] = [];
     if (txIds.length > 0) {
       items = await db.select().from(transactionItems).where(
@@ -379,13 +467,15 @@ export async function exportFinancialReport(startDate: string, endDate: string) 
 
     // Formatear CSV con escaping seguro y detalle por item
     let csv = "ID_Transaccion,Fecha,Hora,Tipo,MetodoPago,Estado,Total_Tx,Abonado_Tx,Item_Nombre,Cantidad,Precio_Unitario,Subtotal\n";
-    for (const tx of txs) {
+    for (const entry of cashEntries) {
+      const tx = transactionsById.get(entry.transactionId);
+      if (!tx) continue;
       const safeId = `"${tx.id.replace(/"/g, '""')}"`;
       const txType = tx.type === "INCOME" ? "VENTA" : "GASTO";
-      const safeMethod = `"${(tx.paymentMethod || '').replace(/"/g, '""')}"`;
+      const safeMethod = `"${(entry.paymentMethod || '').replace(/"/g, '""')}"`;
       const safeStatus = `"${tx.status.replace(/"/g, '""')}"`;
-      const dateStr = new Date(tx.createdAt).toLocaleDateString();
-      const timeStr = new Date(tx.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+      const dateStr = entry.createdAt.toLocaleDateString();
+      const timeStr = entry.createdAt.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
       
       const txItems = items.filter(i => i.transactionId === tx.id);
       
@@ -396,7 +486,7 @@ export async function exportFinancialReport(startDate: string, endDate: string) 
           itemName = log?.details || "Gasto sin descripción";
         }
         const safeItemName = `"${itemName.replace(/"/g, '""')}"`;
-        csv += `${safeId},${dateStr},${timeStr},${txType},${safeMethod},${safeStatus},${tx.totalAmount},${tx.paidAmount},${safeItemName},1,${tx.totalAmount},${tx.totalAmount}\n`;
+        csv += `${safeId},${dateStr},${timeStr},${txType},${safeMethod},${safeStatus},${tx.totalAmount},${entry.amount},${safeItemName},1,${entry.amount},${entry.amount}\n`;
       } else {
         for (const item of txItems) {
           let itemName = "Item Desconocido";
@@ -409,7 +499,7 @@ export async function exportFinancialReport(startDate: string, endDate: string) 
           }
           
           const safeItemName = `"${itemName.replace(/"/g, '""')}"`;
-          csv += `${safeId},${dateStr},${timeStr},${txType},${safeMethod},${safeStatus},${tx.totalAmount},${tx.paidAmount},${safeItemName},${item.quantity},${item.unitPrice},${item.subtotal}\n`;
+          csv += `${safeId},${dateStr},${timeStr},${txType},${safeMethod},${safeStatus},${tx.totalAmount},${entry.amount},${safeItemName},${item.quantity},${item.unitPrice},${item.subtotal}\n`;
         }
       }
     }
