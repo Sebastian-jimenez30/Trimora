@@ -228,9 +228,9 @@ export async function quickCreateProduct(formData: FormData) {
         organizationId,
         productId: product.id,
         type: "IN",
-        quantity: Math.floor(currentStock), // Note: Movement quantity is integer in schema currently
+        quantity: currentStock,
         previousStock: 0,
-        newStock: Math.floor(currentStock),
+        newStock: currentStock,
         notes: "Ajuste inicial desde creación rápida",
       });
     }

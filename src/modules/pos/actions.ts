@@ -204,8 +204,8 @@ export async function processSale(
             productId: item.id,
             type: "OUT",
             quantity: item.quantity,
-            previousStock: Math.round(previousStock),
-            newStock: Math.round(newStock),
+            previousStock,
+            newStock,
             notes: `SALE transaction ${sale.id}`,
           });
         } else {
@@ -234,9 +234,9 @@ export async function processSale(
               organizationId: orgId,
               productId: material.productId,
               type: "OUT",
-              quantity: Math.round(quantityUsed),
-              previousStock: Math.round(previousStock),
-              newStock: Math.round(newStock),
+              quantity: quantityUsed,
+              previousStock,
+              newStock,
               notes: `USAGE transaction ${sale.id}`,
             });
           }

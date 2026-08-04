@@ -370,8 +370,8 @@ export function getAiTools(context: {
               productId: lockedProduct.id,
               type: "OUT",
               quantity: args.cantidad,
-              previousStock: Math.round(previousStock),
-              newStock: Math.round(newStock),
+              previousStock,
+              newStock,
               notes: `SALE transaction ${sale.id}`,
             });
           });

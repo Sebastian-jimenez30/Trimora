@@ -253,6 +253,10 @@ El selector deberá clasificar esta etapa como cambio transversal de `auth-acces
 
 **Rama:** `architecture/03-database-security`
 
+**Estado:** implementada, pendiente de validación del pipeline y aceptación funcional. La matriz de
+acceso, las decisiones de RLS y las pruebas manuales están documentadas en
+`docs/09_seguridad_integridad_base_datos.md`.
+
 **Cambios previstos:**
 
 - versionar RLS para todas las tablas expuestas;
