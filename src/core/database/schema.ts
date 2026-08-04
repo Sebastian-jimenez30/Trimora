@@ -8,6 +8,7 @@ import {
   boolean,
   varchar,
   index,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 // ----------------------------------------------------------------------
@@ -19,15 +20,23 @@ export const organizations = pgTable("organizations", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
-export const organizationMembers = pgTable("organization_members", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  organizationId: uuid("organization_id")
-    .references(() => organizations.id)
-    .notNull(),
-  userId: uuid("user_id").notNull(), // ref to auth.users en Supabase
-  role: text("role").notNull().default("BARBER"), // ADMIN, BARBER, RECEPTIONIST
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-});
+export const organizationMembers = pgTable(
+  "organization_members",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .references(() => organizations.id)
+      .notNull(),
+    userId: uuid("user_id").notNull(), // ref to auth.users en Supabase
+    role: text("role").notNull().default("BARBER"), // ADMIN, BARBER, RECEPTIONIST
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("organization_members_org_user_uidx").on(table.organizationId, table.userId),
+    index("organization_members_user_org_idx").on(table.userId, table.organizationId),
+    index("organization_members_org_role_idx").on(table.organizationId, table.role),
+  ],
+);
 
 export const platformAdmins = pgTable("platform_admins", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -38,76 +47,102 @@ export const platformAdmins = pgTable("platform_admins", {
   revokedAt: timestamp("revoked_at", { withTimezone: true }),
 });
 
-export const invitations = pgTable("invitations", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  organizationId: uuid("organization_id")
-    .references(() => organizations.id)
-    .notNull(),
-  email: text("email").notNull(),
-  role: text("role").notNull().default("BARBER"),
-  token: uuid("token").defaultRandom().notNull(),
-  status: text("status").notNull().default("PENDING"), // PENDING, ACCEPTED
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-});
+export const invitations = pgTable(
+  "invitations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .references(() => organizations.id)
+      .notNull(),
+    email: text("email").notNull(),
+    role: text("role").notNull().default("BARBER"),
+    token: uuid("token").defaultRandom().notNull(),
+    status: text("status").notNull().default("PENDING"), // PENDING, ACCEPTED
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("invitations_token_uidx").on(table.token),
+    index("invitations_org_status_idx").on(table.organizationId, table.status),
+  ],
+);
 
 // ----------------------------------------------------------------------
 // 2. CATÁLOGO E INTELIGENCIA DE INVENTARIO
 // ----------------------------------------------------------------------
-export const services = pgTable("services", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  organizationId: uuid("organization_id")
-    .references(() => organizations.id)
-    .notNull(),
-  name: text("name").notNull(),
-  description: text("description"),
-  durationMinutes: integer("duration_minutes").notNull().default(30),
-  price: numeric("price", { precision: 10, scale: 2 }).notNull(),
-  isActive: boolean("is_active").default(true).notNull(),
-});
+export const services = pgTable(
+  "services",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .references(() => organizations.id)
+      .notNull(),
+    name: text("name").notNull(),
+    description: text("description"),
+    durationMinutes: integer("duration_minutes").notNull().default(30),
+    price: numeric("price", { precision: 10, scale: 2 }).notNull(),
+    isActive: boolean("is_active").default(true).notNull(),
+  },
+  (table) => [index("services_org_idx").on(table.organizationId)],
+);
 
-export const products = pgTable("products", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  organizationId: uuid("organization_id")
-    .references(() => organizations.id)
-    .notNull(),
-  name: text("name").notNull(),
-  description: text("description"),
-  category: text("category").notNull(), // VENTA, CONSUMO
-  currentStock: numeric("current_stock", { precision: 10, scale: 2 }).notNull().default("0"),
-  minimumStock: numeric("minimum_stock", { precision: 10, scale: 2 }).notNull().default("0"),
-  salePrice: numeric("sale_price", { precision: 10, scale: 2 }),
-  costPrice: numeric("cost_price", { precision: 10, scale: 2 }),
-  isActive: boolean("is_active").default(true).notNull(),
-});
+export const products = pgTable(
+  "products",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .references(() => organizations.id)
+      .notNull(),
+    name: text("name").notNull(),
+    description: text("description"),
+    category: text("category").notNull(), // VENTA, CONSUMO
+    currentStock: numeric("current_stock", { precision: 12, scale: 4 }).notNull().default("0"),
+    minimumStock: numeric("minimum_stock", { precision: 12, scale: 4 }).notNull().default("0"),
+    salePrice: numeric("sale_price", { precision: 10, scale: 2 }),
+    costPrice: numeric("cost_price", { precision: 10, scale: 2 }),
+    isActive: boolean("is_active").default(true).notNull(),
+  },
+  (table) => [index("products_org_idx").on(table.organizationId)],
+);
 
-export const serviceMaterials = pgTable("service_materials", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  serviceId: uuid("service_id")
-    .references(() => services.id)
-    .notNull(),
-  productId: uuid("product_id")
-    .references(() => products.id)
-    .notNull(),
-  quantityUsed: numeric("quantity_used", { precision: 10, scale: 4 }).notNull(),
-});
+export const serviceMaterials = pgTable(
+  "service_materials",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    serviceId: uuid("service_id")
+      .references(() => services.id)
+      .notNull(),
+    productId: uuid("product_id")
+      .references(() => products.id)
+      .notNull(),
+    quantityUsed: numeric("quantity_used", { precision: 10, scale: 4 }).notNull(),
+  },
+  (table) => [
+    uniqueIndex("service_materials_service_product_uidx").on(table.serviceId, table.productId),
+    index("service_materials_product_idx").on(table.productId),
+  ],
+);
 
 // ----------------------------------------------------------------------
 // 3. OPERACIÓN DIARIA
 // ----------------------------------------------------------------------
-export const clients = pgTable("clients", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  organizationId: uuid("organization_id")
-    .references(() => organizations.id)
-    .notNull(),
-  firstName: text("first_name").notNull(),
-  lastName: text("last_name"),
-  phone: text("phone"),
-  email: text("email"),
-  notes: text("notes"),
-  totalSpent: numeric("total_spent", { precision: 10, scale: 2 }).default("0"),
-  lastVisit: timestamp("last_visit", { withTimezone: true }),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-});
+export const clients = pgTable(
+  "clients",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .references(() => organizations.id)
+      .notNull(),
+    firstName: text("first_name").notNull(),
+    lastName: text("last_name"),
+    phone: text("phone"),
+    email: text("email"),
+    notes: text("notes"),
+    totalSpent: numeric("total_spent", { precision: 10, scale: 2 }).default("0"),
+    lastVisit: timestamp("last_visit", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [index("clients_org_idx").on(table.organizationId)],
+);
 
 export const appointments = pgTable(
   "appointments",
@@ -131,7 +166,12 @@ export const appointments = pgTable(
     notes: text("notes"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
-  (table) => [index("appointments_org_start_idx").on(table.organizationId, table.startTime)],
+  (table) => [
+    index("appointments_org_start_idx").on(table.organizationId, table.startTime),
+    index("appointments_client_idx").on(table.clientId),
+    index("appointments_staff_idx").on(table.staffId),
+    index("appointments_service_idx").on(table.serviceId),
+  ],
 );
 
 // ----------------------------------------------------------------------
@@ -154,7 +194,16 @@ export const transactions = pgTable(
     notes: text("notes"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
-  (table) => [index("transactions_org_created_idx").on(table.organizationId, table.createdAt)],
+  (table) => [
+    index("transactions_org_created_idx").on(table.organizationId, table.createdAt),
+    index("transactions_client_idx").on(table.clientId),
+    index("transactions_staff_idx").on(table.staffId),
+    index("transactions_org_status_created_idx").on(
+      table.organizationId,
+      table.status,
+      table.createdAt,
+    ),
+  ],
 );
 
 export const transactionItems = pgTable(
@@ -193,36 +242,50 @@ export const transactionPayments = pgTable(
   ],
 );
 
-export const inventoryMovements = pgTable("inventory_movements", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  organizationId: uuid("organization_id")
-    .references(() => organizations.id, { onDelete: "cascade" })
-    .notNull(),
-  productId: uuid("product_id")
-    .references(() => products.id, { onDelete: "cascade" })
-    .notNull(),
-  type: varchar("type", { length: 20 }).notNull(), // IN, OUT
-  quantity: integer("quantity").notNull(),
-  previousStock: integer("previous_stock").notNull(),
-  newStock: integer("new_stock").notNull(),
-  notes: text("notes"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+export const inventoryMovements = pgTable(
+  "inventory_movements",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id")
+      .references(() => organizations.id, { onDelete: "cascade" })
+      .notNull(),
+    productId: uuid("product_id")
+      .references(() => products.id, { onDelete: "cascade" })
+      .notNull(),
+    type: varchar("type", { length: 20 }).notNull(), // IN, OUT
+    quantity: numeric("quantity", { precision: 12, scale: 4, mode: "number" }).notNull(),
+    previousStock: numeric("previous_stock", { precision: 12, scale: 4, mode: "number" }).notNull(),
+    newStock: numeric("new_stock", { precision: 12, scale: 4, mode: "number" }).notNull(),
+    notes: text("notes"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("inventory_movements_org_product_created_idx").on(
+      table.organizationId,
+      table.productId,
+      table.createdAt,
+    ),
+  ],
+);
 
 // ----------------------------------------------------------------------
 // 5. ANALÍTICA E HISTÓRICOS
 // ----------------------------------------------------------------------
-export const dailySummaries = pgTable("daily_summaries", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  organizationId: uuid("organization_id")
-    .references(() => organizations.id)
-    .notNull(),
-  date: timestamp("date", { withTimezone: false }).notNull(),
-  totalRevenue: numeric("total_revenue", { precision: 10, scale: 2 }).default("0"),
-  appointmentsCount: integer("appointments_count").default(0),
-  newClientsCount: integer("new_clients_count").default(0),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-});
+export const dailySummaries = pgTable(
+  "daily_summaries",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .references(() => organizations.id)
+      .notNull(),
+    date: timestamp("date", { withTimezone: false }).notNull(),
+    totalRevenue: numeric("total_revenue", { precision: 10, scale: 2 }).default("0"),
+    appointmentsCount: integer("appointments_count").default(0),
+    newClientsCount: integer("new_clients_count").default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [uniqueIndex("daily_summaries_org_date_uidx").on(table.organizationId, table.date)],
+);
 
 export const auditLogs = pgTable(
   "audit_logs",
@@ -240,19 +303,30 @@ export const auditLogs = pgTable(
   },
   (table) => [
     index("audit_logs_entity_idx").on(table.organizationId, table.entityType, table.entityId),
+    index("audit_logs_org_created_idx").on(table.organizationId, table.createdAt),
   ],
 );
 
 // ----------------------------------------------------------------------
 // 6. CHAT Y MEMORIA DE IA
 // ----------------------------------------------------------------------
-export const chatMessages = pgTable("chat_messages", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  organizationId: uuid("organization_id")
-    .references(() => organizations.id)
-    .notNull(),
-  telegramUserId: text("telegram_user_id").notNull(),
-  role: text("role").notNull(), // 'user' o 'assistant'
-  content: text("content").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-});
+export const chatMessages = pgTable(
+  "chat_messages",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .references(() => organizations.id)
+      .notNull(),
+    telegramUserId: text("telegram_user_id").notNull(),
+    role: text("role").notNull(), // 'user' o 'assistant'
+    content: text("content").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("chat_messages_org_user_created_idx").on(
+      table.organizationId,
+      table.telegramUserId,
+      table.createdAt,
+    ),
+  ],
+);

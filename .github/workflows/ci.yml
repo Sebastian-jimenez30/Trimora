@@ -173,6 +173,30 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  database-tests:
+    name: Migraciones, RLS e integridad PostgreSQL
+    needs: detect-impact
+    if: needs.detect-impact.outputs.needs_database == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: 2.101.0
+
+      - name: Iniciar PostgreSQL y servicios locales
+        run: supabase start
+
+      - name: Reconstruir una base vacía desde migraciones
+        run: supabase db reset --local
+
+      - name: Ejecutar pruebas pgTAP de RLS e integridad
+        run: supabase test db
+
   build:
     name: Build de producción
     needs:
