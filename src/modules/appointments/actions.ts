@@ -3,7 +3,13 @@ import "server-only";
 import { db } from "@/core/database/db";
 import { appointments, clients, services, organizationMembers } from "@/core/database/schema";
 import { eq, ilike, and } from "drizzle-orm";
-import { getErrorMessage } from "@/core/errors";
+
+function getExternalAppointmentError(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message.startsWith("No pude encontrar un servicio")) {
+    return error.message;
+  }
+  return fallback;
+}
 
 export async function createAppointmentFromAI({
   organizationId,
@@ -67,6 +73,12 @@ export async function createAppointmentFromAI({
 
     // 4. Calculate times
     const startTime = new Date(date);
+    if (Number.isNaN(startTime.getTime())) {
+      return {
+        success: false,
+        message: "La fecha y hora de la cita no son validas.",
+      };
+    }
     const endTime = new Date(startTime.getTime() + matchedService.durationMinutes * 60000);
 
     // 5. Insert appointment
@@ -93,10 +105,10 @@ export async function createAppointmentFromAI({
       message: `Cita creada exitosamente para ${customerName} el ${startTime.toLocaleString()} para el servicio ${matchedService.name}.`,
     };
   } catch (error: unknown) {
-    console.error("Error creating AI appointment:", error);
+    console.error("AI appointment creation failed", { code: "APPOINTMENT_CREATE_FAILED" });
     return {
       success: false,
-      message: getErrorMessage(
+      message: getExternalAppointmentError(
         error,
         "Ocurrió un error inesperado al guardar la cita en la base de datos.",
       ),

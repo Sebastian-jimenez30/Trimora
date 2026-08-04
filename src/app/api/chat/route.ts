@@ -3,6 +3,7 @@ import { generateText, isStepCount, type AssistantContent, type ModelMessage } f
 import { openai } from "@ai-sdk/openai";
 import { db } from "@/core/database/db";
 import { chatMessages, services } from "@/core/database/schema";
+import { ADMIN_AI_CAPABILITIES, CUSTOMER_AI_CAPABILITIES } from "@/modules/ai/capabilities";
 import { getAiTools } from "@/modules/ai/tools";
 import { AuthorizationError, requireActor } from "@/core/auth/server/actor";
 import { eq, and, desc } from "drizzle-orm";
@@ -51,11 +52,16 @@ export async function POST(req: Request) {
         ? orgServices.map((s) => `- ${s.name} ($${s.price})`).join("\n")
         : "No hay servicios registrados actualmente.";
 
+    const roleCapabilities = isAdmin
+      ? "La lista de capacidades operativas aplica a tu rol administrador."
+      : "Solo puedes usar agendar_cita y listar_servicios; no tienes herramientas administrativas.";
+
     const systemPrompt = `Eres el asistente inteligente oficial de "${orgName}" en la plataforma Trimora. Eres amable, profesional, conciso y usas emojis moderadamente.
 Estás hablando con ${fromName} (${isAdmin ? "Administrador" : "Barbero/Personal"}).
 
 CATÁLOGO DE SERVICIOS Y PRECIOS DE ${orgName.toUpperCase()}:
 ${servicesListText}
+${roleCapabilities}
 
 CAPACIDADES Y ROLES:
 - Si el usuario te pide agendar una cita o preguntar sobre servicios, ayúdalo usando las herramientas 'agendar_cita' o 'listar_servicios'.
@@ -77,7 +83,7 @@ CAPACIDADES Y ROLES:
       organizationId,
       telegramUserId: chatKey,
       fromName,
-      isAdmin,
+      capabilities: isAdmin ? ADMIN_AI_CAPABILITIES : CUSTOMER_AI_CAPABILITIES,
     });
 
     // --- GUARDAR MENSAJE DEL USUARIO ---

@@ -1,6 +1,6 @@
 BEGIN;
 
-SELECT plan(20);
+SELECT plan(25);
 
 INSERT INTO auth.users (id, email, aud, role)
 VALUES ('11000000-0000-0000-0000-000000000001', 'integrity@trimora.test', 'authenticated', 'authenticated');
@@ -171,6 +171,51 @@ SELECT throws_ok(
   $$ INSERT INTO public.chat_messages (organization_id, telegram_user_id, role, content)
      VALUES ('21000000-0000-0000-0000-000000000001', 'web_x', 'system', 'Inválido') $$,
   '23514', NULL, 'el chat rechaza roles no soportados'
+);
+
+SELECT lives_ok(
+  $$ INSERT INTO public.webhook_events (
+       organization_id, provider, external_event_id, payload_hash
+     ) VALUES (
+       '21000000-0000-0000-0000-000000000001', 'KAPSO', 'delivery-1',
+       'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+     ) $$,
+  'un evento externo valido puede reclamarse'
+);
+SELECT throws_ok(
+  $$ INSERT INTO public.webhook_events (
+       organization_id, provider, external_event_id, payload_hash
+     ) VALUES (
+       '21000000-0000-0000-0000-000000000001', 'KAPSO', 'delivery-1',
+       'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
+     ) $$,
+  '23505', NULL, 'un evento repetido no puede reclamarse dos veces'
+);
+SELECT throws_ok(
+  $$ INSERT INTO public.webhook_events (
+       organization_id, provider, external_event_id, payload_hash
+     ) VALUES (
+       '21000000-0000-0000-0000-000000000001', 'UNKNOWN', 'delivery-2',
+       'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+     ) $$,
+  '23514', NULL, 'los eventos rechazan proveedores desconocidos'
+);
+SELECT throws_ok(
+  $$ INSERT INTO public.webhook_events (
+       organization_id, provider, external_event_id, payload_hash
+     ) VALUES (
+       '21000000-0000-0000-0000-000000000001', 'TELEGRAM', 'update-1', 'raw-payload'
+     ) $$,
+  '23514', NULL, 'la trazabilidad solo admite una huella SHA256 y no un payload'
+);
+SELECT throws_ok(
+  $$ INSERT INTO public.webhook_events (
+       organization_id, provider, external_event_id, payload_hash, status
+     ) VALUES (
+       '21000000-0000-0000-0000-000000000001', 'TELEGRAM', 'update-2',
+       'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'FAILED'
+     ) $$,
+  '23514', NULL, 'un evento fallido exige cierre y codigo de fallo'
 );
 
 SELECT * FROM finish();

@@ -1,270 +1,163 @@
-import { NextResponse } from 'next/server';
-import { generateText } from 'ai';
-import { createOpenAI, openai } from '@ai-sdk/openai';
-import { z } from 'zod';
-import { db } from '@/core/database/db';
-import { chatMessages } from '@/core/database/schema';
-import { getAiTools } from '@/modules/ai/tools';
+import { generateText, isStepCount, type ModelMessage } from "ai";
+import { openai } from "@ai-sdk/openai";
+import { and, desc, eq } from "drizzle-orm";
+import { db } from "@/core/database/db";
+import { chatMessages, services } from "@/core/database/schema";
+import { CUSTOMER_AI_CAPABILITIES } from "@/modules/ai/capabilities";
+import { getAiTools } from "@/modules/ai/tools";
+import { parseTelegramUpdate } from "@/modules/ai/webhooks/contracts";
+import {
+  getTelegramConfig,
+  hashWebhookPayload,
+  parseJsonBody,
+  readWebhookBody,
+  verifyTelegramSecret,
+  WebhookHttpError,
+} from "@/modules/ai/webhooks/security";
+import { webhookErrorResponse, webhookSuccess } from "@/modules/ai/webhooks/responses";
+import { processWebhookOnce } from "@/modules/ai/webhooks/processor";
+import { enforceWebhookRateLimit, persistentWebhookEventStore } from "@/modules/ai/webhooks/store";
 
-const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+export const maxDuration = 10;
 
-// Configuración de OpenAI (por defecto usa process.env.OPENAI_API_KEY)
-// Configuración de NVIDIA
-const nvidia = createOpenAI({
-  baseURL: 'https://integrate.api.nvidia.com/v1',
-  apiKey: process.env.NVIDIA_API_KEY,
-});
-
-// Función auxiliar para enviar un mensaje usando la API directa de Telegram
-async function sendTelegramMessage(chatId: string | number, text: string) {
-  if (!TELEGRAM_BOT_TOKEN) {
-    console.error("TELEGRAM_BOT_TOKEN is not configured.");
-    return;
-  }
-  
-  const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
-  
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      chat_id: chatId,
-      text: text,
-    })
-  });
-  
-  if (!response.ok) {
-    console.error("Failed to send Telegram message:", await response.text());
+function readableStoredMessage(content: string) {
+  try {
+    const parsed = JSON.parse(content) as { text?: unknown };
+    return typeof parsed.text === "string" ? parsed.text : null;
+  } catch {
+    return content;
   }
 }
 
-export async function POST(req: Request) {
+function buildFinalResponse(result: {
+  text: string;
+  toolResults: ReadonlyArray<{ output: unknown }>;
+}) {
+  const text = result.text.replace(/<think>[\s\S]*?<\/think>/giu, "").trim();
+  const toolOutput = result.toolResults
+    .map((toolResult) =>
+      typeof toolResult.output === "string" ? toolResult.output : JSON.stringify(toolResult.output),
+    )
+    .filter(Boolean)
+    .join("\n\n");
+
+  if (text && toolOutput) return `${text}\n\n${toolOutput}`;
+  return text || toolOutput || "Listo, procese tu solicitud correctamente.";
+}
+
+async function sendTelegramMessage(
+  botToken: string,
+  chatId: string,
+  text: string,
+  signal: AbortSignal,
+) {
+  const response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ chat_id: chatId, text }),
+    signal,
+  });
+
+  if (!response.ok) throw new Error("TELEGRAM_SEND_FAILED");
+}
+
+export async function POST(request: Request) {
   try {
-    const body = await req.json();
-    console.log("Telegram Webhook Payload:", JSON.stringify(body, null, 2));
-    
-    // Si no es un mensaje normal de texto, ignoramos
-    if (!body.message || !body.message.text) {
-      return NextResponse.json({ success: true });
-    }
-    
-    const message = body.message.text;
-    const chatId = body.message.chat.id;
-    const fromName = body.message.from?.first_name || body.message.from?.username || "Usuario";
-    const telegramUserId = body.message.from?.id?.toString() || chatId.toString();
-
-    // Obtener la primera organización (Para nuestra prueba single-tenant)
-    const org = await db.query.organizations.findFirst();
-    if (!org) {
-      throw new Error("No organization found");
+    const config = getTelegramConfig();
+    if (
+      !verifyTelegramSecret(
+        request.headers.get("x-telegram-bot-api-secret-token"),
+        config.webhookSecret,
+      )
+    ) {
+      throw new WebhookHttpError(401, "INVALID_SIGNATURE");
     }
 
-    // Obtener los servicios activos de la organización
-    const orgServices = await db.query.services.findMany({
-      where: (services, { eq, and }) => and(eq(services.organizationId, org.id), eq(services.isActive, true))
-    });
-    
-    const servicesListText = orgServices.length > 0 
-      ? orgServices.map(s => `- ${s.name} ($${s.price})`).join('\n')
-      : "No hay servicios disponibles en este momento.";
+    const rawBody = await readWebhookBody(request);
+    const update = parseTelegramUpdate(parseJsonBody(rawBody));
+    if (!update) return webhookSuccess("ignored");
 
-    const systemPrompt = `Eres el asistente inteligente de Trimora, una barbería moderna. Eres amable, conciso y usas emojis moderadamente.
-El usuario con el que hablas se llama ${fromName}.
-
-CATÁLOGO DE SERVICIOS Y PRECIOS:
-${servicesListText}
-
-ROLES Y CAPACIDADES:
-- Si el usuario te pide agendar una cita o preguntar sobre servicios, ayúdalo usando las herramientas 'agendar_cita' o 'listar_servicios'.
-- Tienes acceso directo a la base de datos de Trimora. Eres capaz de:
-  * Ver productos/inventario → 'consultar_productos'
-  * Ver clientes → 'consultar_clientes'
-  * Ver historial de transacciones → 'consultar_transacciones'
-  * Ver agenda de citas → 'consultar_citas' o 'consultar_agenda_hoy'
-  * Ver finanzas del día → 'consultar_finanzas_hoy'
-  * Registrar transacciones → 'registrar_transaccion_caja'
-  * Crear productos/servicios → 'crear_producto', 'crear_servicio'
-- SIEMPRE que te pidan registrar o consultar algo (agenda, caja, productos, ingresos, clientes), **USA TUS HERRAMIENTAS**. No digas que no puedes, tienes permisos para hacerlo.
-- Usa los precios del CATÁLOGO para saber cuánto registrar en ingresos si te mencionan un servicio.
-- IMPORTANTE: Hoy es ${new Date().toLocaleString("es-CO", { timeZone: "America/Bogota" })} (Zona horaria GMT-5).
-- REGLA ESTRICTA: NUNCA inventes o simules en texto que "agendaste una cita" o "creaste un servicio" o "registraste algo". DEBES obligatoriamente usar la herramienta correspondiente. Si no usas la herramienta, la base de datos no se actualiza.
-`;
-
-    // Verifica si el usuario es el administrador (ID de prueba)
-    const isAdmin = true; // temporalmente true para que cualquiera pueda usarlo (antes: telegramUserId === '5190604908') 
-
-    const tools = getAiTools({
-      organizationId: org.id,
-      telegramUserId,
-      fromName,
-      isAdmin
-    });
-
-    // --- MANEJO DE MEMORIA ---
-    // Guardar el mensaje del usuario
-    await db.insert(chatMessages).values({
-      organizationId: org.id,
-      telegramUserId,
-      role: 'user',
-      content: message,
-    });
-
-    // Recuperar últimos 10 mensajes
-    const history = await db.query.chatMessages.findMany({
-      where: (msgs, { eq, and }) => and(
-        eq(msgs.organizationId, org.id), 
-        eq(msgs.telegramUserId, telegramUserId)
-      ),
-      orderBy: (msgs, { desc }) => [desc(msgs.createdAt)],
-      limit: 10
-    });
-    
-    // Order chronological
-    const chronologicalHistory = history.reverse();
-    const coreMessages: any[] = [];
-    for (const m of chronologicalHistory) {
-      if (m.role === 'assistant') {
-        try {
-          const parsed = JSON.parse(m.content);
-          if (parsed.type === 'tool-response') {
-             const assistantContent: any[] = [];
-             if (parsed.text) {
-                assistantContent.push({ type: 'text', text: parsed.text });
-             }
-             if (parsed.toolCalls && parsed.toolCalls.length > 0) {
-                 parsed.toolCalls.forEach((tc: any) => {
-                     assistantContent.push({ type: 'tool-call', toolCallId: tc.toolCallId, toolName: tc.toolName, input: tc.input ?? tc.args ?? {} });
-                 });
-             }
-             
-             if (assistantContent.length > 0) {
-                 coreMessages.push({ role: 'assistant', content: assistantContent });
-             }
-
-             if (parsed.toolCalls && parsed.toolCalls.length > 0) {
-                 if (parsed.toolResults && parsed.toolResults.length > 0) {
-                     coreMessages.push({
-                       role: 'tool',
-                       content: parsed.toolResults.map((tr: any) => ({
-                         type: 'tool-result',
-                         toolCallId: tr.toolCallId,
-                         toolName: tr.toolName,
-                         output: { type: 'json', value: { result: tr.result || 'Executed' } }
-                       }))
-                     });
-                 } else {
-                     coreMessages.push({
-                       role: 'tool',
-                       content: parsed.toolCalls.map((tc: any) => ({
-                         type: 'tool-result',
-                         toolCallId: tc.toolCallId,
-                         toolName: tc.toolName,
-                         output: { type: 'json', value: { result: 'Executed' } }
-                       }))
-                     });
-                 }
-             }
-             continue;
-          }
-          // Si el content parseado es un array (mensaje corrupto/alucinado), lo omitimos
-          if (Array.isArray(parsed)) {
-            continue;
-          }
-        } catch (e) {
-          // No es JSON, continuar normalmente
-        }
-      }
-      // Saltar mensajes cuyo content es un array JSON serializado (alucinados)
-      if (typeof m.content === 'string') {
-        try {
-          const maybeArray = JSON.parse(m.content);
-          if (Array.isArray(maybeArray)) continue;
-        } catch (_) {}
-      }
-      coreMessages.push({ role: m.role as 'user' | 'assistant', content: m.content });
-    }
-
-    // Inicializar el modelo OpenAI principal (o4-mini)
-    const openaiModel = openai('o4-mini');
-
-    let result;
-    try {
-      result = await generateText({
-        model: openaiModel,
-        system: systemPrompt,
-        messages: coreMessages,
-        tools: tools,
-      });
-    } catch (error) {
-      console.error("Error from OpenAI (o4-mini)...", error);
-      throw error;
-    }
-
-    let finalResponse = "";
-    let textPart = "";
-    if (!result) {
-      finalResponse = "Lo siento, nuestros servidores están muy ocupados o en mantenimiento en este momento. Por favor, intenta de nuevo en unos minutos. 🙏";
-    } else {
-      textPart = result.text || "";
-      // Limpiar etiquetas <think>...</think> si el modelo las incluye
-      textPart = textPart.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
-      
-      let toolsPart = "";
-      if (result.toolResults && result.toolResults.length > 0) {
-        toolsPart = result.toolResults
-          .map(t => {
-            const resMsg = (t as any).result || (t as any).output;
-            return typeof resMsg === 'string' ? resMsg : JSON.stringify(resMsg);
-          })
-          .filter(Boolean)
-          .join('\n\n');
-      }
-
-      if (textPart && toolsPart) {
-        finalResponse = `${textPart}\n\n${toolsPart}`;
-      } else if (textPart) {
-        finalResponse = textPart;
-      } else if (toolsPart) {
-        finalResponse = toolsPart;
-      } else if (result.toolCalls && result.toolCalls.length > 0) {
-        finalResponse = "He ejecutado la herramienta correctamente.";
-      } else {
-        finalResponse = "Listo, he ejecutado la acción correctamente en el sistema.";
-      }
-    }
-
-    if (finalResponse) {
-      await sendTelegramMessage(chatId, finalResponse);
-      
-      let dbContent = finalResponse;
-      if (result && result.toolCalls && result.toolCalls.length > 0) {
-        dbContent = JSON.stringify({
-          type: "tool-response",
-          text: textPart,
-          // Normalize: always save as 'input' (AI SDK v7 field name)
-          toolCalls: result.toolCalls.map((tc: any) => ({
-            toolCallId: tc.toolCallId,
-            toolName: tc.toolName,
-            input: tc.input ?? tc.args ?? {},
-          })),
-          toolResults: result.toolResults
+    await enforceWebhookRateLimit(config.organizationId, "TELEGRAM");
+    const processing = await processWebhookOnce(
+      {
+        organizationId: config.organizationId,
+        provider: "TELEGRAM",
+        externalEventId: update.updateId,
+        payloadHash: hashWebhookPayload(rawBody),
+      },
+      async () => {
+        const signal = AbortSignal.timeout(8_000);
+        const organizationServices = await db.query.services.findMany({
+          where: and(
+            eq(services.organizationId, config.organizationId),
+            eq(services.isActive, true),
+          ),
         });
-      }
+        const serviceLines = organizationServices.map((service) => {
+          return `- ${service.name} ($${service.price})`;
+        });
+        const servicesList = serviceLines.join("\n") || "No hay servicios disponibles.";
 
-      // Guardar la respuesta del bot
-      await db.insert(chatMessages).values({
-        organizationId: org.id,
-        telegramUserId,
-        role: 'assistant',
-        content: dbContent,
-      });
-    }
-    
-    return NextResponse.json({ success: true });
-  } catch (error) {
-    console.error("Webhook error:", error);
-    return NextResponse.json({ success: false, error: "Internal Server Error" }, { status: 200 });
+        await db.insert(chatMessages).values({
+          organizationId: config.organizationId,
+          telegramUserId: update.senderId,
+          role: "user",
+          content: update.text,
+        });
+
+        const storedHistory = await db.query.chatMessages.findMany({
+          where: and(
+            eq(chatMessages.organizationId, config.organizationId),
+            eq(chatMessages.telegramUserId, update.senderId),
+          ),
+          orderBy: [desc(chatMessages.createdAt)],
+          limit: 10,
+        });
+        const messages: ModelMessage[] = [];
+        for (const storedMessage of storedHistory.reverse()) {
+          const content = readableStoredMessage(storedMessage.content);
+          if (!content) continue;
+          messages.push({
+            role: storedMessage.role === "assistant" ? "assistant" : "user",
+            content,
+          });
+        }
+
+        const result = await generateText({
+          model: openai("o4-mini"),
+          system: `Eres el recepcionista virtual de Trimora. Atiendes a ${update.senderName} de forma amable y concisa.
+Solo puedes consultar el catalogo y agendar citas; no tienes acceso a caja, finanzas, inventario, clientes ni administracion.
+
+SERVICIOS DISPONIBLES:
+${servicesList}
+
+Usa agendar_cita o listar_servicios cuando corresponda. Nunca afirmes que agendaste algo sin ejecutar la herramienta.
+Hoy es ${new Date().toLocaleString("es-CO", { timeZone: "America/Bogota" })}.`,
+          messages,
+          tools: getAiTools({
+            organizationId: config.organizationId,
+            telegramUserId: update.senderId,
+            fromName: update.senderName,
+            capabilities: CUSTOMER_AI_CAPABILITIES,
+          }),
+          stopWhen: isStepCount(5),
+          abortSignal: signal,
+        });
+        const responseText = buildFinalResponse(result);
+
+        await sendTelegramMessage(config.botToken, update.chatId, responseText, signal);
+        await db.insert(chatMessages).values({
+          organizationId: config.organizationId,
+          telegramUserId: update.senderId,
+          role: "assistant",
+          content: responseText,
+        });
+      },
+      persistentWebhookEventStore,
+    );
+
+    return webhookSuccess(processing.duplicate ? "duplicate" : "processed");
+  } catch (error: unknown) {
+    return webhookErrorResponse(error, "telegram");
   }
 }

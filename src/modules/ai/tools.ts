@@ -1,6 +1,6 @@
 import "server-only";
 
-import { tool } from "ai";
+import { tool, type ToolSet } from "ai";
 import { z } from "zod";
 import { db } from "@/core/database/db";
 import {
@@ -16,6 +16,11 @@ import { eq, ilike, and, gte, lte } from "drizzle-orm";
 import { createAppointmentFromAI } from "@/modules/appointments/actions";
 import { revalidatePath } from "next/cache";
 import { getErrorMessage } from "@/core/errors";
+import {
+  AI_TOOL_CAPABILITY_BY_NAME,
+  hasAiCapability,
+  type AiCapability,
+} from "@/modules/ai/capabilities";
 
 // Helpers para fechas (Zona Horaria Bogotá/Lima/Quito -05:00)
 function getTodayRange() {
@@ -37,7 +42,7 @@ export function getAiTools(context: {
   organizationId: string;
   telegramUserId: string;
   fromName: string;
-  isAdmin: boolean;
+  capabilities: readonly AiCapability[];
 }) {
   const tools = {
     // 1. AGENDAR CITA (Público)
@@ -70,9 +75,9 @@ export function getAiTools(context: {
           });
           revalidatePath("/", "layout");
           return res.message;
-        } catch (error: unknown) {
-          console.error("Error agendando cita", error);
-          return `Hubo un error agendando la cita: ${getErrorMessage(error)}`;
+        } catch {
+          console.error("AI tool failed", { code: "APPOINTMENT_TOOL_FAILED" });
+          return "Hubo un error agendando la cita. Intenta nuevamente.";
         }
       },
     }),
@@ -94,7 +99,7 @@ export function getAiTools(context: {
     }),
 
     // -------------------------------------------------------------
-    // HERRAMIENTAS DE ADMINISTRADOR (Requieren isAdmin = true)
+    // HERRAMIENTAS DE ADMINISTRADOR (requieren capacidades explicitas)
     // -------------------------------------------------------------
 
     // 3. CONSULTAR AGENDA HOY (Admin)
@@ -102,7 +107,7 @@ export function getAiTools(context: {
       description: "ADMIN: Consulta la agenda y las citas programadas para el día de hoy.",
       inputSchema: z.object({}),
       execute: async () => {
-        if (!context.isAdmin)
+        if (!hasAiCapability(context.capabilities, "AGENDA_READ"))
           return "Acceso denegado: Esta acción solo está permitida para administradores.";
         const { start, end } = getTodayRange();
 
@@ -152,7 +157,8 @@ export function getAiTools(context: {
           ),
       }),
       execute: async (args) => {
-        if (!context.isAdmin) return "Acceso denegado: Solo administradores pueden ver finanzas.";
+        if (!hasAiCapability(context.capabilities, "FINANCE_READ"))
+          return "Acceso denegado: Solo administradores pueden ver finanzas.";
 
         let start: Date;
         let end: Date;
@@ -246,7 +252,7 @@ export function getAiTools(context: {
         description: z.string().describe("Breve descripción de lo que se está registrando."),
       }),
       execute: async (args) => {
-        if (!context.isAdmin)
+        if (!hasAiCapability(context.capabilities, "FINANCE_WRITE"))
           return "Acceso denegado: Solo administradores pueden alterar la caja.";
 
         try {
@@ -284,7 +290,7 @@ export function getAiTools(context: {
         clienteNombre: z.string().optional().describe("Nombre del cliente si se menciona."),
       }),
       execute: async (args) => {
-        if (!context.isAdmin) return "Acceso denegado.";
+        if (!hasAiCapability(context.capabilities, "FINANCE_WRITE")) return "Acceso denegado.";
         try {
           // 1. Buscar el producto por nombre
           const found = await db.query.products.findMany({
@@ -401,7 +407,7 @@ export function getAiTools(context: {
         stock: z.number().describe("Cantidad actual en inventario"),
       }),
       execute: async (args) => {
-        if (!context.isAdmin) return "Acceso denegado.";
+        if (!hasAiCapability(context.capabilities, "INVENTORY_WRITE")) return "Acceso denegado.";
         try {
           await db.insert(products).values({
             organizationId: context.organizationId,
@@ -428,7 +434,7 @@ export function getAiTools(context: {
         durationMinutes: z.number().describe("Duración estimada en minutos (ej. 30, 45, 60)"),
       }),
       execute: async (args) => {
-        if (!context.isAdmin) return "Acceso denegado.";
+        if (!hasAiCapability(context.capabilities, "INVENTORY_WRITE")) return "Acceso denegado.";
         try {
           await db.insert(services).values({
             organizationId: context.organizationId,
@@ -464,7 +470,7 @@ export function getAiTools(context: {
           ),
       }),
       execute: async (args) => {
-        if (!context.isAdmin) return "Acceso denegado.";
+        if (!hasAiCapability(context.capabilities, "INVENTORY_READ")) return "Acceso denegado.";
         const allProducts = await db.query.products.findMany({
           where: args.nombre
             ? and(
@@ -500,7 +506,7 @@ export function getAiTools(context: {
           .describe("Filtrar clientes por nombre (búsqueda parcial). Dejar vacío para ver todos."),
       }),
       execute: async (args) => {
-        if (!context.isAdmin) return "Acceso denegado.";
+        if (!hasAiCapability(context.capabilities, "CLIENTS_READ")) return "Acceso denegado.";
         const allClients = await db.query.clients.findMany({
           where: args.nombre
             ? and(
@@ -532,7 +538,7 @@ export function getAiTools(context: {
           ),
       }),
       execute: async (args) => {
-        if (!context.isAdmin) return "Acceso denegado.";
+        if (!hasAiCapability(context.capabilities, "FINANCE_READ")) return "Acceso denegado.";
         const dias = args.dias ?? 7;
         const desde = new Date();
         desde.setDate(desde.getDate() - dias);
@@ -580,7 +586,7 @@ export function getAiTools(context: {
           ),
       }),
       execute: async (args) => {
-        if (!context.isAdmin) return "Acceso denegado.";
+        if (!hasAiCapability(context.capabilities, "AGENDA_READ")) return "Acceso denegado.";
         const dias = args.dias ?? 1;
         const { start } = getTodayRange();
         const end = new Date(start);
@@ -619,5 +625,15 @@ export function getAiTools(context: {
     }),
   };
 
-  return tools;
+  const requiredCapabilityByTool: Record<keyof typeof tools, AiCapability> =
+    AI_TOOL_CAPABILITY_BY_NAME;
+
+  return Object.fromEntries(
+    Object.entries(tools).filter(([toolName]) =>
+      hasAiCapability(
+        context.capabilities,
+        requiredCapabilityByTool[toolName as keyof typeof requiredCapabilityByTool],
+      ),
+    ),
+  ) as ToolSet;
 }
