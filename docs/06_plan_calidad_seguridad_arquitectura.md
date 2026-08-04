@@ -105,18 +105,18 @@ La selección no se basará únicamente en el nombre del archivo de prueba ni en
 
 Componentes iniciales:
 
-| Componente | Código principal | Dependencias que debe activar |
-|---|---|---|
-| `auth-access` | Auth, miembros, colaboradores, superadmin y proxy | Todos los módulos autenticados y seguridad E2E |
-| `pos-finance` | Caja, ventas, pagos, recibos y movimientos | Clientes, inventario y analítica |
-| `inventory-services` | Productos, stock, consumibles y servicios | POS, agenda y analítica |
-| `agenda-appointments` | Agenda, citas, calendario y horarios | POS y dashboard |
-| `clients` | Clientes, totales y cuentas por cobrar | Agenda, POS y analítica |
-| `analytics` | Métricas, trazabilidad, filtros y exportaciones | Dashboard analítico |
-| `ai-integrations` | Chat, herramientas de IA y webhooks | Contratos externos y módulos que las herramientas pueden modificar |
-| `shared-ui` | Navegación, modales y componentes compartidos | Todas las interfaces consumidoras |
-| `database` | Esquema, migraciones, RLS y conexión | Toda integración de backend y E2E crítico |
-| `tooling` | CI, TypeScript, ESLint, Next, Vitest y scripts de pruebas | Suite completa de calidad |
+| Componente            | Código principal                                          | Dependencias que debe activar                                      |
+| --------------------- | --------------------------------------------------------- | ------------------------------------------------------------------ |
+| `auth-access`         | Auth, miembros, colaboradores, superadmin y proxy         | Todos los módulos autenticados y seguridad E2E                     |
+| `pos-finance`         | Caja, ventas, pagos, recibos y movimientos                | Clientes, inventario y analítica                                   |
+| `inventory-services`  | Productos, stock, consumibles y servicios                 | POS, agenda y analítica                                            |
+| `agenda-appointments` | Agenda, citas, calendario y horarios                      | POS y dashboard                                                    |
+| `clients`             | Clientes, totales y cuentas por cobrar                    | Agenda, POS y analítica                                            |
+| `analytics`           | Métricas, trazabilidad, filtros y exportaciones           | Dashboard analítico                                                |
+| `ai-integrations`     | Chat, herramientas de IA y webhooks                       | Contratos externos y módulos que las herramientas pueden modificar |
+| `shared-ui`           | Navegación, modales y componentes compartidos             | Todas las interfaces consumidoras                                  |
+| `database`            | Esquema, migraciones, RLS y conexión                      | Toda integración de backend y E2E crítico                          |
+| `tooling`             | CI, TypeScript, ESLint, Next, Vitest y scripts de pruebas | Suite completa de calidad                                          |
 
 Reglas de selección:
 
@@ -151,16 +151,16 @@ La línea base podrá ampliarse con hallazgos nuevos, pero no se reducirán los 
 
 ## 4. Pirámide de pruebas objetivo
 
-| Capa | Alcance | Herramienta principal | Objetivo final |
-|---|---|---|---:|
-| Dominio | Dinero, deudas, inventario, agenda, fechas | Vitest en Node | 95% líneas / 90% ramas |
-| Aplicación | Casos de uso, autorización, transacciones | Vitest en Node | 90% líneas / 85% ramas |
-| Componentes | Render, interacción, formularios, accesibilidad | Testing Library | 85% líneas / 80% ramas |
-| Base de datos | Esquema, restricciones, RLS, funciones | Supabase local + pgTAP | Todos los permisos e invariantes |
-| Integración | Casos de uso con PostgreSQL real | Vitest + base efímera | Flujos críticos completos |
-| E2E | Recorridos reales en aplicación compilada | Playwright | Flujos de negocio esenciales |
-| Seguridad | Dependencias, secretos, SAST y abuso | CodeQL y herramientas CI | Cero hallazgos altos o críticos |
-| Resiliencia | Concurrencia, rendimiento y mutación | Pruebas especializadas | Sin corrupción ni regresiones críticas |
+| Capa          | Alcance                                         | Herramienta principal    |                         Objetivo final |
+| ------------- | ----------------------------------------------- | ------------------------ | -------------------------------------: |
+| Dominio       | Dinero, deudas, inventario, agenda, fechas      | Vitest en Node           |                 95% líneas / 90% ramas |
+| Aplicación    | Casos de uso, autorización, transacciones       | Vitest en Node           |                 90% líneas / 85% ramas |
+| Componentes   | Render, interacción, formularios, accesibilidad | Testing Library          |                 85% líneas / 80% ramas |
+| Base de datos | Esquema, restricciones, RLS, funciones          | Supabase local + pgTAP   |       Todos los permisos e invariantes |
+| Integración   | Casos de uso con PostgreSQL real                | Vitest + base efímera    |              Flujos críticos completos |
+| E2E           | Recorridos reales en aplicación compilada       | Playwright               |           Flujos de negocio esenciales |
+| Seguridad     | Dependencias, secretos, SAST y abuso            | CodeQL y herramientas CI |        Cero hallazgos altos o críticos |
+| Resiliencia   | Concurrencia, rendimiento y mutación            | Pruebas especializadas   | Sin corrupción ni regresiones críticas |
 
 Los porcentajes son objetivos finales. La cobertura se incrementará por etapas sin permitir que código nuevo crítico quede sin pruebas.
 
@@ -187,6 +187,8 @@ En PR se medirá la cobertura de cada componente afectado. La cobertura global s
 ### Etapa 01 — Fundaciones de CI y pruebas
 
 **Rama:** `architecture/01-ci-foundation`
+
+**Estado:** Implementada; pendiente de validación por pipeline y aceptación del propietario.
 
 **Cambios previstos:**
 
