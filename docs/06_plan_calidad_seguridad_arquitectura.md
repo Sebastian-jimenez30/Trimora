@@ -223,6 +223,9 @@ En PR se medirá la cobertura de cada componente afectado. La cobertura global s
 
 **Rama:** `architecture/02-server-boundaries`
 
+**Estado:** implementada, pendiente de validación del pipeline y aceptación funcional. La decisión
+y las pruebas manuales están documentadas en `docs/08_fronteras_servidor_autorizacion.md`.
+
 **Cambios previstos:**
 
 - crear `requireActor()` como fuente única de usuario, organización y rol;

@@ -1,4 +1,6 @@
-import sgMail from '@sendgrid/mail';
+import "server-only";
+
+import sgMail from "@sendgrid/mail";
 
 function initSendGrid() {
   if (!process.env.SENDGRID_API_KEY) {
@@ -8,7 +10,7 @@ function initSendGrid() {
   }
 }
 
-const getFromEmail = () => process.env.SENDGRID_FROM_EMAIL || 'support@trimora.com';
+const getFromEmail = () => process.env.SENDGRID_FROM_EMAIL || "support@trimora.com";
 
 export async function sendVerificationCode(email: string, code: string) {
   try {
@@ -16,7 +18,7 @@ export async function sendVerificationCode(email: string, code: string) {
     const msg = {
       to: email,
       from: getFromEmail(),
-      subject: 'Trimora - Código de Verificación de Registro',
+      subject: "Trimora - Código de Verificación de Registro",
       text: `Tu código de verificación es: ${code}`,
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #0f0f0f; color: #ffffff; border-radius: 10px;">
@@ -30,11 +32,11 @@ export async function sendVerificationCode(email: string, code: string) {
         </div>
       `,
     };
-    
+
     await sgMail.send(msg);
     return { success: true };
   } catch (error) {
-    console.error('Error al enviar correo de verificación:', error);
+    console.error("Error al enviar correo de verificación:", error);
     return { success: false, error };
   }
 }
@@ -45,7 +47,7 @@ export async function sendPasswordResetCode(email: string, code: string) {
     const msg = {
       to: email,
       from: getFromEmail(),
-      subject: 'Trimora - Recuperación de Contraseña',
+      subject: "Trimora - Recuperación de Contraseña",
       text: `Tu código de recuperación es: ${code}`,
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #0f0f0f; color: #ffffff; border-radius: 10px;">
@@ -59,27 +61,32 @@ export async function sendPasswordResetCode(email: string, code: string) {
         </div>
       `,
     };
-    
+
     await sgMail.send(msg);
     return { success: true };
   } catch (error) {
-    console.error('Error al enviar correo de recuperación:', error);
+    console.error("Error al enviar correo de recuperación:", error);
     return { success: false, error };
   }
 }
 
-export async function sendInvitationEmail(email: string, orgName: string, role: string, token: string) {
+export async function sendInvitationEmail(
+  email: string,
+  orgName: string,
+  role: string,
+  token: string,
+) {
   try {
     initSendGrid();
-    const inviteUrl = `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/invite?token=${token}`;
-    
+    const inviteUrl = `${process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"}/invite?token=${token}`;
+
     // Diccionario de roles para mostrar en español
     const roleNames: Record<string, string> = {
-      'ADMIN': 'Administrador',
-      'BARBER': 'Barbero',
-      'RECEPTIONIST': 'Recepcionista'
+      ADMIN: "Administrador",
+      BARBER: "Barbero",
+      RECEPTIONIST: "Recepcionista",
     };
-    
+
     const roleDisplay = roleNames[role] || role;
 
     const msg = {
@@ -104,11 +111,11 @@ export async function sendInvitationEmail(email: string, orgName: string, role: 
         </div>
       `,
     };
-    
+
     await sgMail.send(msg);
     return { success: true };
   } catch (error) {
-    console.error('Error al enviar correo de invitación:', error);
+    console.error("Error al enviar correo de invitación:", error);
     return { success: false, error };
   }
 }

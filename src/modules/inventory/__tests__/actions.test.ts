@@ -17,13 +17,11 @@ vi.mock("@/core/database/db", () => ({
   },
 }));
 
-vi.mock("@/core/database/server", () => ({
-  createClient: vi.fn(async () => ({
-    auth: {
-      getUser: vi.fn(async () => ({
-        data: { user: { id: "mock-user-id" } },
-      })),
-    },
+vi.mock("@/core/auth/server/actor", () => ({
+  requireActor: vi.fn(async () => ({
+    userId: "mock-user-id",
+    organizationId: "mock-org-id",
+    role: "ADMIN",
   })),
 }));
 

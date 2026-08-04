@@ -1,16 +1,23 @@
 import { db } from "@/core/database/db";
-import { services, products, clients, organizationMembers, transactions, transactionItems, auditLogs } from "@/core/database/schema";
-import { createClient } from "@/core/database/server";
+import {
+  services,
+  products,
+  clients,
+  organizationMembers,
+  transactions,
+  transactionItems,
+  auditLogs,
+} from "@/core/database/schema";
+import { requireActor } from "@/core/auth/server/actor";
 import { getCashEntries } from "@/modules/pos/cash-flow";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { addDays, format, startOfWeek } from "date-fns";
 import { fromZonedTime, toZonedTime } from "date-fns-tz";
-import { redirect } from "next/navigation";
 import POSManager from "./POSManager";
 
 const TIMEZONE = "America/Bogota";
 const HISTORY_RANGES = ["DAY", "WEEK", "MONTH", "YEAR", "CUSTOM", "HISTORIC"] as const;
-type HistoryRange = typeof HISTORY_RANGES[number];
+type HistoryRange = (typeof HISTORY_RANGES)[number];
 
 type POSPageProps = {
   searchParams: Promise<{
@@ -59,18 +66,12 @@ function getSaleDescriptionFromNote(note: string | null) {
 }
 
 export default async function POSPage({ searchParams }: POSPageProps) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) redirect("/login");
-
-  const orgId = user.user_metadata?.organization_id;
-  if (!orgId) return <div className="p-10 text-white">Error: Sin organización asignada.</div>;
+  const { organizationId: orgId } = await requireActor();
 
   const params = await searchParams;
   const requestedRange = firstParam(params.historyRange);
   const historyRange: HistoryRange = HISTORY_RANGES.includes(requestedRange as HistoryRange)
-    ? requestedRange as HistoryRange
+    ? (requestedRange as HistoryRange)
     : "MONTH";
   const requestedStart = firstParam(params.historyStart);
   const requestedEnd = firstParam(params.historyEnd);
@@ -81,44 +82,71 @@ export default async function POSPage({ searchParams }: POSPageProps) {
   const activeServices = await db.select().from(services).where(eq(services.organizationId, orgId));
   const activeProducts = await db.select().from(products).where(eq(products.organizationId, orgId));
   const orgClients = await db.select().from(clients).where(eq(clients.organizationId, orgId));
-  const staff = await db.select().from(organizationMembers).where(eq(organizationMembers.organizationId, orgId));
+  const staff = await db
+    .select()
+    .from(organizationMembers)
+    .where(eq(organizationMembers.organizationId, orgId));
 
-  const staffFormatted = staff.map(s => ({
+  const staffFormatted = staff.map((s) => ({
     id: s.id,
-    name: `Staff ${s.id.substring(0, 4)} (${s.role})`
+    name: `Staff ${s.id.substring(0, 4)} (${s.role})`,
   }));
 
   const [cashEntries, allPendingTransactions] = await Promise.all([
     getCashEntries(orgId, historyBounds?.start, historyBounds?.end),
-    db.select().from(transactions).where(and(
-      eq(transactions.organizationId, orgId),
-      eq(transactions.type, "INCOME"),
-      eq(transactions.status, "PENDING"),
-    )).orderBy(desc(transactions.createdAt)),
+    db
+      .select()
+      .from(transactions)
+      .where(
+        and(
+          eq(transactions.organizationId, orgId),
+          eq(transactions.type, "INCOME"),
+          eq(transactions.status, "PENDING"),
+        ),
+      )
+      .orderBy(desc(transactions.createdAt)),
   ]);
   const pendingTransactions = historyBounds
-    ? allPendingTransactions.filter(transaction => transaction.createdAt >= historyBounds.start && transaction.createdAt < historyBounds.end)
+    ? allPendingTransactions.filter(
+        (transaction) =>
+          transaction.createdAt >= historyBounds.start && transaction.createdAt < historyBounds.end,
+      )
     : allPendingTransactions;
 
-  const transactionIds = [...new Set([
-    ...cashEntries.map(entry => entry.transactionId),
-    ...allPendingTransactions.map(transaction => transaction.id),
-  ])];
-  const [relatedTransactions, historyItems, historyLogs] = transactionIds.length > 0
-    ? await Promise.all([
-        db.select().from(transactions).where(and(
-          eq(transactions.organizationId, orgId),
-          inArray(transactions.id, transactionIds),
-        )),
-        db.select().from(transactionItems).where(inArray(transactionItems.transactionId, transactionIds)),
-        db.select().from(auditLogs).where(inArray(auditLogs.entityId, transactionIds)),
-      ])
-    : [[], [], []];
+  const transactionIds = [
+    ...new Set([
+      ...cashEntries.map((entry) => entry.transactionId),
+      ...allPendingTransactions.map((transaction) => transaction.id),
+    ]),
+  ];
+  const [relatedTransactions, historyItems, historyLogs] =
+    transactionIds.length > 0
+      ? await Promise.all([
+          db
+            .select()
+            .from(transactions)
+            .where(
+              and(eq(transactions.organizationId, orgId), inArray(transactions.id, transactionIds)),
+            ),
+          db
+            .select()
+            .from(transactionItems)
+            .where(inArray(transactionItems.transactionId, transactionIds)),
+          db
+            .select()
+            .from(auditLogs)
+            .where(
+              and(eq(auditLogs.organizationId, orgId), inArray(auditLogs.entityId, transactionIds)),
+            ),
+        ])
+      : [[], [], []];
 
-  const servicesById = new Map(activeServices.map(service => [service.id, service]));
-  const productsById = new Map(activeProducts.map(product => [product.id, product]));
-  const clientsById = new Map(orgClients.map(client => [client.id, client]));
-  const transactionsById = new Map(relatedTransactions.map(transaction => [transaction.id, transaction]));
+  const servicesById = new Map(activeServices.map((service) => [service.id, service]));
+  const productsById = new Map(activeProducts.map((product) => [product.id, product]));
+  const clientsById = new Map(orgClients.map((client) => [client.id, client]));
+  const transactionsById = new Map(
+    relatedTransactions.map((transaction) => [transaction.id, transaction]),
+  );
   const itemsByTransaction = new Map<string, typeof historyItems>();
   const descriptionsByTransaction = new Map<string, string>();
 
@@ -133,12 +161,11 @@ export default async function POSPage({ searchParams }: POSPageProps) {
     }
   }
 
-  const mapTransactionDetails = (tx: typeof relatedTransactions[number]) => {
+  const mapTransactionDetails = (tx: (typeof relatedTransactions)[number]) => {
     const items = itemsByTransaction.get(tx.id) ?? [];
-    const itemDetails = items.map(item => {
-      const catalogItem = item.itemType === "SERVICE"
-        ? servicesById.get(item.itemId)
-        : productsById.get(item.itemId);
+    const itemDetails = items.map((item) => {
+      const catalogItem =
+        item.itemType === "SERVICE" ? servicesById.get(item.itemId) : productsById.get(item.itemId);
       return {
         name: catalogItem?.name || (item.itemType === "SERVICE" ? "Servicio" : "Producto"),
         quantity: item.quantity,
@@ -151,16 +178,20 @@ export default async function POSPage({ searchParams }: POSPageProps) {
     if (tx.type === "EXPENSE") {
       description = descriptionsByTransaction.get(tx.id) || tx.notes || "Gasto sin descripción";
     } else if (items.length > 0) {
-      description = itemDetails.map(item => {
-        const quantity = Number(item.quantity);
-        return quantity === 1 ? item.name : `${quantity} × ${item.name}`;
-      }).join(", ");
+      description = itemDetails
+        .map((item) => {
+          const quantity = Number(item.quantity);
+          return quantity === 1 ? item.name : `${quantity} × ${item.name}`;
+        })
+        .join(", ");
     } else {
       description = getSaleDescriptionFromNote(tx.notes);
     }
 
     const clientObj = tx.clientId ? clientsById.get(tx.clientId) : null;
-    const clientName = clientObj ? `${clientObj.firstName} ${clientObj.lastName || ""}`.trim() : "Cliente General";
+    const clientName = clientObj
+      ? `${clientObj.firstName} ${clientObj.lastName || ""}`.trim()
+      : "Cliente General";
 
     return {
       description,
@@ -170,29 +201,31 @@ export default async function POSPage({ searchParams }: POSPageProps) {
     };
   };
 
-  const cashHistory = cashEntries.flatMap(entry => {
+  const cashHistory = cashEntries.flatMap((entry) => {
     const tx = transactionsById.get(entry.transactionId);
     if (!tx) return [];
 
-    return [{
-      id: `${entry.source.toLowerCase()}:${entry.id}`,
-      transactionId: tx.id,
-      movementKind: entry.source === "PAYMENT" ? "PAYMENT" : "TRANSACTION",
-      canEdit: entry.source === "TRANSACTION",
-      type: tx.type,
-      totalAmount: entry.amount,
-      originalTotalAmount: tx.totalAmount,
-      paidAmount: tx.paidAmount,
-      status: "COMPLETED",
-      transactionStatus: tx.status,
-      paymentMethod: entry.paymentMethod,
-      clientId: tx.clientId,
-      createdAt: entry.createdAt.toISOString(),
-      ...mapTransactionDetails(tx),
-    }];
+    return [
+      {
+        id: `${entry.source.toLowerCase()}:${entry.id}`,
+        transactionId: tx.id,
+        movementKind: entry.source === "PAYMENT" ? "PAYMENT" : "TRANSACTION",
+        canEdit: entry.source === "TRANSACTION",
+        type: tx.type,
+        totalAmount: entry.amount,
+        originalTotalAmount: tx.totalAmount,
+        paidAmount: tx.paidAmount,
+        status: "COMPLETED",
+        transactionStatus: tx.status,
+        paymentMethod: entry.paymentMethod,
+        clientId: tx.clientId,
+        createdAt: entry.createdAt.toISOString(),
+        ...mapTransactionDetails(tx),
+      },
+    ];
   });
 
-  const pendingHistory = pendingTransactions.map(tx => ({
+  const pendingHistory = pendingTransactions.map((tx) => ({
     id: `pending:${tx.id}`,
     transactionId: tx.id,
     movementKind: "PENDING",
@@ -209,23 +242,27 @@ export default async function POSPage({ searchParams }: POSPageProps) {
     ...mapTransactionDetails(tx),
   }));
 
-  const history = [...cashHistory, ...pendingHistory]
-    .sort((first, second) => new Date(second.createdAt).getTime() - new Date(first.createdAt).getTime());
+  const history = [...cashHistory, ...pendingHistory].sort(
+    (first, second) => new Date(second.createdAt).getTime() - new Date(first.createdAt).getTime(),
+  );
 
-  const receivablesByClient = new Map<string, {
-    clientId: string;
-    clientName: string;
-    totalDebt: number;
-    movements: Array<{
-      transactionId: string;
-      createdAt: string;
-      description: string;
-      totalAmount: string;
-      paidAmount: string;
-      remaining: number;
-      itemDetails: ReturnType<typeof mapTransactionDetails>["itemDetails"];
-    }>;
-  }>();
+  const receivablesByClient = new Map<
+    string,
+    {
+      clientId: string;
+      clientName: string;
+      totalDebt: number;
+      movements: Array<{
+        transactionId: string;
+        createdAt: string;
+        description: string;
+        totalAmount: string;
+        paidAmount: string;
+        remaining: number;
+        itemDetails: ReturnType<typeof mapTransactionDetails>["itemDetails"];
+      }>;
+    }
+  >();
 
   for (const transaction of allPendingTransactions) {
     if (!transaction.clientId) continue;
@@ -253,14 +290,19 @@ export default async function POSPage({ searchParams }: POSPageProps) {
   }
 
   const receivables = [...receivablesByClient.values()]
-    .map(account => ({
+    .map((account) => ({
       ...account,
       totalDebt: account.totalDebt.toFixed(2),
-      movements: account.movements.sort((first, second) => new Date(first.createdAt).getTime() - new Date(second.createdAt).getTime()),
+      movements: account.movements.sort(
+        (first, second) =>
+          new Date(first.createdAt).getTime() - new Date(second.createdAt).getTime(),
+      ),
     }))
     .sort((first, second) => Number(second.totalDebt) - Number(first.totalDebt));
 
-  const pendingRes = await import("@/modules/agenda/actions").then(m => m.getPendingAppointmentsForToday());
+  const pendingRes = await import("@/modules/agenda/actions").then((m) =>
+    m.getPendingAppointmentsForToday(),
+  );
   const pendingAppointments = pendingRes.success ? pendingRes.data : [];
 
   return (
