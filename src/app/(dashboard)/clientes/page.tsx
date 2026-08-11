@@ -1,7 +1,7 @@
 import { db } from "@/core/database/db";
 import { clients, transactions } from "@/core/database/schema";
 import { requireActor } from "@/core/auth/server/actor";
-import { eq, desc, and } from "drizzle-orm";
+import { eq, desc, and, ne } from "drizzle-orm";
 import ClientManager from "./ClientManager";
 
 export default async function ClientesPage() {
@@ -20,7 +20,13 @@ export default async function ClientesPage() {
       totalAmount: transactions.totalAmount,
     })
     .from(transactions)
-    .where(and(eq(transactions.organizationId, orgId), eq(transactions.type, "INCOME")));
+    .where(
+      and(
+        eq(transactions.organizationId, orgId),
+        eq(transactions.type, "INCOME"),
+        ne(transactions.status, "REFUNDED"),
+      ),
+    );
 
   const totalsByClient = new Map<string, number>();
   for (const transaction of customerTransactions) {

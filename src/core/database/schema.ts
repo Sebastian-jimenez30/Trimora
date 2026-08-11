@@ -9,6 +9,7 @@ import {
   varchar,
   index,
   uniqueIndex,
+  foreignKey,
 } from "drizzle-orm/pg-core";
 
 // ----------------------------------------------------------------------
@@ -195,6 +196,7 @@ export const transactions = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
+    uniqueIndex("transactions_org_id_uidx").on(table.organizationId, table.id),
     index("transactions_org_created_idx").on(table.organizationId, table.createdAt),
     index("transactions_client_idx").on(table.clientId),
     index("transactions_staff_idx").on(table.staffId),
@@ -252,6 +254,7 @@ export const inventoryMovements = pgTable(
     productId: uuid("product_id")
       .references(() => products.id, { onDelete: "cascade" })
       .notNull(),
+    transactionId: uuid("transaction_id"),
     type: varchar("type", { length: 20 }).notNull(), // IN, OUT
     quantity: numeric("quantity", { precision: 12, scale: 4, mode: "number" }).notNull(),
     previousStock: numeric("previous_stock", { precision: 12, scale: 4, mode: "number" }).notNull(),
@@ -265,6 +268,12 @@ export const inventoryMovements = pgTable(
       table.productId,
       table.createdAt,
     ),
+    index("inventory_movements_transaction_idx").on(table.transactionId),
+    foreignKey({
+      columns: [table.organizationId, table.transactionId],
+      foreignColumns: [transactions.organizationId, transactions.id],
+      name: "inventory_movements_org_transaction_fk",
+    }).onDelete("cascade"),
   ],
 );
 

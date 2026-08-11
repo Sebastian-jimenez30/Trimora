@@ -1,7 +1,5 @@
 import "server-only";
 
-import "server-only";
-
 import { db } from "@/core/database/db";
 import { transactionPayments, transactions } from "@/core/database/schema";
 import { and, desc, eq, gt, gte, lt, notExists, or, sql, type SQL } from "drizzle-orm";
@@ -48,7 +46,10 @@ function getDirectConditions(
     conditions.push(
       or(
         lt(transactions.createdAt, cursor.createdAt),
-        and(eq(transactions.createdAt, cursor.createdAt), lt(transactions.id, cursor.id)),
+        and(
+          eq(transactions.createdAt, cursor.createdAt),
+          sql`('T:' || ${transactions.id}::text) < ${cursor.id}`,
+        ),
       )!,
     );
   }
@@ -90,7 +91,7 @@ function getPaymentConditions(
         lt(transactionPayments.createdAt, cursor.createdAt),
         and(
           eq(transactionPayments.createdAt, cursor.createdAt),
-          lt(transactionPayments.id, cursor.id),
+          sql`('P:' || ${transactionPayments.id}::text) < ${cursor.id}`,
         ),
       )!,
     );
@@ -117,13 +118,14 @@ function mapDirectEntry(row: {
 
 function mapPaymentEntry(row: {
   id: string;
+  paymentId: string;
   transactionId: string;
   type: string;
   amount: string;
   paymentMethod: string;
   createdAt: Date;
 }): CashEntry {
-  return { ...row, paymentId: row.id, source: "PAYMENT" };
+  return { ...row, source: "PAYMENT" };
 }
 
 function selectDirectEntries(
@@ -134,7 +136,7 @@ function selectDirectEntries(
 ) {
   return db
     .select({
-      id: transactions.id,
+      id: sql<string>`'T:' || ${transactions.id}::text`,
       transactionId: transactions.id,
       type: transactions.type,
       amount: sql<string>`case
@@ -156,7 +158,8 @@ function selectPaymentEntries(
 ) {
   return db
     .select({
-      id: transactionPayments.id,
+      id: sql<string>`'P:' || ${transactionPayments.id}::text`,
+      paymentId: transactionPayments.id,
       transactionId: transactionPayments.transactionId,
       type: transactions.type,
       amount: transactionPayments.amount,

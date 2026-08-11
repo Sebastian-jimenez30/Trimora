@@ -314,6 +314,8 @@ Los cambios de cada proveedor ejecutarán sus contratos específicos. Los cambio
 
 **Rama:** `architecture/05-critical-domain-tests`
 
+**Estado de trabajo:** implementada; pendiente de pipeline y aceptacion del propietario.
+
 **Módulos prioritarios:**
 
 1. Caja, ventas, créditos y abonos.

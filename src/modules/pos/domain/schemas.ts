@@ -4,8 +4,8 @@ export const paymentMethodSchema = z.enum(["CASH", "CARD", "TRANSFER", "CREDIT"]
 export const settledPaymentMethodSchema = z.enum(["CASH", "CARD", "TRANSFER"]);
 export const optionalClientIdSchema = z.string().uuid().nullable();
 export const resourceIdSchema = z.string().uuid();
-export const moneySchema = z.number().finite().positive().max(999_999_999_999);
-export const nonNegativeMoneySchema = z.number().finite().nonnegative().max(999_999_999_999);
+export const moneySchema = z.number().finite().positive().max(99_999_999.99);
+export const nonNegativeMoneySchema = z.number().finite().nonnegative().max(99_999_999.99);
 export const descriptionSchema = z.string().trim().min(1).max(500);
 export const transactionUpdateSchema = z.object({
   transactionId: resourceIdSchema,

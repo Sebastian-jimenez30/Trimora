@@ -197,6 +197,35 @@ jobs:
       - name: Ejecutar pruebas pgTAP de RLS e integridad
         run: supabase test db
 
+      - name: Configurar Node.js y cache npm
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Instalar dependencias reproducibles
+        run: npm ci
+
+      - name: Ejecutar integracion transaccional contra PostgreSQL real
+        run: >-
+          npm exec -- vitest run --project server
+          src/modules/pos/__tests__/critical-domain.integration.test.ts
+          --coverage --coverage.reportsDirectory=coverage/database-integration
+        env:
+          RUN_DATABASE_INTEGRATION: "1"
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+          VITEST_COVERAGE_INCLUDE: >-
+            ["src/modules/pos/server/**/*.ts","src/modules/pos/cash-flow.ts","src/modules/services/server/**/*.ts"]
+
+      - name: Publicar cobertura de integracion transaccional
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-database-integration
+          path: coverage/database-integration
+          if-no-files-found: warn
+          retention-days: 14
+
   build:
     name: Build de producción
     needs:

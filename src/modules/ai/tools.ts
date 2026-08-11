@@ -21,6 +21,7 @@ import {
   hasAiCapability,
   type AiCapability,
 } from "@/modules/ai/capabilities";
+import { createManualCashEntry } from "@/modules/pos/server/ledger";
 
 // Helpers para fechas (Zona Horaria Bogotá/Lima/Quito -05:00)
 function getTodayRange() {
@@ -256,13 +257,15 @@ export function getAiTools(context: {
           return "Acceso denegado: Solo administradores pueden alterar la caja.";
 
         try {
-          await db.insert(transactions).values({
+          const paymentMethod = z
+            .enum(["CASH", "CARD", "TRANSFER"])
+            .parse(args.paymentMethod.toUpperCase());
+          await createManualCashEntry({
             organizationId: context.organizationId,
             type: args.type,
-            totalAmount: args.amount.toString(),
-            paymentMethod: args.paymentMethod.toUpperCase(),
-            status: "COMPLETED",
-            notes: args.description,
+            amount: args.amount,
+            paymentMethod,
+            description: args.description,
           });
           revalidatePath("/", "layout");
           return `Transacción registrada exitosamente: ${args.type === "INCOME" ? "Ingreso" : "Gasto"} de $${args.amount} (${args.description}).`;
@@ -312,7 +315,9 @@ export function getAiTools(context: {
           }
 
           const totalVenta = precioUnitario * args.cantidad;
-          const metodo = (args.paymentMethod ?? "CASH").toUpperCase();
+          const metodo = z
+            .enum(["CASH", "CARD", "TRANSFER"])
+            .parse((args.paymentMethod ?? "CASH").toUpperCase());
           const clienteTexto = args.clienteNombre ? ` para ${args.clienteNombre}` : "";
           const descripcion = `Venta de ${args.cantidad} ${producto.name}${clienteTexto}`;
 
@@ -374,6 +379,7 @@ export function getAiTools(context: {
             await databaseTransaction.insert(inventoryMovements).values({
               organizationId: context.organizationId,
               productId: lockedProduct.id,
+              transactionId: sale.id,
               type: "OUT",
               quantity: args.cantidad,
               previousStock,
