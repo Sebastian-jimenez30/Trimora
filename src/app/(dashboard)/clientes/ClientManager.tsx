@@ -166,7 +166,7 @@ export default function ClientManager({ initialClients }: { initialClients: Clie
                     <div className="flex items-center justify-end gap-4">
                       <button
                         onClick={() => openEditModal(client)}
-                        className="text-cognac hover:text-white text-sm font-medium transition-colors"
+                        className="text-[#D89A66] hover:text-white text-sm font-medium transition-colors"
                       >
                         Editar
                       </button>

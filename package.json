@@ -16,6 +16,8 @@
     "test:client": "vitest run --project client",
     "test:component": "node scripts/ci/run-component-tests.mjs",
     "test:coverage": "vitest run --coverage",
+    "test:e2e": "playwright test",
+    "test:e2e:ci": "node scripts/ci/run-e2e-tests.mjs",
     "ci:detect": "node scripts/ci/detect-affected-components.mjs"
   },
   "dependencies": {
@@ -30,15 +32,17 @@
     "date-fns": "^4.4.0",
     "date-fns-tz": "^3.2.0",
     "drizzle-orm": "^0.45.2",
-    "next": "16.2.10",
+    "next": "16.3.0",
     "postgres": "^3.4.9",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "react-hot-toast": "^2.6.0",
-    "xlsx": "^0.18.5",
+    "read-excel-file": "9.3.10",
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.13.0",
+    "@playwright/test": "1.62.1",
     "@tailwindcss/postcss": "^4",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "6.9.1",
@@ -52,7 +56,7 @@
     "dotenv": "^17.4.2",
     "drizzle-kit": "^0.31.10",
     "eslint": "^9",
-    "eslint-config-next": "16.2.10",
+    "eslint-config-next": "16.3.0",
     "jsdom": "^29.1.1",
     "prettier": "3.9.6",
     "tailwindcss": "^4",

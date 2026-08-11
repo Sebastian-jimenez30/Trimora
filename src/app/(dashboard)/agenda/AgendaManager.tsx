@@ -337,7 +337,11 @@ export default function AgendaManager({
     return (
       <div className="flex-1 flex flex-col bg-[#141414] overflow-hidden relative">
         {/* Time Grid */}
-        <div className="flex-1 overflow-y-auto relative pt-3">
+        <div
+          className="flex-1 overflow-y-auto relative pt-3"
+          tabIndex={0}
+          aria-label="Horario diario de citas"
+        >
           <div className="grid grid-cols-[86px_1fr]">
             {/* Hours Column */}
             <div className="border-r border-white/10 shrink-0 sticky left-0 bg-[#141414] z-20">
@@ -452,7 +456,11 @@ export default function AgendaManager({
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto overflow-x-auto relative pt-3">
+        <div
+          className="flex-1 overflow-y-auto overflow-x-auto relative pt-3"
+          tabIndex={0}
+          aria-label="Horario semanal de citas"
+        >
           <div className="grid grid-cols-[86px_1fr] min-w-[600px]">
             {/* Hours Column */}
             <div className="border-r border-white/10 shrink-0 sticky left-0 bg-[#141414] z-20">
@@ -618,7 +626,7 @@ export default function AgendaManager({
             <h2 className="text-xl md:text-2xl font-serif text-white capitalize flex items-baseline gap-2">
               {view === "day" && (
                 <div className="flex items-baseline gap-1.5 mr-1 md:mr-2">
-                  <span className="text-2xl md:text-3xl text-cognac font-bold">
+                  <span className="text-2xl md:text-3xl text-[#D89A66] font-bold">
                     {currentDate.getDate()}
                   </span>
                   <span className="text-sm md:text-base text-[#888] uppercase tracking-wider font-sans font-medium">
@@ -669,12 +677,14 @@ export default function AgendaManager({
           <div className="hidden md:flex items-center bg-white/5 rounded-full p-0.5">
             <button
               onClick={() => changeDate(-1)}
+              aria-label="Período anterior"
               className="text-sterling w-8 h-8 rounded-full flex items-center justify-center hover:bg-white/10 transition-colors"
             >
               &lt;
             </button>
             <button
               onClick={() => changeDate(1)}
+              aria-label="Período siguiente"
               className="text-sterling w-8 h-8 rounded-full flex items-center justify-center hover:bg-white/10 transition-colors"
             >
               &gt;

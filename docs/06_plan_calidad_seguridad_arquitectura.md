@@ -356,7 +356,7 @@ Cada suite quedará etiquetada por componente. Por ejemplo, un cambio exclusivo 
 
 **Rama:** `architecture/06-component-tests`
 
-**Estado de trabajo:** implementada; pendiente de validación por pipeline y aceptación funcional.
+**Estado de trabajo:** aceptada por el propietario con pipeline en verde.
 
 La matriz de comportamientos, los DTO de interfaz y el recorrido manual están documentados en
 `docs/12_componentes_experiencia_usuario.md`.
@@ -395,6 +395,10 @@ Las pruebas de componentes compartidos ejecutarán también las suites de las in
 ### Etapa 07 — E2E, accesibilidad y seguridad en CI
 
 **Rama:** `architecture/07-e2e-security-ci`
+
+**Estado de trabajo:** implementada; pendiente de validación por pipeline, revisión de hallazgos y
+aceptación funcional. La operación, matriz de recorridos y activación manual de protecciones están
+documentadas en `docs/13_e2e_accesibilidad_seguridad_ci.md`.
 
 **Cambios previstos:**
 

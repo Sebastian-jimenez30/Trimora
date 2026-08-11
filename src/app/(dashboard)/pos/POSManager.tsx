@@ -591,7 +591,7 @@ export default function POSManager({
                             </svg>
                           </div>
                           <h4 className="text-sm font-semibold text-sterling mb-1">{srv.name}</h4>
-                          <p className="text-lg text-[#8B4513] font-bold">${srv.price}</p>
+                          <p className="text-lg text-[#D89A66] font-bold">${srv.price}</p>
                           <span className="text-[10px] text-[#888] mt-2">
                             {srv.durationMinutes} min
                           </span>

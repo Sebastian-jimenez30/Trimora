@@ -13,7 +13,7 @@ export function loadManifest() {
 
   const componentNames = new Set(Object.keys(manifest.components));
   for (const [name, component] of Object.entries(manifest.components)) {
-    for (const field of ["paths", "testRoots", "coverage", "triggers"]) {
+    for (const field of ["paths", "testRoots", "coverage", "e2e", "triggers"]) {
       if (!Array.isArray(component[field]))
         throw new Error(`El componente ${name} no define ${field} como arreglo`);
     }
@@ -128,6 +128,9 @@ export function analyzeImpact({ files, forceFullSuite = false }) {
   );
   const testComponents = affectedComponents.filter((name) => testsByComponent[name].length > 0);
   const docsOnly = files.length > 0 && files.every(isDocumentationFile);
+  const e2eJourneys = [
+    ...new Set(affectedComponents.flatMap((name) => manifest.components[name].e2e)),
+  ].sort();
 
   return {
     manifest,
@@ -136,6 +139,7 @@ export function analyzeImpact({ files, forceFullSuite = false }) {
     affectedComponents,
     testComponents,
     testsByComponent,
+    e2eJourneys,
     unclassifiedFiles,
     docsOnly,
     fullSuite: mustRunFullSuite,

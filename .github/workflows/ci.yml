@@ -2,6 +2,7 @@ name: CI
 
 on:
   pull_request:
+  merge_group:
   push:
     branches:
       - main
@@ -36,6 +37,9 @@ jobs:
       test_components: ${{ steps.impact.outputs.test_components }}
       has_components: ${{ steps.impact.outputs.has_components }}
       has_test_components: ${{ steps.impact.outputs.has_test_components }}
+      e2e_journeys: ${{ steps.impact.outputs.e2e_journeys }}
+      has_e2e_journeys: ${{ steps.impact.outputs.has_e2e_journeys }}
+      e2e_browsers: ${{ steps.impact.outputs.e2e_browsers }}
       docs_only: ${{ steps.impact.outputs.docs_only }}
       full_suite: ${{ steps.impact.outputs.full_suite }}
       needs_build: ${{ steps.impact.outputs.needs_build }}
@@ -44,12 +48,12 @@ jobs:
       consolidation: ${{ steps.impact.outputs.consolidation }}
     steps:
       - name: Descargar repositorio e historial
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
       - name: Configurar Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
 
@@ -74,12 +78,12 @@ jobs:
     timeout-minutes: 12
     steps:
       - name: Descargar repositorio e historial
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
       - name: Configurar Node.js y caché npm
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
@@ -119,10 +123,10 @@ jobs:
         component: ${{ fromJSON(needs.detect-impact.outputs.test_components) }}
     steps:
       - name: Descargar repositorio
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Configurar Node.js y caché npm
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
@@ -135,7 +139,7 @@ jobs:
 
       - name: Publicar cobertura del componente
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-${{ matrix.component }}
           path: coverage/components/${{ matrix.component }}
@@ -150,10 +154,10 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Descargar repositorio
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Configurar Node.js y caché npm
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
@@ -166,7 +170,7 @@ jobs:
 
       - name: Publicar cobertura consolidada
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-full
           path: coverage
@@ -181,7 +185,7 @@ jobs:
     timeout-minutes: 25
     steps:
       - name: Descargar repositorio
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Configurar Supabase CLI
         uses: supabase/setup-cli@v1
@@ -198,7 +202,7 @@ jobs:
         run: supabase test db
 
       - name: Configurar Node.js y cache npm
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
@@ -219,10 +223,85 @@ jobs:
 
       - name: Publicar cobertura de integracion transaccional
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-database-integration
           path: coverage/database-integration
+          if-no-files-found: warn
+          retention-days: 14
+
+  e2e:
+    name: E2E · ${{ matrix.browser }}
+    needs:
+      - detect-impact
+      - changed-quality
+    if: >-
+      needs.detect-impact.outputs.has_e2e_journeys == 'true' &&
+      needs.detect-impact.outputs.docs_only != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: ${{ fromJSON(needs.detect-impact.outputs.e2e_browsers) }}
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v6
+
+      - name: Configurar Node.js y caché npm
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Instalar dependencias reproducibles
+        run: npm ci
+
+      - name: Instalar navegador y dependencias del sistema
+        run: npx playwright install --with-deps chromium ${{ matrix.browser }}
+
+      - name: Configurar Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: 2.101.0
+
+      - name: Iniciar Supabase y reconstruir la base E2E
+        run: |
+          supabase start
+          supabase db reset --local
+
+      - name: Exponer credenciales efímeras de Supabase
+        shell: bash
+        run: |
+          supabase status -o env > supabase-status.env
+          set -a
+          source supabase-status.env
+          set +a
+          {
+            echo "NEXT_PUBLIC_SUPABASE_URL=$API_URL"
+            echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$ANON_KEY"
+            echo "SUPABASE_SECRET_KEY=$SERVICE_ROLE_KEY"
+            echo "DATABASE_URL=$DB_URL"
+            echo "NEXT_PUBLIC_SITE_URL=http://127.0.0.1:3000"
+          } >> "$GITHUB_ENV"
+
+      - name: Compilar la aplicación para producción
+        run: npm run build
+
+      - name: Ejecutar recorridos seleccionados
+        run: npm run test:e2e:ci -- ${{ matrix.browser }}
+        env:
+          E2E_JOURNEYS: ${{ needs.detect-impact.outputs.e2e_journeys }}
+          E2E_FULL_SUITE: ${{ needs.detect-impact.outputs.consolidation }}
+
+      - name: Publicar diagnóstico E2E si falla
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-${{ matrix.browser }}-${{ github.run_attempt }}
+          path: |
+            playwright-report
+            test-results
           if-no-files-found: warn
           retention-days: 14
 
@@ -236,10 +315,10 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Descargar repositorio
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Restaurar caché de Next.js
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: .next/cache
           key: ${{ runner.os }}-next-${{ hashFiles('package-lock.json') }}-${{ github.sha }}
@@ -247,7 +326,7 @@ jobs:
             ${{ runner.os }}-next-${{ hashFiles('package-lock.json') }}-
 
       - name: Configurar Node.js y caché npm
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm

@@ -1,7 +1,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import react from "@vitejs/plugin-react";
-import { defineConfig } from "vitest/config";
+import { configDefaults, defineConfig } from "vitest/config";
 
 const projectRoot = path.dirname(fileURLToPath(import.meta.url));
 const componentCoverage = process.env.VITEST_COVERAGE_INCLUDE
@@ -24,6 +24,7 @@ export default defineConfig({
           name: "server",
           environment: "node",
           include: ["**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts}"],
+          exclude: [...configDefaults.exclude, "e2e/**"],
           setupFiles: ["./src/test/setup.server.ts"],
         },
       },
@@ -33,6 +34,7 @@ export default defineConfig({
           name: "client",
           environment: "jsdom",
           include: ["**/*.{test,spec}.{jsx,tsx}"],
+          exclude: [...configDefaults.exclude, "e2e/**"],
           setupFiles: ["./src/test/setup.client.ts"],
         },
       },

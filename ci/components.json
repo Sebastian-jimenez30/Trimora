@@ -40,6 +40,7 @@
         "src/modules/profile/**/*.ts",
         "src/modules/superadmin/**/*.ts"
       ],
+      "e2e": ["auth-session", "roles-tenancy"],
       "triggers": [
         "pos-finance",
         "inventory-services",
@@ -58,6 +59,7 @@
         "src/modules/cash/**/*.ts",
         "src/app/(dashboard)/pos/**/*.tsx"
       ],
+      "e2e": ["pos-sales", "receivables", "history-analytics"],
       "triggers": ["inventory-services", "clients", "analytics"]
     },
     "inventory-services": {
@@ -81,6 +83,7 @@
         "src/app/(dashboard)/inventario/**/*.tsx",
         "src/app/(dashboard)/servicios/**/*.tsx"
       ],
+      "e2e": ["pos-sales", "inventory"],
       "triggers": ["pos-finance", "agenda-appointments", "analytics"]
     },
     "agenda-appointments": {
@@ -103,12 +106,21 @@
         "src/app/(dashboard)/agenda/**/*.tsx",
         "src/app/(dashboard)/calendar/**/*.tsx"
       ],
+      "e2e": ["agenda", "pos-sales"],
       "triggers": ["pos-finance"]
     },
     "clients": {
       "paths": ["src/modules/clients/", "src/app/clientes/", "src/app/(dashboard)/clientes/"],
       "testRoots": ["src/modules/clients", "src/app/clientes", "src/app/(dashboard)/clientes"],
       "coverage": ["src/modules/clients/**/*.ts", "src/app/(dashboard)/clientes/**/*.tsx"],
+      "e2e": [
+        "clients",
+        "agenda",
+        "pos-sales",
+        "receivables",
+        "history-analytics",
+        "roles-tenancy"
+      ],
       "triggers": ["agenda-appointments", "pos-finance", "analytics"]
     },
     "analytics": {
@@ -127,6 +139,7 @@
         "src/app/(dashboard)/analitica/**/*.tsx",
         "src/app/(dashboard)/dashboard/**/*.tsx"
       ],
+      "e2e": ["history-analytics"],
       "triggers": []
     },
     "ai-integrations": {
@@ -154,6 +167,7 @@
         "src/components/ai/**/*.tsx",
         "src/app/api/**/*.ts"
       ],
+      "e2e": [],
       "triggers": ["agenda-appointments", "pos-finance", "inventory-services", "clients"]
     },
     "shared-ui": {
@@ -167,6 +181,7 @@
       ],
       "testRoots": ["src/components/shared", "src/components/layout", "src/components", "src/app"],
       "coverage": ["src/components/**/*.tsx"],
+      "e2e": ["accessibility"],
       "triggers": [
         "auth-access",
         "pos-finance",
@@ -181,6 +196,16 @@
       "paths": ["src/core/database/", "drizzle.config.ts", "supabase/"],
       "testRoots": ["src/core/database", "supabase/tests"],
       "coverage": ["src/core/database/**/*.ts"],
+      "e2e": [
+        "auth-session",
+        "clients",
+        "agenda",
+        "pos-sales",
+        "inventory",
+        "receivables",
+        "history-analytics",
+        "roles-tenancy"
+      ],
       "triggers": [
         "auth-access",
         "pos-finance",
@@ -211,6 +236,17 @@
       ],
       "testRoots": ["scripts/ci"],
       "coverage": ["scripts/ci/**/*.mjs"],
+      "e2e": [
+        "auth-session",
+        "clients",
+        "agenda",
+        "pos-sales",
+        "inventory",
+        "receivables",
+        "history-analytics",
+        "roles-tenancy",
+        "accessibility"
+      ],
       "triggers": [
         "auth-access",
         "pos-finance",

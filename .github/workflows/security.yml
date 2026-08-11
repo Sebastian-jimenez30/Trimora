@@ -1,0 +1,105 @@
+name: Seguridad
+
+on:
+  pull_request:
+  merge_group:
+  push:
+    branches:
+      - main
+  schedule:
+    - cron: "43 8 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dependency-review:
+    name: Dependencias nuevas
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Informar configuracion pendiente
+        if: vars.DEPENDENCY_REVIEW_ENABLED != 'true'
+        run: |
+          echo "::warning title=Dependency Review pendiente::Habilita Dependency Graph y define DEPENDENCY_REVIEW_ENABLED=true para activar el control diferencial."
+          echo "### Dependency Review pendiente" >> "$GITHUB_STEP_SUMMARY"
+          echo "Habilita Dependency Graph y la variable de repositorio DEPENDENCY_REVIEW_ENABLED=true." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Descargar repositorio
+        if: vars.DEPENDENCY_REVIEW_ENABLED == 'true'
+        uses: actions/checkout@v6
+
+      - name: Revisar dependencias modificadas
+        if: vars.DEPENDENCY_REVIEW_ENABLED == 'true'
+        uses: actions/dependency-review-action@v5
+        with:
+          fail-on-severity: high
+
+  dependency-audit:
+    name: Auditoría de dependencias de producción
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v6
+
+      - name: Configurar Node.js y caché npm
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Instalar dependencias reproducibles
+        run: npm ci
+
+      - name: Bloquear vulnerabilidades altas o críticas
+        run: npm audit --omit=dev --audit-level=high
+
+  codeql:
+    name: CodeQL JavaScript y TypeScript
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v6
+
+      - name: Inicializar CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: javascript-typescript
+          queries: security-extended
+
+      - name: Analizar código
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: /language:javascript-typescript
+
+  secrets:
+    name: Secretos versionados
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Descargar historial completo
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Detectar secretos
+        uses: gitleaks/gitleaks-action@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

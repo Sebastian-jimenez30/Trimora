@@ -134,7 +134,12 @@ function TrendChart({ points }: { points: TrendPoint[] }) {
   const labelEvery = Math.max(1, Math.ceil(points.length / 6));
 
   return (
-    <div className="overflow-x-auto">
+    <div
+      className="overflow-x-auto"
+      role="region"
+      aria-label="Gráfica de tendencia financiera"
+      tabIndex={0}
+    >
       <svg
         viewBox={`0 0 ${width} ${height}`}
         className="w-full min-w-[620px] h-[250px]"
@@ -293,7 +298,12 @@ function DemandHeatmap({ data }: { data: AnalyticsData["demand"] }) {
       {data.length === 0 ? (
         <EmptyChart text="No hay citas en este período" />
       ) : (
-        <div className="overflow-x-auto">
+        <div
+          className="overflow-x-auto"
+          role="region"
+          aria-label="Mapa de demanda por día y hora"
+          tabIndex={0}
+        >
           <div
             className="min-w-[680px] grid gap-1"
             style={{ gridTemplateColumns: "42px repeat(7, minmax(70px, 1fr))" }}
@@ -495,7 +505,7 @@ export default function AnalyticsDashboard({ data }: { data: AnalyticsData }) {
       <div className="max-w-[1600px] mx-auto">
         <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-5 mb-7">
           <div>
-            <p className="text-[10px] uppercase tracking-[0.22em] text-cognac font-bold">
+            <p className="text-[10px] uppercase tracking-[0.22em] text-[#D89A66] font-bold">
               Inteligencia del negocio
             </p>
             <h1 className="font-serif text-3xl text-white mt-1">Analítica integral</h1>
@@ -718,7 +728,12 @@ export default function AnalyticsDashboard({ data }: { data: AnalyticsData }) {
               25 por página
             </span>
           </div>
-          <div className="overflow-x-auto">
+          <div
+            className="overflow-x-auto"
+            role="region"
+            aria-label="Trazabilidad de movimientos"
+            tabIndex={0}
+          >
             <table className="w-full text-left min-w-[860px]">
               <thead>
                 <tr className="text-[10px] uppercase tracking-wider text-charcoal">

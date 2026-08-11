@@ -344,14 +344,19 @@ describe.skipIf(!enabled)("dominio critico sobre PostgreSQL real", () => {
     const paymentRows = await database
       .select()
       .from(schema.transactionPayments)
-      .orderBy(asc(schema.transactionPayments.createdAt), asc(schema.transactionPayments.id));
+      .orderBy(asc(schema.transactionPayments.createdAt));
 
     expect(result.allocationCount).toBe(2);
     expect(transactionRows).toEqual([
       { id: first.transactionId, paid: "20.00", status: "COMPLETED" },
       { id: second.transactionId, paid: "10.00", status: "PENDING" },
     ]);
-    expect(paymentRows.map((payment) => payment.amount)).toEqual(["20.00", "10.00"]);
+    expect(
+      Object.fromEntries(paymentRows.map((payment) => [payment.transactionId, payment.amount])),
+    ).toEqual({
+      [first.transactionId]: "20.00",
+      [second.transactionId]: "10.00",
+    });
     expect(paymentRows.every((payment) => payment.createdAt.getTime() === paidAt.getTime())).toBe(
       true,
     );

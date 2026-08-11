@@ -1,23 +1,35 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
-import * as XLSX from "xlsx";
 import { toast } from "react-hot-toast";
 import { batchImportProducts } from "@/modules/inventory/actions";
 import { batchImportServices } from "@/modules/services/actions";
+import { parseCsv, rowsToRecords } from "@/modules/ai/import/spreadsheet";
 
 type ImportExportModalProps = {
   entityType: "products" | "services";
 };
+
+type PreviewItem = {
+  name?: string;
+  category?: "VENTA" | "CONSUMO";
+  salePrice?: string | number;
+  currentStock?: string | number;
+  durationMinutes?: string | number;
+  price?: string | number;
+  [key: string]: unknown;
+};
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "Error procesando el archivo.";
+}
 
 export default function ImportExportModal({ entityType }: ImportExportModalProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [step, setStep] = useState<"upload" | "preview">("upload");
-  const [previewData, setPreviewData] = useState<any[]>([]);
-  const router = useRouter();
+  const [previewData, setPreviewData] = useState<PreviewItem[]>([]);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -39,13 +51,10 @@ export default function ImportExportModal({ entityType }: ImportExportModalProps
           reader.onerror = (error) => reject(error);
         });
       } else {
-        // Parse Excel/CSV
-        const buffer = await file.arrayBuffer();
-        const workbook = XLSX.read(buffer, { type: "array" });
-        const firstSheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[firstSheetName];
-        const json = XLSX.utils.sheet_to_json(worksheet);
-        payloadData = JSON.stringify(json);
+        const rows = file.name.toLowerCase().endsWith(".csv")
+          ? parseCsv(await file.text())
+          : await import("read-excel-file/browser").then(({ readSheet }) => readSheet(file));
+        payloadData = JSON.stringify(rowsToRecords(rows));
       }
 
       // Send to API
@@ -68,12 +77,12 @@ export default function ImportExportModal({ entityType }: ImportExportModalProps
       } else {
         setError(result.error || "Hubo un error importando los datos.");
       }
-    } catch (err: any) {
-      setError(err.message || "Error procesando el archivo.");
+    } catch (err: unknown) {
+      setError(errorMessage(err));
     } finally {
       setIsLoading(false);
       // reset file input
-      if (e.target) e.target.value = '';
+      if (e.target) e.target.value = "";
     }
   };
 
@@ -100,8 +109,8 @@ export default function ImportExportModal({ entityType }: ImportExportModalProps
       } else {
         toast.error(res.error || "Error al guardar los datos");
       }
-    } catch (err: any) {
-      toast.error(err.message || "Error inesperado");
+    } catch (err: unknown) {
+      toast.error(errorMessage(err));
     } finally {
       setIsLoading(false);
     }
@@ -118,7 +127,20 @@ export default function ImportExportModal({ entityType }: ImportExportModalProps
           onClick={() => handleExport()}
           className="bg-white/5 border border-white/10 text-sterling px-4 py-2 rounded-lg text-sm hover:bg-white/10 transition-colors flex items-center gap-2"
         >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
           Exportar
         </button>
         <button
@@ -147,14 +169,26 @@ export default function ImportExportModal({ entityType }: ImportExportModalProps
                 }}
                 className="text-charcoal hover:text-white transition-colors"
               >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
               </button>
             </div>
 
             {step === "upload" ? (
               <div className="flex flex-col gap-4">
                 <p className="text-sm text-[#888]">
-                  Sube un archivo <strong>Excel, CSV</strong>, o una <strong>Fotografía</strong> (ej. lista de precios, menú). La Inteligencia Artificial extraerá, corregirá y mapeará la información automáticamente hacia tu base de datos.
+                  Sube un archivo <strong>Excel, CSV</strong>, o una <strong>Fotografía</strong>{" "}
+                  (ej. lista de precios, menú). La Inteligencia Artificial extraerá, corregirá y
+                  mapeará la información automáticamente hacia tu base de datos.
                 </p>
 
                 {error && (
@@ -166,7 +200,7 @@ export default function ImportExportModal({ entityType }: ImportExportModalProps
                 <div className="relative border-2 border-dashed border-white/20 rounded-xl p-8 text-center hover:bg-white/5 transition-colors group cursor-pointer">
                   <input
                     type="file"
-                    accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel, image/png, image/jpeg, image/jpg"
+                    accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, image/png, image/jpeg, image/jpg"
                     onChange={handleFileChange}
                     disabled={isLoading}
                     className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
@@ -182,7 +216,20 @@ export default function ImportExportModal({ entityType }: ImportExportModalProps
                     ) : (
                       <>
                         <div className="w-12 h-12 bg-white/5 rounded-full flex items-center justify-center text-charcoal group-hover:text-sterling group-hover:scale-110 transition-all">
-                          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                          <svg
+                            width="24"
+                            height="24"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="17 8 12 3 7 8"></polyline>
+                            <line x1="12" y1="3" x2="12" y2="15"></line>
+                          </svg>
                         </div>
                         <span className="text-sm font-medium text-sterling">
                           Haz clic o arrastra aquí tu archivo
@@ -198,7 +245,8 @@ export default function ImportExportModal({ entityType }: ImportExportModalProps
             ) : (
               <div className="flex flex-col gap-4">
                 <p className="text-sm text-sterling">
-                  Por favor aprueba los siguientes {previewData.length} registros generados por la IA:
+                  Por favor aprueba los siguientes {previewData.length} registros generados por la
+                  IA:
                 </p>
                 <div className="overflow-x-auto max-h-[50vh] border border-white/10 rounded-lg">
                   <table className="w-full text-left text-sm text-sterling">
@@ -221,60 +269,85 @@ export default function ImportExportModal({ entityType }: ImportExportModalProps
                     </thead>
                     <tbody>
                       {previewData.map((item, idx) => (
-                        <tr key={idx} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                        <tr
+                          key={idx}
+                          className="border-b border-white/5 hover:bg-white/5 transition-colors"
+                        >
                           <td className="px-4 py-2">
-                            <input 
-                              type="text" 
-                              value={item.name || ""} 
+                            <input
+                              type="text"
+                              value={item.name || ""}
                               onChange={(e) => handleFieldChange(idx, "name", e.target.value)}
-                              className="w-full bg-white/5 border border-white/10 focus:bg-white/10 focus:ring-1 focus:ring-cognac rounded px-2 py-1 outline-none transition-colors" 
+                              className="w-full bg-white/5 border border-white/10 focus:bg-white/10 focus:ring-1 focus:ring-cognac rounded px-2 py-1 outline-none transition-colors"
                             />
                           </td>
                           {entityType === "products" ? (
                             <>
                               <td className="px-4 py-2">
-                                <select 
-                                  value={item.category || "VENTA"} 
-                                  onChange={(e) => handleFieldChange(idx, "category", e.target.value)}
+                                <select
+                                  value={item.category || "VENTA"}
+                                  onChange={(e) =>
+                                    handleFieldChange(idx, "category", e.target.value)
+                                  }
                                   className="w-full bg-white/5 border border-white/10 focus:bg-white/10 focus:ring-1 focus:ring-cognac rounded px-2 py-1 outline-none text-sterling transition-colors"
                                 >
-                                  <option value="VENTA" className="text-black bg-white">VENTA</option>
-                                  <option value="CONSUMO" className="text-black bg-white">CONSUMO</option>
+                                  <option value="VENTA" className="text-black bg-white">
+                                    VENTA
+                                  </option>
+                                  <option value="CONSUMO" className="text-black bg-white">
+                                    CONSUMO
+                                  </option>
                                 </select>
                               </td>
                               <td className="px-4 py-2">
-                                <input 
-                                  type="number" 
-                                  value={item.salePrice || 0} 
-                                  onChange={(e) => handleFieldChange(idx, "salePrice", parseFloat(e.target.value))}
-                                  className="w-full bg-white/5 border border-white/10 focus:bg-white/10 focus:ring-1 focus:ring-cognac rounded px-2 py-1 outline-none transition-colors" 
+                                <input
+                                  type="number"
+                                  value={item.salePrice || 0}
+                                  onChange={(e) =>
+                                    handleFieldChange(idx, "salePrice", parseFloat(e.target.value))
+                                  }
+                                  className="w-full bg-white/5 border border-white/10 focus:bg-white/10 focus:ring-1 focus:ring-cognac rounded px-2 py-1 outline-none transition-colors"
                                 />
                               </td>
                               <td className="px-4 py-2">
-                                <input 
-                                  type="number" 
-                                  value={item.currentStock || 0} 
-                                  onChange={(e) => handleFieldChange(idx, "currentStock", parseFloat(e.target.value))}
-                                  className="w-full bg-white/5 border border-white/10 focus:bg-white/10 focus:ring-1 focus:ring-cognac rounded px-2 py-1 outline-none transition-colors" 
+                                <input
+                                  type="number"
+                                  value={item.currentStock || 0}
+                                  onChange={(e) =>
+                                    handleFieldChange(
+                                      idx,
+                                      "currentStock",
+                                      parseFloat(e.target.value),
+                                    )
+                                  }
+                                  className="w-full bg-white/5 border border-white/10 focus:bg-white/10 focus:ring-1 focus:ring-cognac rounded px-2 py-1 outline-none transition-colors"
                                 />
                               </td>
                             </>
                           ) : (
                             <>
                               <td className="px-4 py-2">
-                                <input 
-                                  type="number" 
-                                  value={item.durationMinutes || 30} 
-                                  onChange={(e) => handleFieldChange(idx, "durationMinutes", parseInt(e.target.value))}
-                                  className="w-full bg-white/5 border border-white/10 focus:bg-white/10 focus:ring-1 focus:ring-cognac rounded px-2 py-1 outline-none transition-colors" 
+                                <input
+                                  type="number"
+                                  value={item.durationMinutes || 30}
+                                  onChange={(e) =>
+                                    handleFieldChange(
+                                      idx,
+                                      "durationMinutes",
+                                      parseInt(e.target.value),
+                                    )
+                                  }
+                                  className="w-full bg-white/5 border border-white/10 focus:bg-white/10 focus:ring-1 focus:ring-cognac rounded px-2 py-1 outline-none transition-colors"
                                 />
                               </td>
                               <td className="px-4 py-2">
-                                <input 
-                                  type="number" 
-                                  value={item.price || 0} 
-                                  onChange={(e) => handleFieldChange(idx, "price", parseFloat(e.target.value))}
-                                  className="w-full bg-white/5 border border-white/10 focus:bg-white/10 focus:ring-1 focus:ring-cognac rounded px-2 py-1 outline-none transition-colors" 
+                                <input
+                                  type="number"
+                                  value={item.price || 0}
+                                  onChange={(e) =>
+                                    handleFieldChange(idx, "price", parseFloat(e.target.value))
+                                  }
+                                  className="w-full bg-white/5 border border-white/10 focus:bg-white/10 focus:ring-1 focus:ring-cognac rounded px-2 py-1 outline-none transition-colors"
                                 />
                               </td>
                             </>
@@ -284,7 +357,7 @@ export default function ImportExportModal({ entityType }: ImportExportModalProps
                     </tbody>
                   </table>
                 </div>
-                
+
                 <div className="flex gap-2 justify-end mt-2">
                   <button
                     onClick={() => setStep("upload")}

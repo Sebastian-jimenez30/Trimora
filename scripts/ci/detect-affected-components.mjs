@@ -20,6 +20,9 @@ setOutput("components", impact.affectedComponents);
 setOutput("test_components", impact.testComponents);
 setOutput("has_components", impact.affectedComponents.length > 0);
 setOutput("has_test_components", impact.testComponents.length > 0);
+setOutput("e2e_journeys", impact.e2eJourneys);
+setOutput("has_e2e_journeys", impact.e2eJourneys.length > 0);
+setOutput("e2e_browsers", consolidation ? ["chromium", "firefox", "webkit"] : ["chromium"]);
 setOutput("docs_only", impact.docsOnly);
 setOutput("full_suite", impact.fullSuite);
 setOutput("needs_build", impact.needsBuild);
@@ -37,6 +40,8 @@ const summary = [
   `- Componentes directos: ${impact.directComponents.join(", ") || "ninguno"}`,
   `- Componentes afectados: ${impact.affectedComponents.join(", ") || "ninguno"}`,
   `- Componentes con pruebas registradas: ${impact.testComponents.join(", ") || "ninguno"}`,
+  `- Recorridos E2E seleccionados: ${impact.e2eJourneys.join(", ") || "ninguno"}`,
+  `- Navegadores E2E: ${consolidation ? "Chromium, Firefox y WebKit" : "Chromium"}`,
   `- Suite completa seleccionada: ${impact.fullSuite ? "sí" : "no"}`,
   `- Ejecución de consolidación: ${consolidation ? "sí" : "no"}`,
 ];
@@ -44,6 +49,17 @@ const summary = [
 if (componentsWithoutTests.length > 0) {
   summary.push(
     `- Componentes todavía sin pruebas registradas: ${componentsWithoutTests.join(", ")}`,
+  );
+}
+if (impact.e2eJourneys.length > 0) {
+  summary.push(
+    "",
+    "### Mapa componente a recorrido E2E",
+    "",
+    ...impact.affectedComponents.map(
+      (name) =>
+        `- ${name}: ${impact.manifest.components[name].e2e.join(", ") || "sin recorrido directo"}`,
+    ),
   );
 }
 if (impact.unclassifiedFiles.length > 0) {

@@ -23,6 +23,9 @@ describe("selector de pruebas por componente", () => {
         "analytics",
       ]),
     );
+    expect(result.e2eJourneys).toEqual(
+      expect.arrayContaining(["inventory", "pos-sales", "history-analytics"]),
+    );
   });
 
   it("ejecuta los consumidores cuando cambia un componente compartido", () => {
@@ -58,6 +61,9 @@ describe("selector de pruebas por componente", () => {
     expect(result.fullSuite).toBe(true);
     expect(result.testComponents).toEqual(
       expect.arrayContaining(["inventory-services", "tooling"]),
+    );
+    expect(result.e2eJourneys).toEqual(
+      expect.arrayContaining(["auth-session", "agenda", "accessibility"]),
     );
   });
 });
