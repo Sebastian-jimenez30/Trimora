@@ -103,7 +103,7 @@
         "src/app/(dashboard)/agenda/**/*.tsx",
         "src/app/(dashboard)/calendar/**/*.tsx"
       ],
-      "triggers": ["pos-finance", "shared-ui"]
+      "triggers": ["pos-finance"]
     },
     "clients": {
       "paths": ["src/modules/clients/", "src/app/clientes/", "src/app/(dashboard)/clientes/"],
@@ -127,7 +127,7 @@
         "src/app/(dashboard)/analitica/**/*.tsx",
         "src/app/(dashboard)/dashboard/**/*.tsx"
       ],
-      "triggers": ["shared-ui"]
+      "triggers": []
     },
     "ai-integrations": {
       "paths": [
@@ -167,7 +167,15 @@
       ],
       "testRoots": ["src/components/shared", "src/components/layout", "src/components", "src/app"],
       "coverage": ["src/components/**/*.tsx"],
-      "triggers": []
+      "triggers": [
+        "auth-access",
+        "pos-finance",
+        "inventory-services",
+        "agenda-appointments",
+        "clients",
+        "analytics",
+        "ai-integrations"
+      ]
     },
     "database": {
       "paths": ["src/core/database/", "drizzle.config.ts", "supabase/"],
@@ -188,6 +196,7 @@
         ".github/workflows/",
         "ci/",
         "scripts/ci/",
+        "src/test/",
         "package.json",
         "package-lock.json",
         "eslint.config.mjs",

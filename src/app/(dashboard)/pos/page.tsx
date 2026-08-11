@@ -10,6 +10,7 @@ import {
 } from "@/core/database/schema";
 import { requireActor } from "@/core/auth/server/actor";
 import { getCashEntries } from "@/modules/pos/cash-flow";
+import type { POSHistoryEntry } from "@/modules/pos/ui/types";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { addDays, format, startOfWeek } from "date-fns";
 import { fromZonedTime, toZonedTime } from "date-fns-tz";
@@ -201,7 +202,7 @@ export default async function POSPage({ searchParams }: POSPageProps) {
     };
   };
 
-  const cashHistory = cashEntries.flatMap((entry) => {
+  const cashHistory = cashEntries.flatMap<POSHistoryEntry>((entry) => {
     const tx = transactionsById.get(entry.transactionId);
     if (!tx) return [];
 
@@ -225,7 +226,7 @@ export default async function POSPage({ searchParams }: POSPageProps) {
     ];
   });
 
-  const pendingHistory = pendingTransactions.map((tx) => ({
+  const pendingHistory = pendingTransactions.map<POSHistoryEntry>((tx) => ({
     id: `pending:${tx.id}`,
     transactionId: tx.id,
     movementKind: "PENDING",

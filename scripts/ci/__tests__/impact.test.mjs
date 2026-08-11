@@ -21,7 +21,24 @@ describe("selector de pruebas por componente", () => {
         "agenda-appointments",
         "clients",
         "analytics",
+      ]),
+    );
+  });
+
+  it("ejecuta los consumidores cuando cambia un componente compartido", () => {
+    const result = analyzeImpact({ files: ["src/components/shared/Dialog.tsx"] });
+
+    expect(result.directComponents).toEqual(["shared-ui"]);
+    expect(result.affectedComponents).toEqual(
+      expect.arrayContaining([
         "shared-ui",
+        "auth-access",
+        "pos-finance",
+        "inventory-services",
+        "agenda-appointments",
+        "clients",
+        "analytics",
+        "ai-integrations",
       ]),
     );
   });

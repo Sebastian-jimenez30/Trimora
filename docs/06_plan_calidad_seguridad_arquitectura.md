@@ -314,7 +314,7 @@ Los cambios de cada proveedor ejecutarán sus contratos específicos. Los cambio
 
 **Rama:** `architecture/05-critical-domain-tests`
 
-**Estado de trabajo:** implementada; pendiente de pipeline y aceptacion del propietario.
+**Estado de trabajo:** aceptada por el propietario con pipeline en verde.
 
 **Módulos prioritarios:**
 
@@ -355,6 +355,11 @@ Cada suite quedará etiquetada por componente. Por ejemplo, un cambio exclusivo 
 ### Etapa 06 — Componentes y experiencia de usuario
 
 **Rama:** `architecture/06-component-tests`
+
+**Estado de trabajo:** implementada; pendiente de validación por pipeline y aceptación funcional.
+
+La matriz de comportamientos, los DTO de interfaz y el recorrido manual están documentados en
+`docs/12_componentes_experiencia_usuario.md`.
 
 **Cambios previstos:**
 

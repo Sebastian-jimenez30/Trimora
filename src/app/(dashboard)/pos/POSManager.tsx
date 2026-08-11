@@ -1,36 +1,51 @@
-"use client"
+"use client";
 
-import { useState, useTransition, useEffect } from "react";
-import { processSale, registerExpense, registerPayment, registerClientPayment, exportFinancialReport, updateTransaction, deleteTransaction, CartItem } from "@/modules/pos/actions";
+import { useCallback, useEffect, useState, useTransition } from "react";
+import {
+  processSale,
+  registerExpense,
+  registerPayment,
+  registerClientPayment,
+  exportFinancialReport,
+  updateTransaction,
+  deleteTransaction,
+} from "@/modules/pos/actions";
+import type { CartItem } from "@/modules/pos/actions";
 import { useSearchParams, useRouter } from "next/navigation";
 import { toast } from "react-hot-toast";
+import Dialog from "@/components/shared/Dialog";
+import type {
+  HistoryRange,
+  POSActiveTab,
+  POSHistoryEntry,
+  POSManagerProps,
+  POSProduct,
+  POSReceivable,
+  POSService,
+} from "@/modules/pos/ui/types";
 
-type POSProps = {
-  services: any[];
-  products: any[];
-  clients: any[];
-  staff: any[];
-  history: any[];
-  receivables: any[];
-  historyRange: HistoryRange;
-  historyStart: string;
-  historyEnd: string;
-  pendingAppointments?: any[];
-};
-
-type HistoryRange = "MONTH" | "WEEK" | "DAY" | "YEAR" | "CUSTOM" | "HISTORIC";
-
-export default function POSManager({ services, products, clients, staff, history, receivables, historyRange, historyStart, historyEnd, pendingAppointments }: POSProps) {
+export default function POSManager({
+  services,
+  products,
+  clients,
+  staff,
+  history,
+  receivables,
+  historyRange,
+  historyStart,
+  historyEnd,
+  pendingAppointments,
+}: POSManagerProps) {
   const searchParams = useSearchParams();
   const router = useRouter();
-  
-  const [activeTab, setActiveTab] = useState<"VENTA" | "RECEIVABLES" | "HISTORY" | "COMPRA">("VENTA");
+
+  const [activeTab, setActiveTab] = useState<POSActiveTab>("VENTA");
   const [isServicesOpen, setIsServicesOpen] = useState(true);
   const [isProductsOpen, setIsProductsOpen] = useState(true);
   const [isCartOpenMobile, setIsCartOpenMobile] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [cart, setCart] = useState<CartItem[]>([]);
-  
+
   const [selectedClientId, setSelectedClientId] = useState<string>("");
   const [paymentMethod, setPaymentMethod] = useState<string>("CASH");
   const [currentAppointmentId, setCurrentAppointmentId] = useState<string>("");
@@ -42,13 +57,13 @@ export default function POSManager({ services, products, clients, staff, history
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentRemaining, setPaymentRemaining] = useState("");
   const [successTxId, setSuccessTxId] = useState("");
-  const [selectedTransaction, setSelectedTransaction] = useState<any | null>(null);
-  const [editingTransaction, setEditingTransaction] = useState<any | null>(null);
-  const [selectedReceivable, setSelectedReceivable] = useState<any | null>(null);
-  const [receivableToPay, setReceivableToPay] = useState<any | null>(null);
+  const [selectedTransaction, setSelectedTransaction] = useState<POSHistoryEntry | null>(null);
+  const [editingTransaction, setEditingTransaction] = useState<POSHistoryEntry | null>(null);
+  const [selectedReceivable, setSelectedReceivable] = useState<POSReceivable | null>(null);
+  const [receivableToPay, setReceivableToPay] = useState<POSReceivable | null>(null);
   const [receivablePaymentAmount, setReceivablePaymentAmount] = useState("");
   const [receivablePaymentMethod, setReceivablePaymentMethod] = useState("CASH");
-  
+
   const [isExporting, setIsExporting] = useState(false);
   const [exportRangeType, setExportRangeType] = useState<HistoryRange>(historyRange);
   const [customStartDate, setCustomStartDate] = useState(historyStart);
@@ -57,32 +72,35 @@ export default function POSManager({ services, products, clients, staff, history
   const [isPending, startTransition] = useTransition();
 
   // Cargar una cita al POS
-  const loadAppointment = (appointmentId: string) => {
-    if (!pendingAppointments) return;
-    const app = pendingAppointments.find(a => a.id === appointmentId);
-    if (!app) return;
+  const loadAppointment = useCallback(
+    (appointmentId: string) => {
+      if (!pendingAppointments) return;
+      const app = pendingAppointments.find((appointment) => appointment.id === appointmentId);
+      if (!app) return;
 
-    // Setear cliente y el ID de la cita
-    setSelectedClientId(app.clientId);
-    setCurrentAppointmentId(app.id);
+      setSelectedClientId(app.clientId);
+      setCurrentAppointmentId(app.id);
 
-    // Buscar el servicio y agregarlo al carrito
-    const srv = services.find(s => s.id === app.serviceId);
-    if (srv) {
-      setCart([{
-        id: srv.id,
-        type: "SERVICE",
-        name: srv.name,
-        price: parseFloat(srv.price),
-        quantity: 1,
-        staffId: app.staffId
-      }]);
-    }
-  };
+      const service = services.find((candidate) => candidate.id === app.serviceId);
+      if (service) {
+        setCart([
+          {
+            id: service.id,
+            type: "SERVICE",
+            name: service.name,
+            price: parseFloat(service.price),
+            quantity: 1,
+            staffId: app.staffId,
+          },
+        ]);
+      }
+    },
+    [pendingAppointments, services],
+  );
 
   useEffect(() => {
     const urlAppId = searchParams?.get("appointmentId");
-    if (urlAppId && pendingAppointments) {
+    if (urlAppId) {
       setTimeout(() => {
         loadAppointment(urlAppId);
         router.replace("/pos");
@@ -92,19 +110,20 @@ export default function POSManager({ services, products, clients, staff, history
     const tab = searchParams?.get("tab");
     if (tab === "HISTORY" || tab === "VENTA" || tab === "RECEIVABLES" || tab === "COMPRA") {
       setTimeout(() => {
-        setActiveTab(tab as any);
+        setActiveTab(tab);
       }, 0);
     }
 
     const receivableClientId = searchParams?.get("clientId");
     if (tab === "RECEIVABLES" && receivableClientId) {
-      const account = receivables.find(receivable => receivable.clientId === receivableClientId);
-      if (account) setTimeout(() => {
-        setSelectedReceivable(account);
-        router.replace("/pos?tab=RECEIVABLES");
-      }, 0);
+      const account = receivables.find((receivable) => receivable.clientId === receivableClientId);
+      if (account)
+        setTimeout(() => {
+          setSelectedReceivable(account);
+          router.replace("/pos?tab=RECEIVABLES");
+        }, 0);
     }
-    
+
     const payTx = searchParams?.get("payTx");
     const payAmountParam = searchParams?.get("payAmount");
     if (payTx && payAmountParam) {
@@ -116,43 +135,48 @@ export default function POSManager({ services, products, clients, staff, history
         router.replace("/pos");
       }, 0);
     }
-  }, [searchParams, pendingAppointments, services, receivables, router]);
+  }, [searchParams, loadAppointment, receivables, router]);
 
   // Helper para añadir al carrito
-  const addToCart = (item: any, type: "SERVICE" | "PRODUCT") => {
-    if (type === "PRODUCT" && parseFloat(item.currentStock) <= 0) {
+  const addToCart = (item: POSService | POSProduct, type: "SERVICE" | "PRODUCT") => {
+    const product = type === "PRODUCT" ? (item as POSProduct) : null;
+    const service = type === "SERVICE" ? (item as POSService) : null;
+    if (product && parseFloat(product.currentStock) <= 0) {
       toast.error("No puedes agregar este producto. Stock agotado (0).");
       return;
     }
 
-    setCart(prev => {
-      const existing = prev.find(i => i.id === item.id);
+    setCart((prev) => {
+      const existing = prev.find((i) => i.id === item.id);
       if (existing) {
-        if (type === "PRODUCT" && existing.quantity >= parseFloat(item.currentStock)) {
+        if (product && existing.quantity >= parseFloat(product.currentStock)) {
           toast.error("No puedes agregar más unidades de las disponibles en stock.");
           return prev;
         }
-        return prev.map(i => i.id === item.id ? { ...i, quantity: i.quantity + 1 } : i);
+        return prev.map((i) => (i.id === item.id ? { ...i, quantity: i.quantity + 1 } : i));
       }
-      return [...prev, {
-        id: item.id,
-        type,
-        name: item.name,
-        price: parseFloat(type === "SERVICE" ? item.price : item.salePrice),
-        quantity: 1,
-        staffId: type === "SERVICE" && staff.length > 0 ? staff[0].id : undefined
-      }];
+      return [
+        ...prev,
+        {
+          id: item.id,
+          type,
+          name: item.name,
+          price: parseFloat(service ? service.price : product?.salePrice || "0"),
+          quantity: 1,
+          staffId: type === "SERVICE" && staff.length > 0 ? staff[0].id : undefined,
+        },
+      ];
     });
   };
 
   const updateCartQty = (id: string, delta: number) => {
-    setCart(prev => {
-      return prev.map(i => {
+    setCart((prev) => {
+      return prev.map((i) => {
         if (i.id === id) {
           const newQty = i.quantity + delta;
           // Validación de stock para productos
           if (i.type === "PRODUCT" && delta > 0) {
-            const product = products.find(p => p.id === id);
+            const product = products.find((p) => p.id === id);
             if (product && newQty > parseFloat(product.currentStock)) {
               toast.error("No puedes agregar más unidades de las disponibles en stock.");
               return i;
@@ -167,26 +191,33 @@ export default function POSManager({ services, products, clients, staff, history
   };
 
   const updateCartStaff = (id: string, staffId: string) => {
-    setCart(prev => prev.map(i => i.id === id ? { ...i, staffId } : i));
+    setCart((prev) => prev.map((i) => (i.id === id ? { ...i, staffId } : i)));
   };
 
   const removeFromCart = (id: string) => {
-    setCart(prev => prev.filter(i => i.id !== id));
+    setCart((prev) => prev.filter((i) => i.id !== id));
   };
 
-  const cartTotal = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
+  const cartTotal = cart.reduce((acc, item) => acc + item.price * item.quantity, 0);
   const cartCount = cart.reduce((acc, item) => acc + item.quantity, 0);
 
   const handleCheckout = () => {
     if (cart.length === 0) return;
-    if (paymentMethod === 'CREDIT' && !selectedClientId) {
+    if (paymentMethod === "CREDIT" && !selectedClientId) {
       toast.error("Debe seleccionar un cliente para fiados.");
       return;
     }
     const parsedInitialPaid = parseFloat(initialPaidAmount) || 0;
-    
+
     startTransition(async () => {
-      const result = await processSale(cart, selectedClientId || null, paymentMethod, currentAppointmentId || undefined, parsedInitialPaid, initialPaymentMethod);
+      const result = await processSale(
+        cart,
+        selectedClientId || null,
+        paymentMethod,
+        currentAppointmentId || undefined,
+        parsedInitialPaid,
+        initialPaymentMethod,
+      );
       if (result.success && result.transactionId) {
         setCart([]);
         setSelectedClientId("");
@@ -220,7 +251,7 @@ export default function POSManager({ services, products, clients, staff, history
     });
   };
 
-  const openReceivablePayment = (receivable: any, payInFull: boolean) => {
+  const openReceivablePayment = (receivable: POSReceivable, payInFull: boolean) => {
     setSelectedReceivable(null);
     setReceivableToPay(receivable);
     setReceivablePaymentAmount(payInFull ? receivable.totalDebt : "");
@@ -242,11 +273,19 @@ export default function POSManager({ services, products, clients, staff, history
     }
 
     startTransition(async () => {
-      const result = await registerClientPayment(receivableToPay.clientId, amount, receivablePaymentMethod);
+      const result = await registerClientPayment(
+        receivableToPay.clientId,
+        amount,
+        receivablePaymentMethod,
+      );
       if (result.success) {
         setReceivableToPay(null);
         setReceivablePaymentAmount("");
-        toast.success(amount >= Number(receivableToPay.totalDebt) ? "Cuenta pagada completamente" : "Abono registrado");
+        toast.success(
+          amount >= Number(receivableToPay.totalDebt)
+            ? "Cuenta pagada completamente"
+            : "Abono registrado",
+        );
       } else {
         toast.error(result.error || "Error al registrar el abono");
       }
@@ -257,9 +296,9 @@ export default function POSManager({ services, products, clients, staff, history
     setIsExporting(true);
     let start = new Date();
     let end = new Date();
-    
-    start.setHours(0,0,0,0);
-    end.setHours(23,59,59,999);
+
+    start.setHours(0, 0, 0, 0);
+    end.setHours(23, 59, 59, 999);
 
     if (exportRangeType === "MONTH") {
       start.setDate(1);
@@ -280,15 +319,15 @@ export default function POSManager({ services, products, clients, staff, history
       start = new Date(customStartDate + "T00:00:00");
       end = new Date(customEndDate + "T23:59:59.999");
     }
-    
+
     const result = await exportFinancialReport(start.toISOString(), end.toISOString());
     setIsExporting(false);
     if (result.success && result.csv) {
-      const blob = new Blob([result.csv], { type: 'text/csv' });
+      const blob = new Blob([result.csv], { type: "text/csv" });
       const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
+      const a = document.createElement("a");
       a.href = url;
-      a.download = `reporte_financiero_${start.toLocaleDateString().replace(/\//g, '-')}_al_${end.toLocaleDateString().replace(/\//g, '-')}.csv`;
+      a.download = `reporte_financiero_${start.toLocaleDateString().replace(/\//g, "-")}_al_${end.toLocaleDateString().replace(/\//g, "-")}.csv`;
       a.click();
       window.URL.revokeObjectURL(url);
     } else {
@@ -296,7 +335,11 @@ export default function POSManager({ services, products, clients, staff, history
     }
   };
 
-  const applyHistoryFilter = (range: HistoryRange, startDate = customStartDate, endDate = customEndDate) => {
+  const applyHistoryFilter = (
+    range: HistoryRange,
+    startDate = customStartDate,
+    endDate = customEndDate,
+  ) => {
     if (range === "CUSTOM" && (!startDate || !endDate)) {
       toast.error("Seleccione ambas fechas para filtrar el historial.");
       return;
@@ -339,7 +382,10 @@ export default function POSManager({ services, products, clients, staff, history
 
     const formData = new FormData(e.currentTarget);
     startTransition(async () => {
-      const result = await updateTransaction(editingTransaction.transactionId || editingTransaction.id, formData);
+      const result = await updateTransaction(
+        editingTransaction.transactionId || editingTransaction.id,
+        formData,
+      );
       if (result.success) {
         setEditingTransaction(null);
         toast.success("Movimiento actualizado");
@@ -350,10 +396,18 @@ export default function POSManager({ services, products, clients, staff, history
   };
 
   const handleDeleteTransaction = () => {
-    if (!editingTransaction || !window.confirm("¿Eliminar este movimiento? Esta acción también revertirá el inventario asociado a la venta.")) return;
+    if (
+      !editingTransaction ||
+      !window.confirm(
+        "¿Eliminar este movimiento? Esta acción también revertirá el inventario asociado a la venta.",
+      )
+    )
+      return;
 
     startTransition(async () => {
-      const result = await deleteTransaction(editingTransaction.transactionId || editingTransaction.id);
+      const result = await deleteTransaction(
+        editingTransaction.transactionId || editingTransaction.id,
+      );
       if (result.success) {
         setEditingTransaction(null);
         toast.success("Movimiento eliminado");
@@ -364,37 +418,46 @@ export default function POSManager({ services, products, clients, staff, history
   };
 
   // Filtrado
-  const filteredServices = services.filter(s => s.name.toLowerCase().includes(searchTerm.toLowerCase()));
-  const filteredProducts = products.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()) && p.category !== "CONSUMO");
+  const filteredServices = services.filter((s) =>
+    s.name.toLowerCase().includes(searchTerm.toLowerCase()),
+  );
+  const filteredProducts = products.filter(
+    (p) => p.name.toLowerCase().includes(searchTerm.toLowerCase()) && p.category !== "CONSUMO",
+  );
 
   return (
     <div className="flex h-full bg-[#0f0f0f] relative overflow-hidden">
-      
       {/* Contenido Principal (Izquierda) */}
       <div className="flex-1 flex flex-col h-full overflow-hidden">
         {/* Topbar */}
         <header className="border-b border-white/10 flex flex-col lg:flex-row items-start lg:items-center justify-between px-4 lg:px-8 bg-pitch shrink-0 gap-4 lg:gap-0 pt-4 lg:pt-0 min-h-[70px]">
           <div className="flex gap-6 overflow-x-auto whitespace-nowrap w-full lg:w-auto scrollbar-hide pb-0 lg:pb-0">
-            {(["VENTA", "RECEIVABLES", "COMPRA", "HISTORY"] as const).map(tab => (
+            {(["VENTA", "RECEIVABLES", "COMPRA", "HISTORY"] as const).map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
                 className={`text-sm font-semibold transition-colors pb-[23px] pt-[23px] border-b-2 ${
-                  activeTab === tab 
-                    ? "text-sterling border-[#8B4513]" 
+                  activeTab === tab
+                    ? "text-sterling border-[#8B4513]"
                     : "text-[#888] border-transparent hover:text-[#ccc]"
                 }`}
               >
-                {tab === "VENTA" ? "Venta" : tab === "RECEIVABLES" ? "Por cobrar" : tab === "COMPRA" ? "Compra (Gastos)" : "Historial"}
+                {tab === "VENTA"
+                  ? "Venta"
+                  : tab === "RECEIVABLES"
+                    ? "Por cobrar"
+                    : tab === "COMPRA"
+                      ? "Compra (Gastos)"
+                      : "Historial"}
               </button>
             ))}
           </div>
 
           <div className="flex items-center gap-5 w-full lg:w-auto pb-4 lg:pb-0">
             {activeTab === "VENTA" && (
-              <input 
-                type="text" 
-                placeholder="Buscar..." 
+              <input
+                type="text"
+                placeholder="Buscar..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="bg-[#141414] border border-white/10 text-sterling px-4 py-2 rounded-full text-sm w-full lg:w-[250px] focus:outline-none focus:border-[#888]"
@@ -405,80 +468,133 @@ export default function POSManager({ services, products, clients, staff, history
 
         {/* Main Area */}
         <div className="flex-1 overflow-y-auto p-4 lg:p-8 relative">
-          
           {/* VENTA (SERVICIOS Y PRODUCTOS) */}
           {activeTab === "VENTA" && (
             <div className="flex flex-col gap-8">
-              
               {/* CITAS PENDIENTES EN PAGINA PRINCIPAL */}
               {pendingAppointments && pendingAppointments.length > 0 && (
-              <div className="bg-[#141414] border border-[#8B4513]/50 p-5 rounded-xl shadow-[0_0_15px_rgba(139,69,19,0.1)] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div>
-                  <h3 className="text-lg font-serif text-[#8B4513] font-bold mb-1">Citas Pendientes de Cobro</h3>
-                  <p className="text-xs text-charcoal">Selecciona una cita para registrar el pago.</p>
+                <div className="bg-[#141414] border border-[#8B4513]/50 p-5 rounded-xl shadow-[0_0_15px_rgba(139,69,19,0.1)] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div>
+                    <h3 className="text-lg font-serif text-[#8B4513] font-bold mb-1">
+                      Citas Pendientes de Cobro
+                    </h3>
+                    <p className="text-xs text-charcoal">
+                      Selecciona una cita para registrar el pago.
+                    </p>
+                  </div>
+                  <select
+                    value={currentAppointmentId}
+                    onChange={(e) => {
+                      if (e.target.value) loadAppointment(e.target.value);
+                      else setCurrentAppointmentId("");
+                    }}
+                    className="bg-pitch border border-[#8B4513]/50 text-sterling px-4 py-3 rounded-lg text-sm focus:outline-none focus:border-[#8B4513] min-w-[250px]"
+                  >
+                    <option value="">(Seleccionar Cita)</option>
+                    {pendingAppointments?.map((app) => (
+                      <option key={app.id} value={app.id}>
+                        {app.clientName} {app.clientLastName} - {app.serviceName}
+                      </option>
+                    ))}
+                  </select>
                 </div>
-                <select 
-                  value={currentAppointmentId} 
-                  onChange={(e) => {
-                    if (e.target.value) loadAppointment(e.target.value);
-                    else setCurrentAppointmentId("");
-                  }}
-                  className="bg-pitch border border-[#8B4513]/50 text-sterling px-4 py-3 rounded-lg text-sm focus:outline-none focus:border-[#8B4513] min-w-[250px]"
-                >
-                  <option value="">(Seleccionar Cita)</option>
-                  {pendingAppointments?.map(app => (
-                    <option key={app.id} value={app.id}>
-                      {app.clientName} {app.clientLastName} - {app.serviceName}
-                    </option>
-                  ))}
-                </select>
-              </div>
               )}
 
               {/* SERVICIOS */}
               <div className="flex flex-col gap-4">
-                <button 
-                  onClick={() => setIsServicesOpen(!isServicesOpen)} 
+                <button
+                  onClick={() => setIsServicesOpen(!isServicesOpen)}
                   className="flex items-center justify-between text-lg font-serif text-sterling bg-[#141414] border border-white/10 px-5 py-3 rounded-xl hover:bg-white/5 transition-colors"
                 >
                   <span>Servicios</span>
-                  <svg className={`w-5 h-5 transition-transform ${isServicesOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                  <svg
+                    className={`w-5 h-5 transition-transform ${isServicesOpen ? "rotate-180" : ""}`}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M19 9l-7 7-7-7"
+                    ></path>
+                  </svg>
                 </button>
-                
+
                 {isServicesOpen && (
                   <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 lg:gap-5">
-                    {filteredServices.map(srv => {
-                      const cartItem = cart.find(i => i.id === srv.id);
+                    {filteredServices.map((srv) => {
+                      const cartItem = cart.find((i) => i.id === srv.id);
                       return (
-                        <div 
-                          key={srv.id} 
+                        <div
+                          key={srv.id}
                           className={`relative bg-[#141414] border rounded-xl p-5 transition-all flex flex-col items-center text-center select-none ${
-                            cartItem ? "border-[#8B4513] shadow-[0_0_15px_rgba(139,69,19,0.2)]" : "border-white/10 hover:-translate-y-1 hover:border-[#8B4513] hover:shadow-lg cursor-pointer"
+                            cartItem
+                              ? "border-[#8B4513] shadow-[0_0_15px_rgba(139,69,19,0.2)]"
+                              : "border-white/10 hover:-translate-y-1 hover:border-[#8B4513] hover:shadow-lg cursor-pointer"
                           }`}
                           onClick={() => !cartItem && addToCart(srv, "SERVICE")}
                         >
                           {/* Controles de Tarjeta (Aparece cuando está en el carrito) */}
                           {cartItem && (
-                            <div className="absolute top-2 right-2 flex bg-pitch border border-[#8B4513]/50 rounded-lg overflow-hidden items-center shadow-lg z-10" onClick={e => e.stopPropagation()}>
-                              <button 
-                                onClick={() => removeFromCart(srv.id)} 
+                            <div
+                              className="absolute top-2 right-2 flex bg-pitch border border-[#8B4513]/50 rounded-lg overflow-hidden items-center shadow-lg z-10"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <button
+                                onClick={() => removeFromCart(srv.id)}
                                 className="px-2 py-1.5 text-red-400 hover:bg-white/10 transition-colors border-r border-[#8B4513]/30"
                                 title="Eliminar del carrito"
                               >
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                                <svg
+                                  width="14"
+                                  height="14"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="2"
+                                >
+                                  <polyline points="3 6 5 6 21 6"></polyline>
+                                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                </svg>
                               </button>
-                              <button onClick={() => updateCartQty(srv.id, -1)} className="px-2.5 py-1 text-sterling hover:bg-white/10 transition-colors">-</button>
-                              <span className="w-6 text-center text-xs font-bold text-[#8B4513]">{cartItem.quantity}</span>
-                              <button onClick={() => updateCartQty(srv.id, 1)} className="px-2.5 py-1 text-sterling hover:bg-white/10 transition-colors border-l border-[#8B4513]/30">+</button>
+                              <button
+                                onClick={() => updateCartQty(srv.id, -1)}
+                                className="px-2.5 py-1 text-sterling hover:bg-white/10 transition-colors"
+                              >
+                                -
+                              </button>
+                              <span className="w-6 text-center text-xs font-bold text-[#8B4513]">
+                                {cartItem.quantity}
+                              </span>
+                              <button
+                                onClick={() => updateCartQty(srv.id, 1)}
+                                className="px-2.5 py-1 text-sterling hover:bg-white/10 transition-colors border-l border-[#8B4513]/30"
+                              >
+                                +
+                              </button>
                             </div>
                           )}
 
                           <div className="w-[60px] h-[60px] rounded-full bg-[#2C2C2C] text-[#8B4513] flex items-center justify-center mb-4 mt-2">
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
+                            <svg
+                              width="24"
+                              height="24"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                            >
+                              <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
+                              <polyline points="14 2 14 8 20 8" />
+                            </svg>
                           </div>
                           <h4 className="text-sm font-semibold text-sterling mb-1">{srv.name}</h4>
                           <p className="text-lg text-[#8B4513] font-bold">${srv.price}</p>
-                          <span className="text-[10px] text-[#888] mt-2">{srv.durationMinutes} min</span>
+                          <span className="text-[10px] text-[#888] mt-2">
+                            {srv.durationMinutes} min
+                          </span>
                         </div>
                       );
                     })}
@@ -488,43 +604,78 @@ export default function POSManager({ services, products, clients, staff, history
 
               {/* PRODUCTOS */}
               <div className="flex flex-col gap-4">
-                <button 
-                  onClick={() => setIsProductsOpen(!isProductsOpen)} 
+                <button
+                  onClick={() => setIsProductsOpen(!isProductsOpen)}
                   className="flex items-center justify-between text-lg font-serif text-sterling bg-[#141414] border border-white/10 px-5 py-3 rounded-xl hover:bg-white/5 transition-colors"
                 >
                   <span>Productos</span>
-                  <svg className={`w-5 h-5 transition-transform ${isProductsOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                  <svg
+                    className={`w-5 h-5 transition-transform ${isProductsOpen ? "rotate-180" : ""}`}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M19 9l-7 7-7-7"
+                    ></path>
+                  </svg>
                 </button>
-                
+
                 {isProductsOpen && (
                   <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 lg:gap-5">
-                    {filteredProducts.map(prd => {
+                    {filteredProducts.map((prd) => {
                       const isOutOfStock = parseFloat(prd.currentStock) <= 0;
-                      const cartItem = cart.find(i => i.id === prd.id);
-                      
+                      const cartItem = cart.find((i) => i.id === prd.id);
+
                       return (
-                        <div 
-                          key={prd.id} 
+                        <div
+                          key={prd.id}
                           className={`relative bg-[#141414] border rounded-xl p-5 transition-all flex flex-col items-center text-center select-none ${
-                            isOutOfStock ? "opacity-50 border-white/10 cursor-not-allowed grayscale" :
-                            cartItem ? "border-blue-500/50 shadow-[0_0_15px_rgba(59,130,246,0.15)]" : "border-white/10 hover:-translate-y-1 hover:border-blue-500/50 hover:shadow-lg cursor-pointer"
+                            isOutOfStock
+                              ? "opacity-50 border-white/10 cursor-not-allowed grayscale"
+                              : cartItem
+                                ? "border-blue-500/50 shadow-[0_0_15px_rgba(59,130,246,0.15)]"
+                                : "border-white/10 hover:-translate-y-1 hover:border-blue-500/50 hover:shadow-lg cursor-pointer"
                           }`}
                           onClick={() => !isOutOfStock && !cartItem && addToCart(prd, "PRODUCT")}
                         >
                           {/* Controles de Tarjeta */}
                           {cartItem && (
-                            <div className="absolute top-2 right-2 flex bg-pitch border border-blue-500/30 rounded-lg overflow-hidden items-center shadow-lg z-10" onClick={e => e.stopPropagation()}>
-                              <button 
-                                onClick={() => removeFromCart(prd.id)} 
+                            <div
+                              className="absolute top-2 right-2 flex bg-pitch border border-blue-500/30 rounded-lg overflow-hidden items-center shadow-lg z-10"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <button
+                                onClick={() => removeFromCart(prd.id)}
                                 className="px-2 py-1.5 text-red-400 hover:bg-white/10 transition-colors border-r border-blue-500/30"
                               >
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                                <svg
+                                  width="14"
+                                  height="14"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="2"
+                                >
+                                  <polyline points="3 6 5 6 21 6"></polyline>
+                                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                </svg>
                               </button>
-                              <button onClick={() => updateCartQty(prd.id, -1)} className="px-2.5 py-1 text-sterling hover:bg-white/10 transition-colors">-</button>
-                              <span className="w-6 text-center text-xs font-bold text-blue-400">{cartItem.quantity}</span>
-                              <button 
-                                onClick={() => updateCartQty(prd.id, 1)} 
-                                className={`px-2.5 py-1 text-sterling transition-colors border-l border-blue-500/30 ${cartItem.quantity >= parseFloat(prd.currentStock) ? 'opacity-30 cursor-not-allowed' : 'hover:bg-white/10'}`}
+                              <button
+                                onClick={() => updateCartQty(prd.id, -1)}
+                                className="px-2.5 py-1 text-sterling hover:bg-white/10 transition-colors"
+                              >
+                                -
+                              </button>
+                              <span className="w-6 text-center text-xs font-bold text-blue-400">
+                                {cartItem.quantity}
+                              </span>
+                              <button
+                                onClick={() => updateCartQty(prd.id, 1)}
+                                className={`px-2.5 py-1 text-sterling transition-colors border-l border-blue-500/30 ${cartItem.quantity >= parseFloat(prd.currentStock) ? "opacity-30 cursor-not-allowed" : "hover:bg-white/10"}`}
                                 disabled={cartItem.quantity >= parseFloat(prd.currentStock)}
                               >
                                 +
@@ -533,11 +684,24 @@ export default function POSManager({ services, products, clients, staff, history
                           )}
 
                           <div className="w-[60px] h-[60px] rounded-full bg-[#2C2C2C] text-blue-400 flex items-center justify-center mb-4 mt-2">
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+                            <svg
+                              width="24"
+                              height="24"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                            >
+                              <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" />
+                              <line x1="3" y1="6" x2="21" y2="6" />
+                              <path d="M16 10a4 4 0 0 1-8 0" />
+                            </svg>
                           </div>
                           <h4 className="text-sm font-semibold text-sterling mb-1">{prd.name}</h4>
                           <p className="text-lg text-blue-400 font-bold">${prd.salePrice}</p>
-                          <span className={`text-[10px] font-bold mt-2 ${isOutOfStock ? "text-red-500" : "text-[#888]"}`}>
+                          <span
+                            className={`text-[10px] font-bold mt-2 ${isOutOfStock ? "text-red-500" : "text-[#888]"}`}
+                          >
                             {isOutOfStock ? "Agotado (0)" : `Stock: ${prd.currentStock}`}
                           </span>
                         </div>
@@ -546,7 +710,6 @@ export default function POSManager({ services, products, clients, staff, history
                   </div>
                 )}
               </div>
-
             </div>
           )}
 
@@ -556,41 +719,66 @@ export default function POSManager({ services, products, clients, staff, history
               <div className="p-5 border-b border-white/10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <div>
                   <h3 className="font-serif text-lg text-sterling">Cuentas por cobrar</h3>
-                  <p className="text-xs text-charcoal mt-1">Cada cliente tiene una sola cuenta, aunque tenga varias ventas pendientes.</p>
+                  <p className="text-xs text-charcoal mt-1">
+                    Cada cliente tiene una sola cuenta, aunque tenga varias ventas pendientes.
+                  </p>
                 </div>
                 <div className="text-left sm:text-right">
-                  <p className="text-[10px] uppercase tracking-wider text-charcoal">Saldo total pendiente</p>
-                  <p className="text-xl font-bold text-orange-400">${receivables.reduce((total, account) => total + Number(account.totalDebt), 0).toFixed(2)}</p>
+                  <p className="text-[10px] uppercase tracking-wider text-charcoal">
+                    Saldo total pendiente
+                  </p>
+                  <p className="text-xl font-bold text-orange-400">
+                    $
+                    {receivables
+                      .reduce((total, account) => total + Number(account.totalDebt), 0)
+                      .toFixed(2)}
+                  </p>
                 </div>
               </div>
 
               {receivables.length === 0 ? (
                 <div className="py-14 px-5 text-center">
                   <p className="text-sm text-sterling">No hay cuentas pendientes por cobrar.</p>
-                  <p className="text-xs text-charcoal mt-1">Las nuevas ventas fiadas aparecerán aquí agrupadas por cliente.</p>
+                  <p className="text-xs text-charcoal mt-1">
+                    Las nuevas ventas fiadas aparecerán aquí agrupadas por cliente.
+                  </p>
                 </div>
               ) : (
                 <div className="divide-y divide-white/5">
-                  {receivables.map(receivable => (
+                  {receivables.map((receivable) => (
                     <div
                       key={receivable.clientId}
                       role="button"
                       tabIndex={0}
                       onClick={() => setSelectedReceivable(receivable)}
                       onKeyDown={(event) => {
-                        if (event.key === "Enter" || event.key === " ") setSelectedReceivable(receivable);
+                        if (event.key === "Enter" || event.key === " ")
+                          setSelectedReceivable(receivable);
                       }}
                       className="p-5 flex flex-col lg:flex-row lg:items-center gap-4 hover:bg-white/5 cursor-pointer transition-colors"
                     >
                       <div className="flex-1 min-w-0">
-                        <h4 className="text-sm font-bold text-sterling truncate">{receivable.clientName}</h4>
-                        <p className="text-xs text-charcoal mt-1">{receivable.movements.length} {receivable.movements.length === 1 ? "movimiento pendiente" : "movimientos pendientes"} · Ver detalle</p>
+                        <h4 className="text-sm font-bold text-sterling truncate">
+                          {receivable.clientName}
+                        </h4>
+                        <p className="text-xs text-charcoal mt-1">
+                          {receivable.movements.length}{" "}
+                          {receivable.movements.length === 1
+                            ? "movimiento pendiente"
+                            : "movimientos pendientes"}{" "}
+                          · Ver detalle
+                        </p>
                       </div>
                       <div className="lg:text-right lg:min-w-[130px]">
-                        <p className="text-[10px] uppercase tracking-wider text-charcoal">Deuda acumulada</p>
+                        <p className="text-[10px] uppercase tracking-wider text-charcoal">
+                          Deuda acumulada
+                        </p>
                         <p className="text-lg font-bold text-orange-400">${receivable.totalDebt}</p>
                       </div>
-                      <div className="flex flex-wrap gap-2 lg:min-w-[210px] lg:justify-end" onClick={event => event.stopPropagation()}>
+                      <div
+                        className="flex flex-wrap gap-2 lg:min-w-[210px] lg:justify-end"
+                        onClick={(event) => event.stopPropagation()}
+                      >
                         <button
                           type="button"
                           onClick={() => openReceivablePayment(receivable, false)}
@@ -619,11 +807,13 @@ export default function POSManager({ services, products, clients, staff, history
               <div className="p-5 border-b border-white/10 flex flex-col xl:flex-row xl:justify-between xl:items-center gap-4">
                 <div>
                   <h3 className="font-serif text-lg text-sterling">Historial de Caja</h3>
-                  <p className="text-xs text-charcoal mt-1">El período seleccionado filtra la lista y también se usa al exportar.</p>
+                  <p className="text-xs text-charcoal mt-1">
+                    El período seleccionado filtra la lista y también se usa al exportar.
+                  </p>
                 </div>
                 <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-                  <select 
-                    value={exportRangeType} 
+                  <select
+                    value={exportRangeType}
                     onChange={(e) => {
                       const range = e.target.value as HistoryRange;
                       setExportRangeType(range);
@@ -638,19 +828,19 @@ export default function POSManager({ services, products, clients, staff, history
                     <option value="CUSTOM">Personalizado</option>
                     <option value="HISTORIC">Histórico</option>
                   </select>
-                  
+
                   {exportRangeType === "CUSTOM" && (
                     <div className="flex flex-wrap items-center gap-2">
-                      <input 
-                        type="date" 
-                        value={customStartDate} 
+                      <input
+                        type="date"
+                        value={customStartDate}
                         onChange={(e) => setCustomStartDate(e.target.value)}
                         className="bg-pitch border border-white/10 text-sterling px-2 py-1 rounded text-xs focus:outline-none"
                       />
                       <span className="text-[#888] text-xs">al</span>
-                      <input 
-                        type="date" 
-                        value={customEndDate} 
+                      <input
+                        type="date"
+                        value={customEndDate}
                         onChange={(e) => setCustomEndDate(e.target.value)}
                         className="bg-pitch border border-white/10 text-sterling px-2 py-1 rounded text-xs focus:outline-none"
                       />
@@ -664,12 +854,25 @@ export default function POSManager({ services, products, clients, staff, history
                     </div>
                   )}
 
-                  <button 
+                  <button
                     onClick={handleExport}
                     disabled={isExporting}
                     className="bg-[#1a1a1a] border border-white/10 hover:bg-white/5 text-[#888] hover:text-white px-4 py-2 rounded-lg text-xs font-bold transition-colors disabled:opacity-50 flex items-center gap-2"
                   >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                      <polyline points="7 10 12 15 17 10"></polyline>
+                      <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
                     {isExporting ? "Exportando..." : "Exportar CSV"}
                   </button>
                 </div>
@@ -678,112 +881,181 @@ export default function POSManager({ services, products, clients, staff, history
                 <table className="w-full text-left border-collapse whitespace-nowrap lg:whitespace-normal min-w-[680px] lg:min-w-0">
                   <thead>
                     <tr>
-                    <th className="py-3 px-5 text-xs text-[#888] font-medium border-b border-white/10">Fecha / Hora</th>
-                    <th className="py-3 px-5 text-xs text-[#888] font-medium border-b border-white/10">Tipo</th>
-                    <th className="py-3 px-5 text-xs text-[#888] font-medium border-b border-white/10">Descripción</th>
-                    <th className="py-3 px-5 text-xs text-[#888] font-medium border-b border-white/10">Cliente</th>
-                    <th className="py-3 px-5 text-xs text-[#888] font-medium border-b border-white/10">Estado</th>
-                    <th className="py-3 px-5 text-xs text-[#888] font-medium border-b border-white/10 text-right">Monto</th>
-                    <th className="py-3 px-5 text-xs text-[#888] font-medium border-b border-white/10 text-center">Acciones</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {history.map(tx => {
-                    const isPending = tx.status === 'PENDING';
-                    const remaining = isPending ? (parseFloat(tx.totalAmount) - parseFloat(tx.paidAmount || '0')).toFixed(2) : '0.00';
-                    return (
-                    <tr
-                      key={tx.id}
-                      onClick={() => setSelectedTransaction(tx)}
-                      className={`group cursor-pointer hover:bg-white/5 border-b border-white/5 transition-colors ${isPending ? 'bg-[#8B4513]/10' : ''}`}
-                    >
-                      <td className="py-3 px-5 text-sm text-sterling">
-                        {new Date(tx.createdAt).toLocaleDateString()} {new Date(tx.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                      </td>
-                      <td className="py-3 px-5">
-                        <span className={`px-2 py-1 rounded text-[10px] uppercase font-bold tracking-wider ${
-                          tx.type === "INCOME" ? "bg-green-900/30 text-green-500" : "bg-red-900/30 text-red-500"
-                        }`}>
-                          {tx.movementKind === "PAYMENT" ? "ABONO" : tx.movementKind === "PENDING" ? "POR COBRAR" : tx.type === "INCOME" ? "VENTA" : "GASTO"}
-                        </span>
-                      </td>
-                      <td className="py-3 px-5 text-sm text-sterling">
-                        <div className="flex items-center gap-2">
-                          <span className="truncate">{tx.description}</span>
-                          {tx.canEdit ? (
-                            <button
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                setEditingTransaction(tx);
-                              }}
-                              className="shrink-0 p-1.5 text-charcoal hover:text-white transition-colors bg-white/5 hover:bg-white/10 rounded"
-                              title="Editar movimiento"
-                              aria-label="Editar movimiento"
+                      <th className="py-3 px-5 text-xs text-[#888] font-medium border-b border-white/10">
+                        Fecha / Hora
+                      </th>
+                      <th className="py-3 px-5 text-xs text-[#888] font-medium border-b border-white/10">
+                        Tipo
+                      </th>
+                      <th className="py-3 px-5 text-xs text-[#888] font-medium border-b border-white/10">
+                        Descripción
+                      </th>
+                      <th className="py-3 px-5 text-xs text-[#888] font-medium border-b border-white/10">
+                        Cliente
+                      </th>
+                      <th className="py-3 px-5 text-xs text-[#888] font-medium border-b border-white/10">
+                        Estado
+                      </th>
+                      <th className="py-3 px-5 text-xs text-[#888] font-medium border-b border-white/10 text-right">
+                        Monto
+                      </th>
+                      <th className="py-3 px-5 text-xs text-[#888] font-medium border-b border-white/10 text-center">
+                        Acciones
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {history.map((tx) => {
+                      const isPending = tx.status === "PENDING";
+                      const remaining = isPending
+                        ? (parseFloat(tx.totalAmount) - parseFloat(tx.paidAmount || "0")).toFixed(2)
+                        : "0.00";
+                      return (
+                        <tr
+                          key={tx.id}
+                          onClick={() => setSelectedTransaction(tx)}
+                          className={`group cursor-pointer hover:bg-white/5 border-b border-white/5 transition-colors ${isPending ? "bg-[#8B4513]/10" : ""}`}
+                        >
+                          <td className="py-3 px-5 text-sm text-sterling">
+                            {new Date(tx.createdAt).toLocaleDateString()}{" "}
+                            {new Date(tx.createdAt).toLocaleTimeString([], {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </td>
+                          <td className="py-3 px-5">
+                            <span
+                              className={`px-2 py-1 rounded text-[10px] uppercase font-bold tracking-wider ${
+                                tx.type === "INCOME"
+                                  ? "bg-green-900/30 text-green-500"
+                                  : "bg-red-900/30 text-red-500"
+                              }`}
                             >
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
-                            </button>
-                          ) : <span className="w-[26px] shrink-0" aria-hidden="true" />}
-                        </div>
-                      </td>
-                      <td className="py-3 px-5 text-sm text-[#888]">{tx.clientName}</td>
-                      <td className="py-3 px-5">
-                        {isPending ? (
-                          <div className="flex flex-col">
-                            <span className="text-orange-400 font-bold text-xs uppercase tracking-wider">Pendiente</span>
-                            <span className="text-[10px] text-orange-400/70">Debe: ${remaining}</span>
-                          </div>
-                        ) : (
-                          <span className="text-green-500 font-bold text-xs uppercase tracking-wider">Completado</span>
-                        )}
-                      </td>
-                      <td className={`py-3 px-5 text-sm font-bold text-right ${tx.type === "INCOME" ? "text-green-500" : "text-red-500"}`}>
-                        {tx.type === "INCOME" ? "+" : "-"}${tx.totalAmount}
-                      </td>
-                      <td className="py-3 px-3 min-w-[140px]">
-                        <div className="grid grid-cols-[36px_1fr] items-center gap-2">
-                        <div className="flex justify-center">
-                        {tx.type === "INCOME" && (
-                          <button
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              window.open(`/pos/receipt/${tx.transactionId || tx.id}`, '_blank');
-                            }}
-                            className="bg-white/5 hover:bg-white/10 text-sterling p-2 rounded transition-colors"
-                            title="Imprimir factura"
-                            aria-label="Imprimir factura"
+                              {tx.movementKind === "PAYMENT"
+                                ? "ABONO"
+                                : tx.movementKind === "PENDING"
+                                  ? "POR COBRAR"
+                                  : tx.type === "INCOME"
+                                    ? "VENTA"
+                                    : "GASTO"}
+                            </span>
+                          </td>
+                          <td className="py-3 px-5 text-sm text-sterling">
+                            <div className="flex items-center gap-2">
+                              <span className="truncate">{tx.description}</span>
+                              {tx.canEdit ? (
+                                <button
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    setEditingTransaction(tx);
+                                  }}
+                                  className="shrink-0 p-1.5 text-charcoal hover:text-white transition-colors bg-white/5 hover:bg-white/10 rounded"
+                                  title="Editar movimiento"
+                                  aria-label="Editar movimiento"
+                                >
+                                  <svg
+                                    width="14"
+                                    height="14"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="2"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                  >
+                                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                                  </svg>
+                                </button>
+                              ) : (
+                                <span className="w-[26px] shrink-0" aria-hidden="true" />
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-3 px-5 text-sm text-[#888]">{tx.clientName}</td>
+                          <td className="py-3 px-5">
+                            {isPending ? (
+                              <div className="flex flex-col">
+                                <span className="text-orange-400 font-bold text-xs uppercase tracking-wider">
+                                  Pendiente
+                                </span>
+                                <span className="text-[10px] text-orange-400/70">
+                                  Debe: ${remaining}
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="text-green-500 font-bold text-xs uppercase tracking-wider">
+                                Completado
+                              </span>
+                            )}
+                          </td>
+                          <td
+                            className={`py-3 px-5 text-sm font-bold text-right ${tx.type === "INCOME" ? "text-green-500" : "text-red-500"}`}
                           >
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
-                          </button>
-                        )}
-                        </div>
-                        <div className="flex justify-start">
-                        {isPending && (
-                           <button
-                             onClick={(event) => {
-                               event.stopPropagation();
-                               setSelectedTxId(tx.transactionId || tx.id);
-                               setPaymentAmount(remaining);
-                               setPaymentRemaining(remaining);
-                               setIsPaymentModalOpen(true);
-                             }}
-                             className="bg-orange-500/20 hover:bg-orange-500/40 border border-orange-500/50 text-orange-400 px-3 py-1.5 rounded text-xs transition-colors font-bold"
-                             title="Abonar"
-                           >
-                             Abonar
-                           </button>
-                        )}
-                        </div>
-                        </div>
-                      </td>
-                    </tr>
-                  )})}
-                  {history.length === 0 && (
-                    <tr>
-                      <td colSpan={7} className="py-10 text-center text-[#888] text-sm">No hay transacciones en el período seleccionado.</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+                            {tx.type === "INCOME" ? "+" : "-"}${tx.totalAmount}
+                          </td>
+                          <td className="py-3 px-3 min-w-[140px]">
+                            <div className="grid grid-cols-[36px_1fr] items-center gap-2">
+                              <div className="flex justify-center">
+                                {tx.type === "INCOME" && (
+                                  <button
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      window.open(
+                                        `/pos/receipt/${tx.transactionId || tx.id}`,
+                                        "_blank",
+                                      );
+                                    }}
+                                    className="bg-white/5 hover:bg-white/10 text-sterling p-2 rounded transition-colors"
+                                    title="Imprimir factura"
+                                    aria-label="Imprimir factura"
+                                  >
+                                    <svg
+                                      width="14"
+                                      height="14"
+                                      viewBox="0 0 24 24"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      strokeWidth="2"
+                                    >
+                                      <polyline points="6 9 6 2 18 2 18 9"></polyline>
+                                      <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+                                      <rect x="6" y="14" width="12" height="8"></rect>
+                                    </svg>
+                                  </button>
+                                )}
+                              </div>
+                              <div className="flex justify-start">
+                                {isPending && (
+                                  <button
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      setSelectedTxId(tx.transactionId || tx.id);
+                                      setPaymentAmount(remaining);
+                                      setPaymentRemaining(remaining);
+                                      setIsPaymentModalOpen(true);
+                                    }}
+                                    className="bg-orange-500/20 hover:bg-orange-500/40 border border-orange-500/50 text-orange-400 px-3 py-1.5 rounded text-xs transition-colors font-bold"
+                                    title="Abonar"
+                                  >
+                                    Abonar
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {history.length === 0 && (
+                      <tr>
+                        <td colSpan={7} className="py-10 text-center text-[#888] text-sm">
+                          No hay transacciones en el período seleccionado.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
               </div>
             </div>
           )}
@@ -793,42 +1065,70 @@ export default function POSManager({ services, products, clients, staff, history
             <div className="flex items-center justify-center pt-10">
               <div className="bg-[#141414] border border-white/10 rounded-xl p-8 w-full max-w-md">
                 <h3 className="font-serif text-2xl text-sterling mb-2">Registrar Gasto</h3>
-                <p className="text-sm text-[#888] mb-6">Salida de dinero de la caja para insumos, recibos o emergencias.</p>
-                
+                <p className="text-sm text-[#888] mb-6">
+                  Salida de dinero de la caja para insumos, recibos o emergencias.
+                </p>
+
                 <form onSubmit={handleExpenseSubmit} className="flex flex-col gap-5">
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-xs text-charcoal uppercase tracking-wider">Descripción del Gasto *</label>
-                    <input type="text" name="description" required placeholder="Ej. Pago de Luz" className="bg-pitch border border-white/10 text-sterling px-4 py-3 rounded-lg text-sm focus:outline-none focus:border-red-500" />
+                    <label className="text-xs text-charcoal uppercase tracking-wider">
+                      Descripción del Gasto *
+                    </label>
+                    <input
+                      type="text"
+                      name="description"
+                      required
+                      placeholder="Ej. Pago de Luz"
+                      className="bg-pitch border border-white/10 text-sterling px-4 py-3 rounded-lg text-sm focus:outline-none focus:border-red-500"
+                    />
                   </div>
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-xs text-charcoal uppercase tracking-wider">Monto Total ($) *</label>
-                    <input type="number" step="0.01" min="0" name="amount" required placeholder="0.00" className="bg-pitch border border-white/10 text-sterling px-4 py-3 rounded-lg text-sm focus:outline-none focus:border-red-500" />
+                    <label className="text-xs text-charcoal uppercase tracking-wider">
+                      Monto Total ($) *
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      name="amount"
+                      required
+                      placeholder="0.00"
+                      className="bg-pitch border border-white/10 text-sterling px-4 py-3 rounded-lg text-sm focus:outline-none focus:border-red-500"
+                    />
                   </div>
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-xs text-charcoal uppercase tracking-wider">Método de Pago</label>
-                    <select name="paymentMethod" className="bg-pitch border border-white/10 text-sterling px-4 py-3 rounded-lg text-sm focus:outline-none focus:border-red-500">
+                    <label className="text-xs text-charcoal uppercase tracking-wider">
+                      Método de Pago
+                    </label>
+                    <select
+                      name="paymentMethod"
+                      className="bg-pitch border border-white/10 text-sterling px-4 py-3 rounded-lg text-sm focus:outline-none focus:border-red-500"
+                    >
                       <option value="CASH">Efectivo (Caja)</option>
                       <option value="TRANSFER">Transferencia (Banco)</option>
                       <option value="CARD">Tarjeta</option>
                     </select>
                   </div>
-                  <button type="submit" disabled={isPending} className="bg-red-900/80 hover:bg-red-800 text-white w-full py-3 rounded-lg text-sm font-bold transition-colors mt-2">
+                  <button
+                    type="submit"
+                    disabled={isPending}
+                    className="bg-red-900/80 hover:bg-red-800 text-white w-full py-3 rounded-lg text-sm font-bold transition-colors mt-2"
+                  >
                     {isPending ? "Registrando..." : "Confirmar Gasto"}
                   </button>
                 </form>
               </div>
             </div>
           )}
-
         </div>
       </div>
 
       {/* Barra Lateral de Caja (Sidebar POS) */}
-      
+
       {/* Botón Flotante para Móviles */}
       {activeTab === "VENTA" && cart.length > 0 && !isCartOpenMobile && (
         <div className="lg:hidden absolute bottom-4 left-4 right-4 z-10">
-          <button 
+          <button
             onClick={() => setIsCartOpenMobile(true)}
             className="w-full bg-[#8B4513] hover:bg-[#A0522D] text-white py-4 rounded-xl font-bold shadow-lg flex justify-between px-6 items-center"
           >
@@ -839,31 +1139,50 @@ export default function POSManager({ services, products, clients, staff, history
       )}
 
       {activeTab === "VENTA" && cart.length > 0 && (
-        <div className={`w-full lg:w-[420px] bg-[#101010] border-l border-white/10 flex-col h-full z-20 animate-in slide-in-from-right duration-300 absolute lg:relative right-0 shadow-[-10px_0_20px_rgba(0,0,0,0.5)] lg:shadow-none ${isCartOpenMobile ? 'flex' : 'hidden lg:flex'}`}>
-          
+        <div
+          className={`w-full lg:w-[420px] bg-[#101010] border-l border-white/10 flex-col h-full z-20 animate-in slide-in-from-right duration-300 absolute lg:relative right-0 shadow-[-10px_0_20px_rgba(0,0,0,0.5)] lg:shadow-none ${isCartOpenMobile ? "flex" : "hidden lg:flex"}`}
+        >
           <div className="p-5 border-b border-white/10 bg-[#141414] flex justify-between items-center shrink-0">
             <div>
               <h2 className="text-xl font-serif text-sterling">Ticket de Venta</h2>
-              <p className="text-[10px] text-charcoal uppercase tracking-wider mt-1">{cartCount} {cartCount === 1 ? 'ítem' : 'ítems'}</p>
+              <p className="text-[10px] text-charcoal uppercase tracking-wider mt-1">
+                {cartCount} {cartCount === 1 ? "ítem" : "ítems"}
+              </p>
             </div>
             {/* Botón solo visible en móviles para ocultar el carrito si se desea seguir agregando */}
-            <button onClick={() => setIsCartOpenMobile(false)} className="lg:hidden text-charcoal hover:text-white">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            <button
+              onClick={() => setIsCartOpenMobile(false)}
+              className="lg:hidden text-charcoal hover:text-white"
+            >
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
             </button>
           </div>
 
           <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-5">
-            
             <div className="flex flex-col gap-2">
-              <label className="text-xs text-charcoal uppercase tracking-wider">Cliente (Opcional)</label>
-              <select 
-                value={selectedClientId} 
+              <label className="text-xs text-charcoal uppercase tracking-wider">
+                Cliente (Opcional)
+              </label>
+              <select
+                value={selectedClientId}
                 onChange={(e) => setSelectedClientId(e.target.value)}
                 className="bg-pitch border border-white/10 text-sterling px-3 py-2.5 rounded-lg text-sm focus:outline-none focus:border-[#8B4513] w-full"
               >
                 <option value="">Cliente General</option>
-                {clients.map(c => (
-                  <option key={c.id} value={c.id}>{c.firstName} {c.lastName}</option>
+                {clients.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.firstName} {c.lastName}
+                  </option>
                 ))}
               </select>
             </div>
@@ -871,36 +1190,71 @@ export default function POSManager({ services, products, clients, staff, history
             <div className="border-t border-white/5 pt-4 flex-1">
               <h3 className="text-xs text-charcoal uppercase tracking-wider mb-3">Detalle</h3>
               <div className="flex flex-col gap-3">
-                {cart.map(item => (
+                {cart.map((item) => (
                   <div key={item.id} className="flex flex-col bg-white/5 rounded-lg p-3">
                     <div className="flex justify-between items-start mb-2">
                       <div className="flex-1 pr-2">
-                        <h4 className="text-sm font-bold text-sterling leading-tight">{item.name}</h4>
-                        <span className="text-[10px] text-[#888]">${item.price.toFixed(2)} c/u</span>
+                        <h4 className="text-sm font-bold text-sterling leading-tight">
+                          {item.name}
+                        </h4>
+                        <span className="text-[10px] text-[#888]">
+                          ${item.price.toFixed(2)} c/u
+                        </span>
                       </div>
-                      <span className="text-sm font-bold text-sterling">${(item.price * item.quantity).toFixed(2)}</span>
+                      <span className="text-sm font-bold text-sterling">
+                        ${(item.price * item.quantity).toFixed(2)}
+                      </span>
                     </div>
 
                     <div className="flex items-center justify-between mt-1">
                       {item.type === "SERVICE" ? (
-                        <select 
-                          value={item.staffId} 
+                        <select
+                          value={item.staffId}
                           onChange={(e) => updateCartStaff(item.id, e.target.value)}
                           className="bg-pitch border border-white/10 text-[#888] px-2 py-1 rounded text-[10px] focus:outline-none w-[120px]"
                         >
-                          {staff.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                          {staff.map((s) => (
+                            <option key={s.id} value={s.id}>
+                              {s.name}
+                            </option>
+                          ))}
                         </select>
                       ) : (
                         <div className="w-[120px]"></div>
                       )}
 
                       <div className="flex items-center bg-pitch border border-white/10 rounded-md">
-                        <button onClick={() => removeFromCart(item.id)} className="px-2 py-1 text-red-400 hover:text-red-300 border-r border-white/10">
-                           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                        <button
+                          onClick={() => removeFromCart(item.id)}
+                          className="px-2 py-1 text-red-400 hover:text-red-300 border-r border-white/10"
+                        >
+                          <svg
+                            width="12"
+                            height="12"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                          >
+                            <polyline points="3 6 5 6 21 6"></polyline>
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                          </svg>
                         </button>
-                        <button onClick={() => updateCartQty(item.id, -1)} className="px-2 py-1 text-[#888] hover:text-white">-</button>
-                        <span className="text-xs font-bold text-sterling w-5 text-center">{item.quantity}</span>
-                        <button onClick={() => updateCartQty(item.id, 1)} className="px-2 py-1 text-[#888] hover:text-white">+</button>
+                        <button
+                          onClick={() => updateCartQty(item.id, -1)}
+                          className="px-2 py-1 text-[#888] hover:text-white"
+                        >
+                          -
+                        </button>
+                        <span className="text-xs font-bold text-sterling w-5 text-center">
+                          {item.quantity}
+                        </span>
+                        <button
+                          onClick={() => updateCartQty(item.id, 1)}
+                          className="px-2 py-1 text-[#888] hover:text-white"
+                        >
+                          +
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -909,39 +1263,49 @@ export default function POSManager({ services, products, clients, staff, history
             </div>
 
             <div className="border-t border-white/5 pt-4">
-              <h3 className="text-xs text-charcoal uppercase tracking-wider mb-2">Método de Pago</h3>
+              <h3 className="text-xs text-charcoal uppercase tracking-wider mb-2">
+                Método de Pago
+              </h3>
               <div className="grid grid-cols-4 gap-2">
-                {(["CASH", "CARD", "TRANSFER", "CREDIT"] as const).map(method => (
-                  <button 
+                {(["CASH", "CARD", "TRANSFER", "CREDIT"] as const).map((method) => (
+                  <button
                     key={method}
                     onClick={() => setPaymentMethod(method)}
                     className={`py-2 text-[10px] font-medium rounded-lg border transition-all ${
-                      paymentMethod === method 
-                        ? "bg-[#8B4513]/20 border-[#8B4513] text-white" 
+                      paymentMethod === method
+                        ? "bg-[#8B4513]/20 border-[#8B4513] text-white"
                         : "bg-pitch border-white/10 text-[#888] hover:border-white/30"
                     }`}
                   >
-                    {method === "CASH" ? "Efectivo" : method === "CARD" ? "Tarjeta" : method === "TRANSFER" ? "Transferencia" : "Fiado"}
+                    {method === "CASH"
+                      ? "Efectivo"
+                      : method === "CARD"
+                        ? "Tarjeta"
+                        : method === "TRANSFER"
+                          ? "Transferencia"
+                          : "Fiado"}
                   </button>
                 ))}
               </div>
-              
+
               {paymentMethod === "CREDIT" && (
                 <div className="mt-4 p-3 bg-white/5 rounded-lg border border-orange-500/30 animate-in fade-in slide-in-from-top-2">
-                  <label className="text-xs text-orange-400 font-bold mb-2 block">Abono Inicial (Opcional)</label>
+                  <label className="text-xs text-orange-400 font-bold mb-2 block">
+                    Abono Inicial (Opcional)
+                  </label>
                   <div className="flex gap-2">
-                    <input 
-                      type="number" 
+                    <input
+                      type="number"
                       min="0"
                       step="0.01"
-                      placeholder="0.00" 
+                      placeholder="0.00"
                       value={initialPaidAmount}
-                      onChange={e => setInitialPaidAmount(e.target.value)}
+                      onChange={(e) => setInitialPaidAmount(e.target.value)}
                       className="bg-pitch border border-white/10 text-sterling px-3 py-2 rounded-lg text-sm w-full focus:outline-none focus:border-orange-500"
                     />
-                    <select 
+                    <select
                       value={initialPaymentMethod}
-                      onChange={e => setInitialPaymentMethod(e.target.value)}
+                      onChange={(e) => setInitialPaymentMethod(e.target.value)}
                       className="bg-pitch border border-white/10 text-[#888] px-2 py-2 rounded-lg text-xs focus:outline-none w-[110px]"
                     >
                       <option value="CASH">Efectivo</option>
@@ -949,122 +1313,249 @@ export default function POSManager({ services, products, clients, staff, history
                       <option value="TRANSFER">Transf.</option>
                     </select>
                   </div>
-                  <p className="text-[10px] text-charcoal mt-1">Deje vacío si no hay abono inicial.</p>
+                  <p className="text-[10px] text-charcoal mt-1">
+                    Deje vacío si no hay abono inicial.
+                  </p>
                 </div>
               )}
             </div>
-
           </div>
 
           <div className="p-5 border-t border-white/10 bg-[#141414] shrink-0">
             <div className="flex justify-between items-end mb-4">
               <span className="text-sm text-[#888]">Total</span>
-              <span className="text-3xl font-serif font-bold text-[#8B4513]">${cartTotal.toFixed(2)}</span>
+              <span className="text-3xl font-serif font-bold text-[#8B4513]">
+                ${cartTotal.toFixed(2)}
+              </span>
             </div>
-            <button 
-              onClick={handleCheckout} 
+            <button
+              onClick={handleCheckout}
               disabled={isPending}
               className="w-full bg-[#8B4513] hover:brightness-110 text-white py-3.5 rounded-xl font-bold text-sm transition-transform hover:scale-[1.02] disabled:opacity-50 flex justify-center items-center gap-2 shadow-[0_0_15px_rgba(139,69,19,0.3)]"
             >
-              {isPending && <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>}
+              {isPending && (
+                <svg
+                  className="animate-spin h-4 w-4 text-white"
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                  ></circle>
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  ></path>
+                </svg>
+              )}
               {isPending ? "Procesando Venta..." : "Cobrar"}
             </button>
           </div>
-          
         </div>
       )}
 
       {/* MODAL DE CUENTA POR COBRAR DEL CLIENTE */}
       {selectedReceivable && (
-        <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#141414] border border-white/10 rounded-xl w-full max-w-2xl max-h-[90vh] shadow-2xl animate-in zoom-in-95 overflow-hidden flex flex-col">
-            <div className="p-6 border-b border-white/10 flex items-start justify-between gap-4">
-              <div>
-                <span className="inline-flex px-2 py-1 rounded text-[10px] uppercase font-bold tracking-wider bg-orange-500/15 text-orange-400">Cuenta por cobrar</span>
-                <h3 className="text-xl font-serif text-sterling mt-3">{selectedReceivable.clientName}</h3>
-                <p className="text-xs text-charcoal mt-1">{selectedReceivable.movements.length} {selectedReceivable.movements.length === 1 ? "movimiento pendiente" : "movimientos pendientes"}</p>
+        <Dialog
+          label={`Cuenta por cobrar de ${selectedReceivable.clientName}`}
+          onClose={() => setSelectedReceivable(null)}
+          overlayClassName="z-[100]"
+          className="bg-[#141414] border border-white/10 rounded-xl w-full max-w-2xl max-h-[90vh] shadow-2xl animate-in zoom-in-95 overflow-hidden flex flex-col"
+        >
+          <div className="p-6 border-b border-white/10 flex items-start justify-between gap-4">
+            <div>
+              <span className="inline-flex px-2 py-1 rounded text-[10px] uppercase font-bold tracking-wider bg-orange-500/15 text-orange-400">
+                Cuenta por cobrar
+              </span>
+              <h3 className="text-xl font-serif text-sterling mt-3">
+                {selectedReceivable.clientName}
+              </h3>
+              <p className="text-xs text-charcoal mt-1">
+                {selectedReceivable.movements.length}{" "}
+                {selectedReceivable.movements.length === 1
+                  ? "movimiento pendiente"
+                  : "movimientos pendientes"}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSelectedReceivable(null)}
+              className="text-charcoal hover:text-white p-1"
+              aria-label="Cerrar"
+            >
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+          </div>
+
+          <div className="p-6 overflow-y-auto space-y-3">
+            {selectedReceivable.movements.map((movement) => (
+              <div
+                key={movement.transactionId}
+                className="border border-white/10 rounded-lg p-4 bg-pitch/50"
+              >
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-sterling">{movement.description}</p>
+                    <p className="text-[11px] text-charcoal mt-1">
+                      {new Date(movement.createdAt).toLocaleDateString()} ·{" "}
+                      {new Date(movement.createdAt).toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </p>
+                  </div>
+                  <div className="sm:text-right shrink-0">
+                    <p className="text-[10px] uppercase tracking-wider text-charcoal">
+                      Saldo de este movimiento
+                    </p>
+                    <p className="text-sm font-bold text-orange-400">
+                      ${movement.remaining.toFixed(2)}
+                    </p>
+                    {Number(movement.paidAmount) > 0 && (
+                      <p className="text-[10px] text-emerald-400 mt-0.5">
+                        Abonado: ${Number(movement.paidAmount).toFixed(2)}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                {movement.itemDetails?.length > 0 && (
+                  <div className="mt-3 pt-3 border-t border-white/5 flex flex-wrap gap-x-4 gap-y-1">
+                    {movement.itemDetails.map((item, index) => (
+                      <span key={`${item.name}-${index}`} className="text-[11px] text-[#888]">
+                        {Number(item.quantity)} × {item.name} (${item.subtotal})
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
-              <button type="button" onClick={() => setSelectedReceivable(null)} className="text-charcoal hover:text-white p-1" aria-label="Cerrar">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            ))}
+          </div>
+
+          <div className="p-5 border-t border-white/10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-charcoal">
+                Deuda total del cliente
+              </p>
+              <p className="text-2xl font-bold text-orange-400">${selectedReceivable.totalDebt}</p>
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => openReceivablePayment(selectedReceivable, false)}
+                className="bg-orange-500/15 hover:bg-orange-500/30 border border-orange-500/40 text-orange-400 px-4 py-2.5 rounded-lg text-sm font-bold transition-colors"
+              >
+                Abonar
+              </button>
+              <button
+                type="button"
+                onClick={() => openReceivablePayment(selectedReceivable, true)}
+                className="bg-orange-500 hover:bg-orange-400 text-white px-4 py-2.5 rounded-lg text-sm font-bold transition-colors"
+              >
+                Pagar completo
               </button>
             </div>
-
-            <div className="p-6 overflow-y-auto space-y-3">
-              {selectedReceivable.movements.map((movement: any) => (
-                <div key={movement.transactionId} className="border border-white/10 rounded-lg p-4 bg-pitch/50">
-                  <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-sterling">{movement.description}</p>
-                      <p className="text-[11px] text-charcoal mt-1">{new Date(movement.createdAt).toLocaleDateString()} · {new Date(movement.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</p>
-                    </div>
-                    <div className="sm:text-right shrink-0">
-                      <p className="text-[10px] uppercase tracking-wider text-charcoal">Saldo de este movimiento</p>
-                      <p className="text-sm font-bold text-orange-400">${movement.remaining.toFixed(2)}</p>
-                      {Number(movement.paidAmount) > 0 && <p className="text-[10px] text-emerald-400 mt-0.5">Abonado: ${Number(movement.paidAmount).toFixed(2)}</p>}
-                    </div>
-                  </div>
-                  {movement.itemDetails?.length > 0 && (
-                    <div className="mt-3 pt-3 border-t border-white/5 flex flex-wrap gap-x-4 gap-y-1">
-                      {movement.itemDetails.map((item: any, index: number) => (
-                        <span key={`${item.name}-${index}`} className="text-[11px] text-[#888]">{Number(item.quantity)} × {item.name} (${item.subtotal})</span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-
-            <div className="p-5 border-t border-white/10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <div>
-                <p className="text-[10px] uppercase tracking-wider text-charcoal">Deuda total del cliente</p>
-                <p className="text-2xl font-bold text-orange-400">${selectedReceivable.totalDebt}</p>
-              </div>
-              <div className="flex gap-2">
-                <button type="button" onClick={() => openReceivablePayment(selectedReceivable, false)} className="bg-orange-500/15 hover:bg-orange-500/30 border border-orange-500/40 text-orange-400 px-4 py-2.5 rounded-lg text-sm font-bold transition-colors">Abonar</button>
-                <button type="button" onClick={() => openReceivablePayment(selectedReceivable, true)} className="bg-orange-500 hover:bg-orange-400 text-white px-4 py-2.5 rounded-lg text-sm font-bold transition-colors">Pagar completo</button>
-              </div>
-            </div>
           </div>
-        </div>
+        </Dialog>
       )}
 
       {/* MODAL PARA ABONAR A LA CUENTA ACUMULADA */}
       {receivableToPay && (
-        <div className="fixed inset-0 z-[110] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#141414] border border-white/10 p-6 rounded-xl w-full max-w-sm shadow-2xl animate-in zoom-in-95">
-            <h3 className="text-lg font-serif text-sterling mb-1">Abonar a {receivableToPay.clientName}</h3>
-            <p className="text-xs text-[#888] mb-5">Saldo acumulado: <span className="text-orange-400 font-bold">${receivableToPay.totalDebt}</span>. El abono se aplicará primero a los movimientos más antiguos.</p>
-            <form onSubmit={handleReceivablePayment} className="flex flex-col gap-4">
-              <div>
-                <label className="text-xs text-charcoal uppercase tracking-wider block mb-1">Monto ($)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0.01"
-                  max={receivableToPay.totalDebt}
-                  required
-                  autoFocus
-                  value={receivablePaymentAmount}
-                  onChange={event => setReceivablePaymentAmount(event.target.value)}
-                  className="bg-pitch border border-white/10 text-sterling px-4 py-3 rounded-lg text-sm focus:outline-none focus:border-orange-500 w-full"
-                />
-                <button type="button" onClick={() => setReceivablePaymentAmount(receivableToPay.totalDebt)} className="mt-2 text-xs font-bold text-orange-400 hover:text-orange-300 transition-colors">Usar saldo completo (${receivableToPay.totalDebt})</button>
-              </div>
-              <div>
-                <label className="text-xs text-charcoal uppercase tracking-wider block mb-1">Método de pago</label>
-                <select value={receivablePaymentMethod} onChange={event => setReceivablePaymentMethod(event.target.value)} className="bg-pitch border border-white/10 text-sterling px-4 py-3 rounded-lg text-sm focus:outline-none focus:border-orange-500 w-full">
-                  <option value="CASH">Efectivo</option>
-                  <option value="CARD">Tarjeta</option>
-                  <option value="TRANSFER">Transferencia</option>
-                </select>
-              </div>
-              <div className="flex gap-3 mt-2">
-                <button type="button" onClick={() => setReceivableToPay(null)} className="flex-1 bg-white/5 hover:bg-white/10 text-sterling py-2.5 rounded-lg text-sm font-bold transition-colors">Cancelar</button>
-                <button type="submit" disabled={isPending} className="flex-1 bg-orange-500 hover:bg-orange-400 text-white py-2.5 rounded-lg text-sm font-bold transition-colors disabled:opacity-50">{isPending ? "Procesando..." : "Confirmar"}</button>
-              </div>
-            </form>
-          </div>
-        </div>
+        <Dialog
+          label={`Abonar a ${receivableToPay.clientName}`}
+          onClose={() => setReceivableToPay(null)}
+          overlayClassName="z-[110]"
+          className="bg-[#141414] border border-white/10 p-6 rounded-xl w-full max-w-sm shadow-2xl animate-in zoom-in-95"
+        >
+          <h3 className="text-lg font-serif text-sterling mb-1">
+            Abonar a {receivableToPay.clientName}
+          </h3>
+          <p className="text-xs text-[#888] mb-5">
+            Saldo acumulado:{" "}
+            <span className="text-orange-400 font-bold">${receivableToPay.totalDebt}</span>. El
+            abono se aplicará primero a los movimientos más antiguos.
+          </p>
+          <form onSubmit={handleReceivablePayment} className="flex flex-col gap-4">
+            <div>
+              <label
+                htmlFor="receivable-payment-amount"
+                className="text-xs text-charcoal uppercase tracking-wider block mb-1"
+              >
+                Monto ($)
+              </label>
+              <input
+                id="receivable-payment-amount"
+                data-autofocus
+                type="number"
+                step="0.01"
+                min="0.01"
+                max={receivableToPay.totalDebt}
+                required
+                autoFocus
+                value={receivablePaymentAmount}
+                onChange={(event) => setReceivablePaymentAmount(event.target.value)}
+                className="bg-pitch border border-white/10 text-sterling px-4 py-3 rounded-lg text-sm focus:outline-none focus:border-orange-500 w-full"
+              />
+              <button
+                type="button"
+                onClick={() => setReceivablePaymentAmount(receivableToPay.totalDebt)}
+                className="mt-2 text-xs font-bold text-orange-400 hover:text-orange-300 transition-colors"
+              >
+                Usar saldo completo (${receivableToPay.totalDebt})
+              </button>
+            </div>
+            <div>
+              <label
+                htmlFor="receivable-payment-method"
+                className="text-xs text-charcoal uppercase tracking-wider block mb-1"
+              >
+                Método de pago
+              </label>
+              <select
+                id="receivable-payment-method"
+                value={receivablePaymentMethod}
+                onChange={(event) => setReceivablePaymentMethod(event.target.value)}
+                className="bg-pitch border border-white/10 text-sterling px-4 py-3 rounded-lg text-sm focus:outline-none focus:border-orange-500 w-full"
+              >
+                <option value="CASH">Efectivo</option>
+                <option value="CARD">Tarjeta</option>
+                <option value="TRANSFER">Transferencia</option>
+              </select>
+            </div>
+            <div className="flex gap-3 mt-2">
+              <button
+                type="button"
+                onClick={() => setReceivableToPay(null)}
+                className="flex-1 bg-white/5 hover:bg-white/10 text-sterling py-2.5 rounded-lg text-sm font-bold transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={isPending}
+                className="flex-1 bg-orange-500 hover:bg-orange-400 text-white py-2.5 rounded-lg text-sm font-bold transition-colors disabled:opacity-50"
+              >
+                {isPending ? "Procesando..." : "Confirmar"}
+              </button>
+            </div>
+          </form>
+        </Dialog>
       )}
 
       {/* MODAL PARA ABONAR */}
@@ -1075,15 +1566,17 @@ export default function POSManager({ services, products, clients, staff, history
             <p className="text-xs text-[#888] mb-4">Ingrese el monto a abonar a la deuda.</p>
             <form onSubmit={handlePayment} className="flex flex-col gap-4">
               <div>
-                <label className="text-xs text-charcoal uppercase tracking-wider block mb-1">Monto ($)</label>
-                <input 
-                  type="number" 
-                  step="0.01" 
+                <label className="text-xs text-charcoal uppercase tracking-wider block mb-1">
+                  Monto ($)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
                   min="0.01"
                   required
                   autoFocus
                   value={paymentAmount}
-                  onChange={e => setPaymentAmount(e.target.value)}
+                  onChange={(e) => setPaymentAmount(e.target.value)}
                   className="bg-pitch border border-white/10 text-sterling px-4 py-3 rounded-lg text-sm focus:outline-none focus:border-orange-500 w-full"
                 />
                 <button
@@ -1095,15 +1588,15 @@ export default function POSManager({ services, products, clients, staff, history
                 </button>
               </div>
               <div className="flex gap-3 mt-2">
-                <button 
-                  type="button" 
+                <button
+                  type="button"
                   onClick={() => setIsPaymentModalOpen(false)}
                   className="flex-1 bg-white/5 hover:bg-white/10 text-sterling py-2.5 rounded-lg text-sm font-bold transition-colors"
                 >
                   Cancelar
                 </button>
-                <button 
-                  type="submit" 
+                <button
+                  type="submit"
                   disabled={isPending}
                   className="flex-1 bg-orange-500/80 hover:bg-orange-500 text-white py-2.5 rounded-lg text-sm font-bold transition-colors disabled:opacity-50"
                 >
@@ -1117,148 +1610,334 @@ export default function POSManager({ services, products, clients, staff, history
 
       {/* MODAL DE DETALLE DEL MOVIMIENTO */}
       {selectedTransaction && (
-        <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#141414] border border-white/10 rounded-xl w-full max-w-lg shadow-2xl animate-in zoom-in-95 overflow-hidden">
-            <div className="p-6 border-b border-white/10 flex items-start justify-between gap-4">
+        <Dialog
+          label="Detalle del movimiento"
+          onClose={() => setSelectedTransaction(null)}
+          className="bg-[#141414] border border-white/10 rounded-xl w-full max-w-lg shadow-2xl animate-in zoom-in-95 overflow-hidden"
+        >
+          <div className="p-6 border-b border-white/10 flex items-start justify-between gap-4">
+            <div>
+              <span
+                className={`inline-flex px-2 py-1 rounded text-[10px] uppercase font-bold tracking-wider ${
+                  selectedTransaction.type === "INCOME"
+                    ? "bg-green-900/30 text-green-500"
+                    : "bg-red-900/30 text-red-500"
+                }`}
+              >
+                {selectedTransaction.movementKind === "PAYMENT"
+                  ? "Abono recibido"
+                  : selectedTransaction.movementKind === "PENDING"
+                    ? "Cuenta por cobrar"
+                    : selectedTransaction.type === "INCOME"
+                      ? "Venta"
+                      : "Gasto"}
+              </span>
+              <h3 className="text-xl font-serif text-sterling mt-3">Detalle del movimiento</h3>
+              <p className="text-xs text-[#888] mt-1">
+                {new Date(selectedTransaction.createdAt).toLocaleDateString()} ·{" "}
+                {new Date(selectedTransaction.createdAt).toLocaleTimeString([], {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+              </p>
+            </div>
+            <button
+              type="button"
+              data-autofocus
+              onClick={() => setSelectedTransaction(null)}
+              className="text-charcoal hover:text-white p-1"
+              aria-label="Cerrar"
+            >
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+          </div>
+          <div className="p-6 space-y-5">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-pitch/70 rounded-lg p-3">
+                <p className="text-[10px] uppercase tracking-wider text-charcoal">
+                  {selectedTransaction.movementKind === "PAYMENT"
+                    ? "Monto recibido"
+                    : "Monto total"}
+                </p>
+                <p
+                  className={`text-lg font-bold mt-1 ${selectedTransaction.type === "INCOME" ? "text-green-500" : "text-red-500"}`}
+                >
+                  {selectedTransaction.type === "INCOME" ? "+" : "-"}$
+                  {selectedTransaction.totalAmount}
+                </p>
+              </div>
+              <div className="bg-pitch/70 rounded-lg p-3">
+                <p className="text-[10px] uppercase tracking-wider text-charcoal">Estado</p>
+                <p
+                  className={`text-sm font-bold mt-1 ${selectedTransaction.status === "PENDING" ? "text-orange-400" : "text-green-500"}`}
+                >
+                  {selectedTransaction.status === "PENDING" ? "Pendiente" : "Completado"}
+                </p>
+              </div>
               <div>
-                <span className={`inline-flex px-2 py-1 rounded text-[10px] uppercase font-bold tracking-wider ${
-                  selectedTransaction.type === "INCOME" ? "bg-green-900/30 text-green-500" : "bg-red-900/30 text-red-500"
-                }`}>
-                  {selectedTransaction.movementKind === "PAYMENT" ? "Abono recibido" : selectedTransaction.movementKind === "PENDING" ? "Cuenta por cobrar" : selectedTransaction.type === "INCOME" ? "Venta" : "Gasto"}
+                <p className="text-[10px] uppercase tracking-wider text-charcoal">Método de pago</p>
+                <p className="text-sm text-sterling mt-1">
+                  {selectedTransaction.paymentMethod === "CASH"
+                    ? "Efectivo"
+                    : selectedTransaction.paymentMethod === "CARD"
+                      ? "Tarjeta"
+                      : selectedTransaction.paymentMethod === "TRANSFER"
+                        ? "Transferencia"
+                        : "Fiado"}
+                </p>
+              </div>
+              <div>
+                <p className="text-[10px] uppercase tracking-wider text-charcoal">Cliente</p>
+                <p className="text-sm text-sterling mt-1">{selectedTransaction.clientName}</p>
+              </div>
+            </div>
+
+            {selectedTransaction.status === "PENDING" && (
+              <div className="bg-orange-500/10 border border-orange-500/30 rounded-lg p-3 flex justify-between items-center">
+                <span className="text-sm text-orange-300">Saldo pendiente</span>
+                <span className="text-sm font-bold text-orange-400">
+                  $
+                  {(
+                    parseFloat(selectedTransaction.totalAmount) -
+                    parseFloat(selectedTransaction.paidAmount || "0")
+                  ).toFixed(2)}
                 </span>
-                <h3 className="text-xl font-serif text-sterling mt-3">Detalle del movimiento</h3>
-                <p className="text-xs text-[#888] mt-1">{new Date(selectedTransaction.createdAt).toLocaleDateString()} · {new Date(selectedTransaction.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</p>
               </div>
-              <button type="button" onClick={() => setSelectedTransaction(null)} className="text-charcoal hover:text-white p-1" aria-label="Cerrar">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-              </button>
-            </div>
-            <div className="p-6 space-y-5">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="bg-pitch/70 rounded-lg p-3">
-                  <p className="text-[10px] uppercase tracking-wider text-charcoal">{selectedTransaction.movementKind === "PAYMENT" ? "Monto recibido" : "Monto total"}</p>
-                  <p className={`text-lg font-bold mt-1 ${selectedTransaction.type === "INCOME" ? "text-green-500" : "text-red-500"}`}>{selectedTransaction.type === "INCOME" ? "+" : "-"}${selectedTransaction.totalAmount}</p>
-                </div>
-                <div className="bg-pitch/70 rounded-lg p-3">
-                  <p className="text-[10px] uppercase tracking-wider text-charcoal">Estado</p>
-                  <p className={`text-sm font-bold mt-1 ${selectedTransaction.status === "PENDING" ? "text-orange-400" : "text-green-500"}`}>{selectedTransaction.status === "PENDING" ? "Pendiente" : "Completado"}</p>
-                </div>
-                <div>
-                  <p className="text-[10px] uppercase tracking-wider text-charcoal">Método de pago</p>
-                  <p className="text-sm text-sterling mt-1">{selectedTransaction.paymentMethod === "CASH" ? "Efectivo" : selectedTransaction.paymentMethod === "CARD" ? "Tarjeta" : selectedTransaction.paymentMethod === "TRANSFER" ? "Transferencia" : "Fiado"}</p>
-                </div>
-                <div>
-                  <p className="text-[10px] uppercase tracking-wider text-charcoal">Cliente</p>
-                  <p className="text-sm text-sterling mt-1">{selectedTransaction.clientName}</p>
-                </div>
-              </div>
+            )}
 
-              {selectedTransaction.status === "PENDING" && (
-                <div className="bg-orange-500/10 border border-orange-500/30 rounded-lg p-3 flex justify-between items-center">
-                  <span className="text-sm text-orange-300">Saldo pendiente</span>
-                  <span className="text-sm font-bold text-orange-400">${(parseFloat(selectedTransaction.totalAmount) - parseFloat(selectedTransaction.paidAmount || "0")).toFixed(2)}</span>
-                </div>
-              )}
-
-              {selectedTransaction.itemDetails?.length > 0 ? (
-                <div>
-                  <p className="text-[10px] uppercase tracking-wider text-charcoal mb-2">Detalle de la venta</p>
-                  <div className="rounded-lg border border-white/10 divide-y divide-white/5 overflow-hidden">
-                    {selectedTransaction.itemDetails.map((item: any, index: number) => (
-                      <div key={`${item.name}-${index}`} className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm">
-                        <div><p className="text-sterling">{item.name}</p><p className="text-xs text-charcoal">{item.quantity} × ${item.unitPrice}</p></div>
-                        <span className="font-medium text-sterling">${item.subtotal}</span>
+            {selectedTransaction.itemDetails?.length > 0 ? (
+              <div>
+                <p className="text-[10px] uppercase tracking-wider text-charcoal mb-2">
+                  Detalle de la venta
+                </p>
+                <div className="rounded-lg border border-white/10 divide-y divide-white/5 overflow-hidden">
+                  {selectedTransaction.itemDetails.map((item, index) => (
+                    <div
+                      key={`${item.name}-${index}`}
+                      className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm"
+                    >
+                      <div>
+                        <p className="text-sterling">{item.name}</p>
+                        <p className="text-xs text-charcoal">
+                          {item.quantity} × ${item.unitPrice}
+                        </p>
                       </div>
-                    ))}
-                  </div>
+                      <span className="font-medium text-sterling">${item.subtotal}</span>
+                    </div>
+                  ))}
                 </div>
-              ) : (
-                <div>
-                  <p className="text-[10px] uppercase tracking-wider text-charcoal mb-2">Descripción</p>
-                  <p className="text-sm text-sterling bg-pitch/70 rounded-lg p-3">{selectedTransaction.notes || selectedTransaction.description}</p>
-                </div>
-              )}
+              </div>
+            ) : (
+              <div>
+                <p className="text-[10px] uppercase tracking-wider text-charcoal mb-2">
+                  Descripción
+                </p>
+                <p className="text-sm text-sterling bg-pitch/70 rounded-lg p-3">
+                  {selectedTransaction.notes || selectedTransaction.description}
+                </p>
+              </div>
+            )}
 
-              {selectedTransaction.itemDetails?.length > 0 && selectedTransaction.notes && (
-                <div>
-                  <p className="text-[10px] uppercase tracking-wider text-charcoal mb-2">Información adicional</p>
-                  <p className="text-sm text-sterling bg-pitch/70 rounded-lg p-3">{selectedTransaction.notes}</p>
-                </div>
-              )}
-            </div>
-            <div className="p-5 border-t border-white/10 flex flex-wrap justify-end gap-3">
-              {selectedTransaction.status === "PENDING" && (
-                <button type="button" onClick={() => {
-                  const remaining = (parseFloat(selectedTransaction.totalAmount) - parseFloat(selectedTransaction.paidAmount || "0")).toFixed(2);
+            {selectedTransaction.itemDetails?.length > 0 && selectedTransaction.notes && (
+              <div>
+                <p className="text-[10px] uppercase tracking-wider text-charcoal mb-2">
+                  Información adicional
+                </p>
+                <p className="text-sm text-sterling bg-pitch/70 rounded-lg p-3">
+                  {selectedTransaction.notes}
+                </p>
+              </div>
+            )}
+          </div>
+          <div className="p-5 border-t border-white/10 flex flex-wrap justify-end gap-3">
+            {selectedTransaction.status === "PENDING" && (
+              <button
+                type="button"
+                onClick={() => {
+                  const remaining = (
+                    parseFloat(selectedTransaction.totalAmount) -
+                    parseFloat(selectedTransaction.paidAmount || "0")
+                  ).toFixed(2);
                   setSelectedTxId(selectedTransaction.transactionId || selectedTransaction.id);
                   setPaymentAmount(remaining);
                   setPaymentRemaining(remaining);
                   setSelectedTransaction(null);
                   setIsPaymentModalOpen(true);
-                }} className="bg-orange-500/20 hover:bg-orange-500/40 border border-orange-500/50 text-orange-400 px-4 py-2.5 rounded-lg text-sm font-bold transition-colors">Abonar</button>
-              )}
-              {selectedTransaction.canEdit && (
-                <button type="button" onClick={() => {
+                }}
+                className="bg-orange-500/20 hover:bg-orange-500/40 border border-orange-500/50 text-orange-400 px-4 py-2.5 rounded-lg text-sm font-bold transition-colors"
+              >
+                Abonar
+              </button>
+            )}
+            {selectedTransaction.canEdit && (
+              <button
+                type="button"
+                onClick={() => {
                   setEditingTransaction(selectedTransaction);
                   setSelectedTransaction(null);
-                }} className="bg-cognac hover:brightness-110 text-white px-4 py-2.5 rounded-lg text-sm font-bold transition-colors">Editar</button>
-              )}
-            </div>
+                }}
+                className="bg-cognac hover:brightness-110 text-white px-4 py-2.5 rounded-lg text-sm font-bold transition-colors"
+              >
+                Editar
+              </button>
+            )}
           </div>
-        </div>
+        </Dialog>
       )}
 
       {/* MODAL PARA EDITAR MOVIMIENTO */}
       {editingTransaction && (
-        <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#141414] border border-white/10 p-6 rounded-xl w-full max-w-md shadow-2xl animate-in zoom-in-95">
-            <div className="flex items-start justify-between gap-4 mb-5">
-              <div>
-                <h3 className="text-lg font-serif text-sterling">Editar movimiento</h3>
-                <p className="text-xs text-[#888] mt-1">{editingTransaction.type === "INCOME" ? "Puedes corregir el monto, cliente o método de pago." : "Puedes corregir los datos del gasto."}</p>
-              </div>
-              <button type="button" onClick={() => setEditingTransaction(null)} className="text-charcoal hover:text-white p-1" aria-label="Cerrar">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-              </button>
+        <Dialog
+          label="Editar movimiento"
+          onClose={() => setEditingTransaction(null)}
+          className="bg-[#141414] border border-white/10 p-6 rounded-xl w-full max-w-md shadow-2xl animate-in zoom-in-95"
+        >
+          <div className="flex items-start justify-between gap-4 mb-5">
+            <div>
+              <h3 className="text-lg font-serif text-sterling">Editar movimiento</h3>
+              <p className="text-xs text-[#888] mt-1">
+                {editingTransaction.type === "INCOME"
+                  ? "Puedes corregir el monto, cliente o método de pago."
+                  : "Puedes corregir los datos del gasto."}
+              </p>
             </div>
-            <form onSubmit={handleUpdateTransaction} className="flex flex-col gap-4">
-              {editingTransaction.type === "EXPENSE" ? (
-                <div>
-                  <label className="text-xs text-charcoal uppercase tracking-wider block mb-1">Descripción *</label>
-                  <input name="description" type="text" required defaultValue={editingTransaction.description} className="bg-pitch border border-white/10 text-sterling px-4 py-3 rounded-lg text-sm focus:outline-none focus:border-red-500 w-full" />
-                </div>
-              ) : (
-                <div>
-                  <label className="text-xs text-charcoal uppercase tracking-wider block mb-1">Cliente</label>
-                  <select name="clientId" defaultValue={editingTransaction.clientId || ""} className="bg-pitch border border-white/10 text-sterling px-4 py-3 rounded-lg text-sm focus:outline-none focus:border-cognac w-full">
-                    <option value="">Cliente general</option>
-                    {clients.map((client) => <option key={client.id} value={client.id}>{client.firstName} {client.lastName || ""}</option>)}
-                  </select>
-                </div>
-              )}
+            <button
+              type="button"
+              onClick={() => setEditingTransaction(null)}
+              className="text-charcoal hover:text-white p-1"
+              aria-label="Cerrar"
+            >
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+          </div>
+          <form onSubmit={handleUpdateTransaction} className="flex flex-col gap-4">
+            {editingTransaction.type === "EXPENSE" ? (
               <div>
-                <label className="text-xs text-charcoal uppercase tracking-wider block mb-1">Monto total ($) *</label>
-                <input name="totalAmount" type="number" min="0.01" step="0.01" required defaultValue={editingTransaction.totalAmount} className="bg-pitch border border-white/10 text-sterling px-4 py-3 rounded-lg text-sm focus:outline-none focus:border-cognac w-full" />
+                <label
+                  htmlFor="movement-description"
+                  className="text-xs text-charcoal uppercase tracking-wider block mb-1"
+                >
+                  Descripción *
+                </label>
+                <input
+                  id="movement-description"
+                  data-autofocus
+                  name="description"
+                  type="text"
+                  required
+                  defaultValue={editingTransaction.description}
+                  className="bg-pitch border border-white/10 text-sterling px-4 py-3 rounded-lg text-sm focus:outline-none focus:border-red-500 w-full"
+                />
               </div>
+            ) : (
               <div>
-                <label className="text-xs text-charcoal uppercase tracking-wider block mb-1">Método de pago</label>
-                <select name="paymentMethod" defaultValue={editingTransaction.paymentMethod || "CASH"} className="bg-pitch border border-white/10 text-sterling px-4 py-3 rounded-lg text-sm focus:outline-none focus:border-cognac w-full">
-                  <option value="CASH">Efectivo</option>
-                  <option value="CARD">Tarjeta</option>
-                  <option value="TRANSFER">Transferencia</option>
-                  {editingTransaction.type === "INCOME" && <option value="CREDIT">Fiado</option>}
+                <label
+                  htmlFor="movement-client"
+                  className="text-xs text-charcoal uppercase tracking-wider block mb-1"
+                >
+                  Cliente
+                </label>
+                <select
+                  id="movement-client"
+                  data-autofocus
+                  name="clientId"
+                  defaultValue={editingTransaction.clientId || ""}
+                  className="bg-pitch border border-white/10 text-sterling px-4 py-3 rounded-lg text-sm focus:outline-none focus:border-cognac w-full"
+                >
+                  <option value="">Cliente general</option>
+                  {clients.map((client) => (
+                    <option key={client.id} value={client.id}>
+                      {client.firstName} {client.lastName || ""}
+                    </option>
+                  ))}
                 </select>
               </div>
-              <div className="flex items-center justify-between gap-3 border-t border-white/10 pt-5 mt-1">
-                <button type="button" onClick={handleDeleteTransaction} disabled={isPending} className="text-red-400 hover:text-red-300 text-sm font-medium disabled:opacity-50">Eliminar</button>
-                <div className="flex gap-3">
-                  <button type="button" onClick={() => setEditingTransaction(null)} className="bg-white/5 hover:bg-white/10 text-sterling px-4 py-2.5 rounded-lg text-sm font-bold transition-colors">Cancelar</button>
-                  <button type="submit" disabled={isPending} className="bg-cognac hover:brightness-110 text-white px-4 py-2.5 rounded-lg text-sm font-bold transition-colors disabled:opacity-50">{isPending ? "Guardando..." : "Guardar cambios"}</button>
-                </div>
+            )}
+            <div>
+              <label
+                htmlFor="movement-total"
+                className="text-xs text-charcoal uppercase tracking-wider block mb-1"
+              >
+                Monto total ($) *
+              </label>
+              <input
+                id="movement-total"
+                name="totalAmount"
+                type="number"
+                min="0.01"
+                step="0.01"
+                required
+                defaultValue={editingTransaction.totalAmount}
+                className="bg-pitch border border-white/10 text-sterling px-4 py-3 rounded-lg text-sm focus:outline-none focus:border-cognac w-full"
+              />
+            </div>
+            <div>
+              <label
+                htmlFor="movement-payment-method"
+                className="text-xs text-charcoal uppercase tracking-wider block mb-1"
+              >
+                Método de pago
+              </label>
+              <select
+                id="movement-payment-method"
+                name="paymentMethod"
+                defaultValue={editingTransaction.paymentMethod || "CASH"}
+                className="bg-pitch border border-white/10 text-sterling px-4 py-3 rounded-lg text-sm focus:outline-none focus:border-cognac w-full"
+              >
+                <option value="CASH">Efectivo</option>
+                <option value="CARD">Tarjeta</option>
+                <option value="TRANSFER">Transferencia</option>
+                {editingTransaction.type === "INCOME" && <option value="CREDIT">Fiado</option>}
+              </select>
+            </div>
+            <div className="flex items-center justify-between gap-3 border-t border-white/10 pt-5 mt-1">
+              <button
+                type="button"
+                onClick={handleDeleteTransaction}
+                disabled={isPending}
+                className="text-red-400 hover:text-red-300 text-sm font-medium disabled:opacity-50"
+              >
+                Eliminar
+              </button>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setEditingTransaction(null)}
+                  className="bg-white/5 hover:bg-white/10 text-sterling px-4 py-2.5 rounded-lg text-sm font-bold transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isPending}
+                  className="bg-cognac hover:brightness-110 text-white px-4 py-2.5 rounded-lg text-sm font-bold transition-colors disabled:opacity-50"
+                >
+                  {isPending ? "Guardando..." : "Guardar cambios"}
+                </button>
               </div>
-            </form>
-          </div>
-        </div>
+            </div>
+          </form>
+        </Dialog>
       )}
 
       {/* MODAL DE VENTA EXITOSA */}
@@ -1266,19 +1945,41 @@ export default function POSManager({ services, products, clients, staff, history
         <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-[#141414] border border-white/10 p-8 rounded-xl w-full max-w-sm shadow-2xl animate-in zoom-in-95 flex flex-col items-center text-center">
             <div className="w-16 h-16 bg-green-500/20 text-green-500 rounded-full flex items-center justify-center mb-4">
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              <svg
+                width="32"
+                height="32"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="3"
+              >
+                <polyline points="20 6 9 17 4 12"></polyline>
+              </svg>
             </div>
             <h3 className="text-2xl font-serif text-sterling mb-2">¡Venta Exitosa!</h3>
-            <p className="text-sm text-[#888] mb-6">La transacción se ha registrado correctamente.</p>
+            <p className="text-sm text-[#888] mb-6">
+              La transacción se ha registrado correctamente.
+            </p>
             <div className="flex flex-col gap-3 w-full">
-              <button 
-                onClick={() => window.open(`/pos/receipt/${successTxId}`, '_blank')}
+              <button
+                onClick={() => window.open(`/pos/receipt/${successTxId}`, "_blank")}
                 className="w-full bg-[#8B4513] hover:bg-[#A0522D] text-white py-3 rounded-lg text-sm font-bold transition-colors flex items-center justify-center gap-2 shadow-lg"
               >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <polyline points="6 9 6 2 18 2 18 9"></polyline>
+                  <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+                  <rect x="6" y="14" width="12" height="8"></rect>
+                </svg>
                 Imprimir Factura
               </button>
-              <button 
+              <button
                 onClick={() => setSuccessTxId("")}
                 className="w-full bg-white/5 hover:bg-white/10 text-sterling py-3 rounded-lg text-sm font-bold transition-colors"
               >
@@ -1288,7 +1989,6 @@ export default function POSManager({ services, products, clients, staff, history
           </div>
         </div>
       )}
-
     </div>
   );
 }
