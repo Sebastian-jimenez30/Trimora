@@ -16,6 +16,9 @@ COPY . .
 
 # Deshabilitar telemetría de Next.js durante la construcción (opcional)
 ENV NEXT_TELEMETRY_DISABLED 1
+# La imagen autocontenida se genera solo para este destino. Vercel utiliza
+# la salida nativa de Next.js para crear sus propias funciones y artefactos.
+ENV TRIMORA_BUILD_TARGET standalone
 
 # Construir la aplicación
 RUN npm run build

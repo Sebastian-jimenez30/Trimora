@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { analyzeImpact } from "../lib/impact.mjs";
+import { selectResilienceComponents } from "../lib/resilience.mjs";
 
 describe("selector de pruebas por componente", () => {
   it("reconoce un cambio exclusivamente documental", () => {
@@ -65,5 +66,14 @@ describe("selector de pruebas por componente", () => {
     expect(result.e2eJourneys).toEqual(
       expect.arrayContaining(["auth-session", "agenda", "accessibility"]),
     );
+  });
+
+  it("selecciona propiedades, mutacion y base segun los componentes afectados", () => {
+    const impact = analyzeImpact({ files: ["src/modules/pos/domain/money.ts"] });
+    const resilience = selectResilienceComponents(impact.affectedComponents);
+
+    expect(resilience.propertyComponents).toContain("pos-finance");
+    expect(resilience.mutationComponents).toContain("pos-finance");
+    expect(resilience.databaseComponents).toContain("pos-finance");
   });
 });

@@ -59,7 +59,7 @@
         "src/modules/cash/**/*.ts",
         "src/app/(dashboard)/pos/**/*.tsx"
       ],
-      "e2e": ["pos-sales", "receivables", "history-analytics"],
+      "e2e": ["pos-sales", "receivables", "history-analytics", "performance"],
       "triggers": ["inventory-services", "clients", "analytics"]
     },
     "inventory-services": {
@@ -106,7 +106,7 @@
         "src/app/(dashboard)/agenda/**/*.tsx",
         "src/app/(dashboard)/calendar/**/*.tsx"
       ],
-      "e2e": ["agenda", "pos-sales"],
+      "e2e": ["agenda", "pos-sales", "performance"],
       "triggers": ["pos-finance"]
     },
     "clients": {
@@ -139,7 +139,7 @@
         "src/app/(dashboard)/analitica/**/*.tsx",
         "src/app/(dashboard)/dashboard/**/*.tsx"
       ],
-      "e2e": ["history-analytics"],
+      "e2e": ["history-analytics", "performance"],
       "triggers": []
     },
     "ai-integrations": {
@@ -181,7 +181,7 @@
       ],
       "testRoots": ["src/components/shared", "src/components/layout", "src/components", "src/app"],
       "coverage": ["src/components/**/*.tsx"],
-      "e2e": ["accessibility"],
+      "e2e": ["accessibility", "performance"],
       "triggers": [
         "auth-access",
         "pos-finance",
@@ -221,7 +221,10 @@
         ".github/workflows/",
         "ci/",
         "scripts/ci/",
+        "scripts/release/",
         "src/test/",
+        "src/core/observability/",
+        "src/instrumentation.ts",
         "package.json",
         "package-lock.json",
         "eslint.config.mjs",
@@ -232,10 +235,11 @@
         ".prettierrc.json",
         ".prettierignore",
         ".nvmrc",
-        ".env.test.example"
+        ".env.test.example",
+        "vercel.json"
       ],
       "testRoots": ["scripts/ci"],
-      "coverage": ["scripts/ci/**/*.mjs"],
+      "coverage": ["scripts/ci/**/*.mjs", "scripts/release/**/*.mjs"],
       "e2e": [
         "auth-session",
         "clients",

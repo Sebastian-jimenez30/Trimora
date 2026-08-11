@@ -1,5 +1,6 @@
 import { appendFileSync } from "node:fs";
 import { analyzeImpact, getAllTrackedFiles, getChangedFiles } from "./lib/impact.mjs";
+import { selectResilienceComponents } from "./lib/resilience.mjs";
 
 const forceFullSuite = process.env.FORCE_FULL_SUITE === "true";
 const consolidation = process.env.CONSOLIDATION_RUN === "true";
@@ -8,6 +9,7 @@ const files =
     ? getAllTrackedFiles()
     : getChangedFiles(process.env.BASE_SHA, process.env.HEAD_SHA);
 const impact = analyzeImpact({ files, forceFullSuite });
+const resilience = selectResilienceComponents(impact.affectedComponents);
 
 function setOutput(name, value) {
   const serialized = typeof value === "string" ? value : JSON.stringify(value);
@@ -27,8 +29,13 @@ setOutput("docs_only", impact.docsOnly);
 setOutput("full_suite", impact.fullSuite);
 setOutput("needs_build", impact.needsBuild);
 setOutput("needs_typecheck", impact.needsTypecheck);
-setOutput("needs_database", impact.needsDatabase);
+setOutput("needs_database", impact.needsDatabase || resilience.databaseComponents.length > 0);
 setOutput("consolidation", consolidation);
+setOutput("property_components", resilience.propertyComponents);
+setOutput("has_property_components", resilience.propertyComponents.length > 0);
+setOutput("mutation_components", resilience.mutationComponents);
+setOutput("has_mutation_components", resilience.mutationComponents.length > 0);
+setOutput("database_resilience", resilience.databaseComponents.length > 0);
 
 const componentsWithoutTests = impact.affectedComponents.filter(
   (name) => impact.testsByComponent[name].length === 0,
@@ -44,6 +51,9 @@ const summary = [
   `- Navegadores E2E: ${consolidation ? "Chromium, Firefox y WebKit" : "Chromium"}`,
   `- Suite completa seleccionada: ${impact.fullSuite ? "sí" : "no"}`,
   `- Ejecución de consolidación: ${consolidation ? "sí" : "no"}`,
+  `- Propiedades seleccionadas: ${resilience.propertyComponents.join(", ") || "ninguna"}`,
+  `- Mutación seleccionada: ${resilience.mutationComponents.join(", ") || "ninguna"}`,
+  `- Resiliencia PostgreSQL: ${resilience.databaseComponents.join(", ") || "ninguna"}`,
 ];
 
 if (componentsWithoutTests.length > 0) {

@@ -396,8 +396,8 @@ Las pruebas de componentes compartidos ejecutarán también las suites de las in
 
 **Rama:** `architecture/07-e2e-security-ci`
 
-**Estado de trabajo:** implementada; pendiente de validación por pipeline, revisión de hallazgos y
-aceptación funcional. La operación, matriz de recorridos y activación manual de protecciones están
+**Estado de trabajo:** aceptada por el propietario con pipeline en verde. La operación, matriz de
+recorridos y activación manual de protecciones están
 documentadas en `docs/13_e2e_accesibilidad_seguridad_ci.md`.
 
 **Cambios previstos:**
@@ -436,6 +436,10 @@ documentadas en `docs/13_e2e_accesibilidad_seguridad_ci.md`.
 ### Etapa 08 — Resiliencia, mutación y rendimiento
 
 **Rama:** `architecture/08-resilience-performance`
+
+**Estado de trabajo:** implementada; pendiente de validación por pipeline y aceptación del
+propietario. Las decisiones, presupuestos y pruebas manuales están documentados en
+`docs/14_resiliencia_mutacion_rendimiento.md`.
 
 **Cambios previstos:**
 
@@ -540,7 +544,8 @@ El programa se considerará completo cuando:
 - el aislamiento multiempresa esté probado;
 - no existan hallazgos altos o críticos abiertos;
 - la cobertura alcance los objetivos acordados;
-- exista un plan de despliegue y reversión;
+- exista un plan de despliegue y reversión, definido para este programa en
+  `docs/15_despliegue_coordinado_produccion.md`;
 - el propietario autorice explícitamente el merge final a `main`.
 
 Hasta entonces, ninguna rama intermedia de este programa debe publicarse parcialmente en producción.
