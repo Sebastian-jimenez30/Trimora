@@ -48,6 +48,8 @@ version; no ejecuta el SQL. El control posterior bloquea el release si el plan i
 - `0006`: trazabilidad de inventario por transaccion, reconciliacion de `total_spent` y reglas del
   libro financiero.
 - `0007`: indices para concurrencia, historico, agenda y rendimiento.
+- `20260813183434`: perfil publico por organizacion, slug unico, zona horaria y banderas seguras de
+  activacion; crea perfiles deshabilitados para organizaciones existentes sin modificar sus datos.
 
 `0004` contiene consolidacion de duplicados historicos. El preflight bloquea el despliegue si
 encuentra membresias, invitaciones pendientes, consumibles de servicio o resumenes diarios
@@ -113,6 +115,8 @@ registrada.
 4. Crear dos deudas del mismo cliente, abonar y comprobar distribucion FIFO.
 5. Revisar Caja, historial, cuentas por cobrar y Analitica.
 6. Confirmar que no aparezcan eventos `platform_admin_schema_pending` ni errores `42P01` o `42703`.
+7. Confirmar un perfil publico por organizacion, todas sus banderas en `false` y una respuesta 404
+   neutral para un slug inexistente o deshabilitado.
 
 ## Fallos y reversion
 
@@ -130,5 +134,5 @@ registrada.
 ## Criterio de cierre
 
 El programa se considera publicado cuando el workflow termina verde, el SHA desplegado coincide
-con `main`, las versiones `0000` a `0007` figuran en el historial remoto y la validacion funcional
-posterior es satisfactoria.
+con `main`, las versiones `0000` a `0007` y `20260813183434` figuran en el historial remoto y la
+validacion funcional posterior es satisfactoria.

@@ -21,6 +21,27 @@ export const organizations = pgTable("organizations", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
+export const organizationPublicProfiles = pgTable(
+  "organization_public_profiles",
+  {
+    organizationId: uuid("organization_id")
+      .primaryKey()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    slug: text("slug").notNull(),
+    displayName: text("display_name").notNull(),
+    timeZone: text("time_zone").notNull().default("America/Bogota"),
+    publicProfileEnabled: boolean("public_profile_enabled").notNull().default(false),
+    publicCatalogEnabled: boolean("public_catalog_enabled").notNull().default(false),
+    publicBookingEnabled: boolean("public_booking_enabled").notNull().default(false),
+    publicSelfServiceEnabled: boolean("public_self_service_enabled").notNull().default(false),
+    publicChatEnabled: boolean("public_chat_enabled").notNull().default(false),
+    remindersEnabled: boolean("reminders_enabled").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [uniqueIndex("organization_public_profiles_slug_uidx").on(table.slug)],
+);
+
 export const organizationMembers = pgTable(
   "organization_members",
   {

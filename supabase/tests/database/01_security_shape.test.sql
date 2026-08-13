@@ -9,6 +9,7 @@ SELECT is(
     WHERE oid = ANY (ARRAY[
       'public.organizations'::regclass,
       'public.organization_members'::regclass,
+      'public.organization_public_profiles'::regclass,
       'public.invitations'::regclass,
       'public.services'::regclass,
       'public.products'::regclass,
@@ -27,7 +28,7 @@ SELECT is(
       'public.webhook_rate_limits'::regclass
     ]) AND relrowsecurity
   ),
-  18::bigint,
+  19::bigint,
   'todas las tablas privadas expuestas tienen RLS habilitado'
 );
 
@@ -38,6 +39,7 @@ SELECT is(
     WHERE oid = ANY (ARRAY[
       'public.organizations'::regclass,
       'public.organization_members'::regclass,
+      'public.organization_public_profiles'::regclass,
       'public.invitations'::regclass,
       'public.services'::regclass,
       'public.products'::regclass,
@@ -56,7 +58,7 @@ SELECT is(
       'public.webhook_rate_limits'::regclass
     ]) AND relforcerowsecurity
   ),
-  18::bigint,
+  19::bigint,
   'RLS también se fuerza para propietarios sin BYPASSRLS'
 );
 
@@ -66,7 +68,8 @@ SELECT is(
     FROM information_schema.tables
     WHERE table_schema = 'public'
       AND table_name = ANY (ARRAY[
-        'organizations', 'organization_members', 'invitations', 'services', 'products',
+        'organizations', 'organization_members', 'organization_public_profiles', 'invitations',
+        'services', 'products',
         'service_materials', 'clients', 'appointments', 'transactions', 'transaction_items',
         'transaction_payments', 'inventory_movements', 'daily_summaries', 'audit_logs',
         'chat_messages', 'platform_admins', 'webhook_events', 'webhook_rate_limits'

@@ -399,7 +399,8 @@ organización inexistente, banderas apagadas, RLS y ausencia de privilegios púb
 
 1. Ejecutar el release en modo `plan` y revisar que sólo agregue estructuras.
 2. Aplicar migración y desplegar con todas las banderas en `false`.
-3. Confirmar que `/reservar/slug-inexistente` no exponga datos.
+3. Confirmar que `/reservar/slug-inexistente` y
+   `/api/public/organizations/slug-inexistente/config` respondan 404 sin exponer datos.
 4. Ejecutar el smoke administrativo completo.
 5. Confirmar ausencia de errores nuevos de esquema o autorización.
 

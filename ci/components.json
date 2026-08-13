@@ -48,6 +48,7 @@
         "clients",
         "analytics",
         "ai-integrations",
+        "public-booking",
         "shared-ui"
       ]
     },
@@ -60,7 +61,7 @@
         "src/app/(dashboard)/pos/**/*.tsx"
       ],
       "e2e": ["pos-sales", "receivables", "history-analytics", "performance"],
-      "triggers": ["inventory-services", "clients", "analytics"]
+      "triggers": ["inventory-services", "clients", "analytics", "public-booking"]
     },
     "inventory-services": {
       "paths": [
@@ -84,7 +85,7 @@
         "src/app/(dashboard)/servicios/**/*.tsx"
       ],
       "e2e": ["pos-sales", "inventory"],
-      "triggers": ["pos-finance", "agenda-appointments", "analytics"]
+      "triggers": ["pos-finance", "agenda-appointments", "analytics", "public-booking"]
     },
     "agenda-appointments": {
       "paths": [
@@ -107,7 +108,7 @@
         "src/app/(dashboard)/calendar/**/*.tsx"
       ],
       "e2e": ["agenda", "pos-sales", "performance"],
-      "triggers": ["pos-finance"]
+      "triggers": ["pos-finance", "public-booking"]
     },
     "clients": {
       "paths": ["src/modules/clients/", "src/app/clientes/", "src/app/(dashboard)/clientes/"],
@@ -121,7 +122,7 @@
         "history-analytics",
         "roles-tenancy"
       ],
-      "triggers": ["agenda-appointments", "pos-finance", "analytics"]
+      "triggers": ["agenda-appointments", "pos-finance", "analytics", "public-booking"]
     },
     "analytics": {
       "paths": [
@@ -157,9 +158,36 @@
         "src/app/api/import",
         "src/app/api/webhooks"
       ],
-      "coverage": ["src/modules/ai/**/*.ts", "src/components/ai/**/*.tsx", "src/app/api/**/*.ts"],
+      "coverage": [
+        "src/modules/ai/**/*.ts",
+        "src/components/ai/**/*.tsx",
+        "src/app/api/chat/**/*.ts",
+        "src/app/api/import/**/*.ts",
+        "src/app/api/webhooks/**/*.ts"
+      ],
       "e2e": [],
-      "triggers": ["agenda-appointments", "pos-finance", "inventory-services", "clients"]
+      "triggers": [
+        "agenda-appointments",
+        "pos-finance",
+        "inventory-services",
+        "clients",
+        "public-booking"
+      ]
+    },
+    "public-booking": {
+      "paths": ["src/modules/public-booking/", "src/app/(public)/reservar/", "src/app/api/public/"],
+      "testRoots": [
+        "src/modules/public-booking",
+        "src/app/(public)/reservar",
+        "src/app/api/public"
+      ],
+      "coverage": [
+        "src/modules/public-booking/**/*.ts",
+        "src/app/(public)/reservar/**/*.tsx",
+        "src/app/api/public/**/*.ts"
+      ],
+      "e2e": [],
+      "triggers": []
     },
     "shared-ui": {
       "paths": [
@@ -180,7 +208,8 @@
         "agenda-appointments",
         "clients",
         "analytics",
-        "ai-integrations"
+        "ai-integrations",
+        "public-booking"
       ]
     },
     "database": {
@@ -204,7 +233,8 @@
         "agenda-appointments",
         "clients",
         "analytics",
-        "ai-integrations"
+        "ai-integrations",
+        "public-booking"
       ]
     },
     "tooling": {
@@ -251,7 +281,8 @@
         "analytics",
         "ai-integrations",
         "shared-ui",
-        "database"
+        "database",
+        "public-booking"
       ]
     }
   }

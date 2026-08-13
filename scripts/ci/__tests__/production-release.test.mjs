@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { evaluatePostflight, evaluatePreflight } from "../../release/production-schema-state.mjs";
+import {
+  evaluatePostflight,
+  evaluatePreflight,
+  RELEASE_INDEXES,
+  RELEASE_MIGRATIONS,
+  RELEASE_TABLES,
+} from "../../release/production-schema-state.mjs";
 
 const legacyTables = [
   "appointments",
@@ -19,6 +25,12 @@ const legacyTables = [
 ];
 
 describe("release coordinado de produccion", () => {
+  it("incluye la fundacion publica en el contrato de despliegue", () => {
+    expect(RELEASE_MIGRATIONS).toContain("20260813183434");
+    expect(RELEASE_TABLES).toContain("organization_public_profiles");
+    expect(RELEASE_INDEXES).toContain("organization_public_profiles_slug_uidx");
+  });
+
   it("bloquea una base sin linea base cuando no existe autorizacion", () => {
     const result = evaluatePreflight({
       tables: legacyTables,

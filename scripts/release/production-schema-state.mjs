@@ -1,5 +1,15 @@
 export const BASELINE_VERSION = "0000";
-export const RELEASE_MIGRATIONS = ["0000", "0001", "0002", "0003", "0004", "0005", "0006", "0007"];
+export const RELEASE_MIGRATIONS = [
+  "0000",
+  "0001",
+  "0002",
+  "0003",
+  "0004",
+  "0005",
+  "0006",
+  "0007",
+  "20260813183434",
+];
 
 export const LEGACY_TABLES = [
   "appointments",
@@ -20,6 +30,7 @@ export const RELEASE_TABLES = [
   ...LEGACY_TABLES,
   "chat_messages",
   "invitations",
+  "organization_public_profiles",
   "platform_admins",
   "transaction_payments",
   "webhook_events",
@@ -29,6 +40,7 @@ export const RELEASE_TABLES = [
 export const RELEASE_INDEXES = [
   "appointments_org_start_idx",
   "inventory_movements_org_transaction_idx",
+  "organization_public_profiles_slug_uidx",
   "transaction_payments_created_transaction_idx",
   "transactions_org_created_idx",
 ];
@@ -100,6 +112,7 @@ export function evaluatePostflight({
   const missingIndexes = missingValues(indexes, RELEASE_INDEXES);
   const missingProtection = missingValues(protectedTables, [
     "inventory_movements",
+    "organization_public_profiles",
     "transactions",
     "transaction_items",
     "transaction_payments",
