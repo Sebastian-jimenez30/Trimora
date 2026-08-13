@@ -1,4 +1,11 @@
-import { getOrganizationMembers, addMemberToOrganization, updateMemberRole, removeMember, sendInvitation, getPendingInvitations, cancelInvitation } from "@/modules/superadmin/actions";
+import {
+  getOrganizationMembers,
+  updateMemberRole,
+  removeMember,
+  sendInvitation,
+  getPendingInvitations,
+  cancelInvitation,
+} from "@/modules/superadmin/actions";
 import Link from "next/link";
 import { revalidatePath } from "next/cache";
 
@@ -9,31 +16,31 @@ export default async function OrganizationDetailsPage(props: { params: Promise<{
   const pendingInvitations = await getPendingInvitations(organizationId);
 
   async function handleSendInvite(formData: FormData) {
-    'use server';
-    const email = formData.get('email') as string;
-    const role = formData.get('role') as string;
+    "use server";
+    const email = formData.get("email") as string;
+    const role = formData.get("role") as string;
     if (email && role) {
       await sendInvitation(organizationId, email, role);
     }
   }
 
   async function handleCancelInvite(formData: FormData) {
-    'use server';
-    const invitationId = formData.get('invitationId') as string;
+    "use server";
+    const invitationId = formData.get("invitationId") as string;
     await cancelInvitation(invitationId, organizationId);
   }
 
   async function handleUpdateRole(formData: FormData) {
-    'use server';
-    const memberId = formData.get('memberId') as string;
-    const role = formData.get('role') as string;
+    "use server";
+    const memberId = formData.get("memberId") as string;
+    const role = formData.get("role") as string;
     await updateMemberRole(memberId, role);
     revalidatePath(`/superadmin/organizations/${organizationId}`);
   }
 
   async function handleRemoveMember(formData: FormData) {
-    'use server';
-    const memberId = formData.get('memberId') as string;
+    "use server";
+    const memberId = formData.get("memberId") as string;
     await removeMember(memberId);
     revalidatePath(`/superadmin/organizations/${organizationId}`);
   }
@@ -41,25 +48,34 @@ export default async function OrganizationDetailsPage(props: { params: Promise<{
   return (
     <div className="space-y-8">
       <div className="flex items-center space-x-4">
-        <Link href="/superadmin/organizations" className="text-gray-400 hover:text-white transition">
+        <Link
+          href="/superadmin/organizations"
+          className="text-gray-400 hover:text-white transition"
+        >
           ← Volver
         </Link>
         <h2 className="text-3xl font-bold text-white">Gestión de Barbería</h2>
       </div>
 
       <div className="bg-gray-900 border border-gray-800 p-6 rounded-xl">
-        <h3 className="text-xl font-semibold mb-4 text-gray-200">Invitar Nuevo Miembro por Correo</h3>
-        <p className="text-sm text-gray-500 mb-4">Se enviará un correo con un enlace único. Al hacer clic, el usuario podrá crear su contraseña (o iniciar sesión si ya tiene cuenta) y se unirá automáticamente a esta barbería con el rol especificado.</p>
+        <h3 className="text-xl font-semibold mb-4 text-gray-200">
+          Invitar Nuevo Miembro por Correo
+        </h3>
+        <p className="text-sm text-gray-500 mb-4">
+          Se enviará un correo con un enlace único. Al hacer clic, el usuario podrá crear su
+          contraseña (o iniciar sesión si ya tiene cuenta) y se unirá automáticamente a esta
+          barbería con el rol especificado.
+        </p>
         <form action={handleSendInvite} className="flex gap-4">
-          <input 
-            type="email" 
+          <input
+            type="email"
             name="email"
-            placeholder="Correo del usuario a invitar" 
+            placeholder="Correo del usuario a invitar"
             className="flex-1 bg-gray-800 border border-gray-700 text-white px-4 py-2 rounded-lg focus:outline-none focus:border-blue-500"
             required
           />
-          <select 
-            name="role" 
+          <select
+            name="role"
             className="bg-gray-800 border border-gray-700 text-white px-4 py-2 rounded-lg focus:outline-none focus:border-blue-500"
             required
           >
@@ -67,7 +83,10 @@ export default async function OrganizationDetailsPage(props: { params: Promise<{
             <option value="BARBER">BARBER</option>
             <option value="RECEPTIONIST">RECEPTIONIST</option>
           </select>
-          <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition">
+          <button
+            type="submit"
+            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition"
+          >
             Enviar Invitación
           </button>
         </form>
@@ -88,7 +107,7 @@ export default async function OrganizationDetailsPage(props: { params: Promise<{
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-800">
-              {pendingInvitations.map(inv => (
+              {pendingInvitations.map((inv) => (
                 <tr key={inv.id} className="hover:bg-gray-800/30 transition">
                   <td className="px-6 py-4 font-medium text-white">{inv.email}</td>
                   <td className="px-6 py-4">{inv.role}</td>
@@ -122,14 +141,14 @@ export default async function OrganizationDetailsPage(props: { params: Promise<{
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-800">
-            {members.map(member => (
+            {members.map((member) => (
               <tr key={member.id} className="hover:bg-gray-800/30 transition">
                 <td className="px-6 py-4 font-medium text-white">{member.email}</td>
                 <td className="px-6 py-4">
                   <form action={handleUpdateRole} className="flex items-center gap-2">
                     <input type="hidden" name="memberId" value={member.id} />
-                    <select 
-                      name="role" 
+                    <select
+                      name="role"
                       defaultValue={member.role}
                       className="bg-gray-800 border border-gray-700 text-white px-2 py-1 rounded focus:outline-none focus:border-blue-500"
                     >
@@ -137,7 +156,10 @@ export default async function OrganizationDetailsPage(props: { params: Promise<{
                       <option value="BARBER">BARBER</option>
                       <option value="RECEPTIONIST">RECEPTIONIST</option>
                     </select>
-                    <button type="submit" className="text-xs bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded text-white transition">
+                    <button
+                      type="submit"
+                      className="text-xs bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded text-white transition"
+                    >
                       Actualizar
                     </button>
                   </form>

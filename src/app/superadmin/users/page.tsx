@@ -5,8 +5,8 @@ export default async function GlobalUsersPage() {
   const users = await getAllGlobalUsers();
 
   async function handleDeleteUser(formData: FormData) {
-    'use server';
-    const userId = formData.get('userId') as string;
+    "use server";
+    const userId = formData.get("userId") as string;
     if (userId) {
       await deleteGlobalUser(userId);
     }
@@ -21,8 +21,9 @@ export default async function GlobalUsersPage() {
       <div className="bg-gray-900 border border-gray-800 p-6 rounded-xl text-yellow-500/80 mb-6">
         <strong className="text-yellow-500 block mb-2">⚠ ZONA DE PELIGRO</strong>
         <p className="text-sm">
-          Borrar a un usuario desde este panel elimina su cuenta completamente de Supabase Auth y rompe sus referencias de inicio de sesión. 
-          Use esta opción únicamente si el usuario solicitó eliminar su cuenta permanentemente o si es una cuenta de prueba/spam.
+          Borrar a un usuario desde este panel elimina su cuenta completamente de Supabase Auth y
+          rompe sus referencias de inicio de sesión. Use esta opción únicamente si el usuario
+          solicitó eliminar su cuenta permanentemente o si es una cuenta de prueba/spam.
         </p>
       </div>
 
@@ -37,16 +38,21 @@ export default async function GlobalUsersPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-800">
-            {users.map(user => (
+            {users.map((user) => (
               <tr key={user.id} className="hover:bg-gray-800/30 transition">
                 <td className="px-6 py-4 font-medium text-white">{user.email}</td>
-                <td className="px-6 py-4">{user.last_sign_in_at ? new Date(user.last_sign_in_at).toLocaleString() : 'Nunca'}</td>
+                <td className="px-6 py-4">
+                  {user.last_sign_in_at ? new Date(user.last_sign_in_at).toLocaleString() : "Nunca"}
+                </td>
                 <td className="px-6 py-4">{new Date(user.created_at).toLocaleDateString()}</td>
                 <td className="px-6 py-4 text-right flex justify-end gap-4">
-                  <Link href={`/superadmin/users/${user.id}`} className="text-blue-500 hover:text-blue-400 font-medium">
+                  <Link
+                    href={`/superadmin/users/${user.id}`}
+                    className="text-blue-500 hover:text-blue-400 font-medium"
+                  >
                     Gestionar
                   </Link>
-                  
+
                   <form action={handleDeleteUser}>
                     <input type="hidden" name="userId" value={user.id} />
                     <button type="submit" className="text-red-500 hover:text-red-400 font-medium">

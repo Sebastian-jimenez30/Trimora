@@ -1,28 +1,41 @@
 import Link from "next/link";
+import Image from "next/image";
 import { FeaturesCarousel } from "@/components/FeaturesCarousel";
 
 export default function Home() {
   return (
-    <div 
+    <div
       className="min-h-screen flex flex-col relative"
       style={{
         backgroundImage: `linear-gradient(90deg, rgba(10,10,10,1) 30%, rgba(10,10,10,0.7) 60%, rgba(10,10,10,0.1) 100%), url('https://images.unsplash.com/photo-1503951914875-452162b0f3f1?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80')`,
-        backgroundSize: 'cover',
-        backgroundPosition: 'center right',
-        backgroundRepeat: 'no-repeat',
-        backgroundAttachment: 'fixed',
+        backgroundSize: "cover",
+        backgroundPosition: "center right",
+        backgroundRepeat: "no-repeat",
+        backgroundAttachment: "fixed",
       }}
     >
       <div className="container mx-auto max-w-[1200px] px-5 flex flex-col min-h-screen relative z-10">
         {/* Navbar */}
         <nav className="flex justify-between items-center py-10">
-          <Link href="/" className="flex items-center gap-3 text-sterling hover:text-white transition-colors">
-            <img src="/trimora-logo-white.png" alt="Trimora Logo" className="w-[40px] h-[40px] object-contain" />
+          <Link
+            href="/"
+            className="flex items-center gap-3 text-sterling hover:text-white transition-colors"
+          >
+            <Image
+              src="/trimora-logo-white.png"
+              alt="Trimora Logo"
+              width={40}
+              height={40}
+              className="w-[40px] h-[40px] object-contain"
+            />
             <span className="font-serif text-[28px] font-bold tracking-[2px]">TRIMORA</span>
           </Link>
-          
+
           <nav className="flex items-center gap-8 text-sm tracking-wide">
-            <Link href="/login" className="px-5 py-2.5 bg-cognac hover:bg-cognac-hover text-white rounded-full transition-all duration-300 shadow-[0_0_15px_rgba(139,69,19,0.3)] hover:shadow-[0_0_20px_rgba(139,69,19,0.5)] font-semibold">
+            <Link
+              href="/login"
+              className="px-5 py-2.5 bg-cognac hover:bg-cognac-hover text-white rounded-full transition-all duration-300 shadow-[0_0_15px_rgba(139,69,19,0.3)] hover:shadow-[0_0_20px_rgba(139,69,19,0.5)] font-semibold"
+            >
               INICIAR SESIÓN
             </Link>
           </nav>
@@ -34,7 +47,9 @@ export default function Home() {
             TRIMORA
           </h1>
           <p className="text-lg leading-[1.6] text-[#dcdcdc] font-light max-w-[500px] mb-10">
-            Somos la plataforma que te ayuda a organizar y profesionalizar la administración de tu negocio. Facilitamos tu día a día con herramientas intuitivas para gestionar tu tiempo, tus clientes y tus ingresos.
+            Somos la plataforma que te ayuda a organizar y profesionalizar la administración de tu
+            negocio. Facilitamos tu día a día con herramientas intuitivas para gestionar tu tiempo,
+            tus clientes y tus ingresos.
           </p>
         </main>
 
@@ -45,38 +60,55 @@ export default function Home() {
         <section className="py-24 relative z-10 w-full max-w-[1200px] mx-auto mt-10">
           <div className="bg-gradient-to-br from-[#141414] to-pitch p-12 md:p-16 rounded-3xl border border-white/10 shadow-2xl overflow-hidden relative">
             <div className="absolute top-0 right-0 w-full h-full bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-cognac/20 via-transparent to-transparent opacity-60"></div>
-            
+
             <div className="relative z-10 max-w-3xl">
               <h2 className="font-serif text-3xl md:text-5xl font-bold mb-6 text-white leading-tight">
-                Todo Conectado, <br/> Todo en Armonía
+                Todo Conectado, <br /> Todo en Armonía
               </h2>
               <p className="text-[#dcdcdc] text-lg font-light leading-relaxed mb-8">
-                El verdadero poder de <strong>Trimora</strong> no está en sus herramientas individuales, sino en cómo colaboran. 
-                Cada funcionalidad tiene un propósito mayor dentro de tu negocio:
+                El verdadero poder de <strong>Trimora</strong> no está en sus herramientas
+                individuales, sino en cómo colaboran. Cada funcionalidad tiene un propósito mayor
+                dentro de tu negocio:
               </p>
 
               <div className="space-y-8">
                 <div className="flex gap-4 items-start">
-                  <div className="w-10 h-10 rounded-full bg-cognac/20 border border-cognac flex items-center justify-center flex-shrink-0 text-cognac font-bold">1</div>
+                  <div className="w-10 h-10 rounded-full bg-cognac/20 border border-cognac flex items-center justify-center flex-shrink-0 text-cognac font-bold">
+                    1
+                  </div>
                   <div>
                     <h4 className="text-xl font-bold text-white mb-2">Comienza en la Agenda</h4>
-                    <p className="text-[#dcdcdc] text-sm leading-relaxed">Al programar una cita, el cliente queda automáticamente vinculado. No hay registros duplicados ni confusiones.</p>
+                    <p className="text-[#dcdcdc] text-sm leading-relaxed">
+                      Al programar una cita, el cliente queda automáticamente vinculado. No hay
+                      registros duplicados ni confusiones.
+                    </p>
                   </div>
                 </div>
 
                 <div className="flex gap-4 items-start">
-                  <div className="w-10 h-10 rounded-full bg-cognac/20 border border-cognac flex items-center justify-center flex-shrink-0 text-cognac font-bold">2</div>
+                  <div className="w-10 h-10 rounded-full bg-cognac/20 border border-cognac flex items-center justify-center flex-shrink-0 text-cognac font-bold">
+                    2
+                  </div>
                   <div>
                     <h4 className="text-xl font-bold text-white mb-2">Impacta al Cliente</h4>
-                    <p className="text-[#dcdcdc] text-sm leading-relaxed">Cuando el cliente asiste, su perfil se actualiza con un nuevo historial, ayudándote a fidelizarlo con un servicio más personalizado en el futuro.</p>
+                    <p className="text-[#dcdcdc] text-sm leading-relaxed">
+                      Cuando el cliente asiste, su perfil se actualiza con un nuevo historial,
+                      ayudándote a fidelizarlo con un servicio más personalizado en el futuro.
+                    </p>
                   </div>
                 </div>
 
                 <div className="flex gap-4 items-start">
-                  <div className="w-10 h-10 rounded-full bg-cognac/20 border border-cognac flex items-center justify-center flex-shrink-0 text-cognac font-bold">3</div>
+                  <div className="w-10 h-10 rounded-full bg-cognac/20 border border-cognac flex items-center justify-center flex-shrink-0 text-cognac font-bold">
+                    3
+                  </div>
                   <div>
                     <h4 className="text-xl font-bold text-white mb-2">Finaliza en la Caja</h4>
-                    <p className="text-[#dcdcdc] text-sm leading-relaxed">Al completar el servicio, pasas al Punto de Venta. Se cobra el servicio, se venden los productos asociados y el <strong>inventario se descuenta automáticamente</strong>.</p>
+                    <p className="text-[#dcdcdc] text-sm leading-relaxed">
+                      Al completar el servicio, pasas al Punto de Venta. Se cobra el servicio, se
+                      venden los productos asociados y el{" "}
+                      <strong>inventario se descuenta automáticamente</strong>.
+                    </p>
                   </div>
                 </div>
               </div>

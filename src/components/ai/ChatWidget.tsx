@@ -1,4 +1,4 @@
-"use client"
+"use client";
 
 import { useState, useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
@@ -33,8 +33,9 @@ export default function ChatWidget() {
       setMessages([
         {
           role: "assistant",
-          content: "¡Hola! 👋 Soy tu asistente de Trimora. Puedo ayudarte a agendar citas, ver la caja del día, consultar el inventario, registrar ventas y más. ¿En qué te ayudo hoy?"
-        }
+          content:
+            "¡Hola! 👋 Soy tu asistente de Trimora. Puedo ayudarte a agendar citas, ver la caja del día, consultar el inventario, registrar ventas y más. ¿En qué te ayudo hoy?",
+        },
       ]);
     }
     setIsInitialLoaded(true);
@@ -73,10 +74,7 @@ export default function ChatWidget() {
       const data = await response.json();
 
       if (data.success && data.message) {
-        setMessages((prev) => [
-          ...prev,
-          { role: "assistant", content: data.message },
-        ]);
+        setMessages((prev) => [...prev, { role: "assistant", content: data.message }]);
       } else {
         setMessages((prev) => [
           ...prev,
@@ -86,7 +84,7 @@ export default function ChatWidget() {
           },
         ]);
       }
-    } catch (error: any) {
+    } catch {
       setMessages((prev) => [
         ...prev,
         {
@@ -106,8 +104,8 @@ export default function ChatWidget() {
     setMessages([
       {
         role: "assistant",
-        content: "Conversación reiniciada. ¿En qué te puedo colaborar?"
-      }
+        content: "Conversación reiniciada. ¿En qué te puedo colaborar?",
+      },
     ]);
     setIsLoading(false);
   };
@@ -135,7 +133,16 @@ export default function ChatWidget() {
           aria-label="Abrir asistente de IA"
         >
           <div className="relative flex items-center justify-center">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
               <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
               <path d="M8 10h.01"></path>
               <path d="M12 10h.01"></path>
@@ -148,9 +155,11 @@ export default function ChatWidget() {
 
       {/* Ventana Emergente del Chatbot */}
       {isOpen && (
-        <div className={`fixed right-4 sm:right-6 z-50 w-[calc(100vw-2rem)] sm:w-[380px] h-[520px] max-h-[80vh] bg-[#141414] border border-white/10 rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-5 fade-in duration-200 backdrop-blur-md ${
-          isAgenda ? "bottom-24" : "bottom-6"
-        }`}>
+        <div
+          className={`fixed right-4 sm:right-6 z-50 w-[calc(100vw-2rem)] sm:w-[380px] h-[520px] max-h-[80vh] bg-[#141414] border border-white/10 rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-5 fade-in duration-200 backdrop-blur-md ${
+            isAgenda ? "bottom-24" : "bottom-6"
+          }`}
+        >
           {/* Header */}
           <div className="p-4 bg-pitch border-b border-white/10 flex items-center justify-between shrink-0">
             <div className="flex items-center gap-3">
@@ -161,25 +170,47 @@ export default function ChatWidget() {
                 <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-pitch"></span>
               </div>
               <div>
-                <h4 className="text-sm font-semibold text-sterling leading-tight">Asistente IA Trimora</h4>
+                <h4 className="text-sm font-semibold text-sterling leading-tight">
+                  Asistente IA Trimora
+                </h4>
                 <p className="text-[11px] text-charcoal">En línea • Operación & Consultas</p>
               </div>
             </div>
-            
+
             <div className="flex items-center gap-1">
               <button
                 onClick={handleClearHistory}
                 title="Limpiar chat"
                 className="p-1.5 text-charcoal hover:text-sterling hover:bg-white/5 rounded-lg transition-colors"
               >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <path d="M3 6h18"></path>
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                </svg>
               </button>
               <button
                 onClick={() => setIsOpen(false)}
                 title="Cerrar"
                 className="p-1.5 text-charcoal hover:text-sterling hover:bg-white/5 rounded-lg transition-colors"
               >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
               </button>
             </div>
           </div>
@@ -189,9 +220,7 @@ export default function ChatWidget() {
             {messages.map((msg, idx) => (
               <div
                 key={idx}
-                className={`flex flex-col ${
-                  msg.role === "user" ? "items-end" : "items-start"
-                }`}
+                className={`flex flex-col ${msg.role === "user" ? "items-end" : "items-start"}`}
               >
                 <div
                   className={`max-w-[85%] px-3.5 py-2.5 rounded-2xl text-xs leading-relaxed whitespace-pre-wrap ${
@@ -209,9 +238,25 @@ export default function ChatWidget() {
             {isLoading && (
               <div className="flex items-start gap-2">
                 <div className="bg-pitch border border-white/10 px-3.5 py-2.5 rounded-2xl rounded-bl-xs text-xs text-charcoal flex items-center gap-2">
-                  <svg className="animate-spin h-3.5 w-3.5 text-cognac" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  <svg
+                    className="animate-spin h-3.5 w-3.5 text-cognac"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    ></circle>
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    ></path>
                   </svg>
                   <span>Consultando información...</span>
                 </div>
@@ -256,7 +301,16 @@ export default function ChatWidget() {
               disabled={!input.trim() || isLoading}
               className="bg-cognac hover:brightness-110 text-white p-2.5 rounded-xl transition-all disabled:opacity-30 disabled:cursor-not-allowed shrink-0 flex items-center justify-center"
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
                 <line x1="22" y1="2" x2="11" y2="13"></line>
                 <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
               </svg>

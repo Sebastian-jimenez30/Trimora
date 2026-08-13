@@ -1,13 +1,12 @@
-'use client';
+"use client";
 
-import { useEffect, useRef } from 'react';
-import { logoutIdle } from '@/modules/auth/actions';
+import { useEffect, useRef } from "react";
+import { logoutIdle } from "@/modules/auth/actions";
+
+const SESSION_TIMEOUT_MS = 10 * 60 * 1000;
 
 export default function SessionTimeout() {
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-  // 10 minutos de inactividad
-  const TIMEOUT_MS = 10 * 60 * 1000;
 
   useEffect(() => {
     const resetTimer = () => {
@@ -18,13 +17,13 @@ export default function SessionTimeout() {
       timeoutRef.current = setTimeout(() => {
         // Ejecutar Server Action para limpiar las cookies y cerrar sesión en Supabase
         logoutIdle();
-      }, TIMEOUT_MS);
+      }, SESSION_TIMEOUT_MS);
     };
 
     // Escuchar eventos globales que indican actividad del usuario
-    const events = ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart'];
+    const events = ["mousemove", "mousedown", "keydown", "scroll", "touchstart"];
 
-    events.forEach(event => {
+    events.forEach((event) => {
       window.addEventListener(event, resetTimer);
     });
 
@@ -36,7 +35,7 @@ export default function SessionTimeout() {
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
       }
-      events.forEach(event => {
+      events.forEach((event) => {
         window.removeEventListener(event, resetTimer);
       });
     };
