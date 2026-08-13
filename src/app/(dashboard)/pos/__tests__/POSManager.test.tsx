@@ -1,26 +1,31 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import POSManager from "../POSManager";
 import { buildPOSHistoryEntry, buildPOSManagerProps, buildPOSReceivable } from "@/test/factories";
 
-const mocks = vi.hoisted(() => ({ replace: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  replace: vi.fn(),
+  processSale: vi.fn(),
+  registerPayment: vi.fn(),
+  toastSuccess: vi.fn(),
+}));
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace: mocks.replace }),
   useSearchParams: () => new URLSearchParams(),
 }));
 vi.mock("@/modules/pos/actions", () => ({
-  processSale: vi.fn(),
+  processSale: mocks.processSale,
   registerExpense: vi.fn(),
-  registerPayment: vi.fn(),
+  registerPayment: mocks.registerPayment,
   registerClientPayment: vi.fn(),
   exportFinancialReport: vi.fn(),
   updateTransaction: vi.fn(),
   deleteTransaction: vi.fn(),
 }));
 vi.mock("react-hot-toast", () => ({
-  toast: { error: vi.fn(), success: vi.fn() },
+  toast: { error: vi.fn(), success: mocks.toastSuccess },
 }));
 
 const receivable = buildPOSReceivable({
@@ -51,6 +56,12 @@ const receivable = buildPOSReceivable({
 });
 
 describe("POSManager", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.processSale.mockResolvedValue({ success: true, transactionId: "transaction-new" });
+    mocks.registerPayment.mockResolvedValue({ success: true });
+  });
+
   it("oculta las citas pendientes cuando no existen y presenta estados vacios", async () => {
     const user = userEvent.setup();
     render(<POSManager {...buildPOSManagerProps()} />);
@@ -74,6 +85,66 @@ describe("POSManager", () => {
     await user.click(within(detail).getByRole("button", { name: "Pagar completo" }));
     expect(screen.getByRole("dialog", { name: "Abonar a Ana Lopez" })).toBeInTheDocument();
     expect(screen.getByLabelText("Monto ($)")).toHaveValue(35000);
+  });
+
+  it("permite pagar completamente un movimiento específico de una cuenta", async () => {
+    const user = userEvent.setup();
+    render(<POSManager {...buildPOSManagerProps({ receivables: [receivable] })} />);
+    await user.click(screen.getByRole("button", { name: "Por cobrar" }));
+    await user.click(screen.getByText("Ana Lopez"));
+
+    const detail = screen.getByRole("dialog", { name: "Cuenta por cobrar de Ana Lopez" });
+    await user.click(within(detail).getAllByRole("button", { name: "Pagar este movimiento" })[1]);
+    expect(screen.getByLabelText("Monto ($)")).toHaveValue(15000);
+
+    await user.click(screen.getByRole("button", { name: "Confirmar" }));
+    expect(mocks.registerPayment).toHaveBeenCalledWith("transaction-2", 15000, "CASH");
+  });
+
+  it("permite buscar y seleccionar el cliente desde el ticket de venta", async () => {
+    const user = userEvent.setup();
+    render(
+      <POSManager
+        {...buildPOSManagerProps({
+          services: [
+            { id: "service-1", name: "Corte clásico", price: "25000.00", durationMinutes: 30 },
+          ],
+          clients: [
+            { id: "client-1", firstName: "Ana", lastName: "Lopez" },
+            { id: "client-2", firstName: "Carlos", lastName: "Perez" },
+          ],
+        })}
+      />,
+    );
+
+    await user.click(screen.getByText("Corte clásico"));
+    const clientPicker = screen.getByRole("combobox", { name: "Cliente (Opcional)" });
+    await user.type(clientPicker, "Carlos");
+    expect(screen.queryByRole("option", { name: "Ana Lopez" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("option", { name: "Carlos Perez" }));
+
+    expect(clientPicker).toHaveValue("Carlos Perez");
+  });
+
+  it("confirma el cobro sin enviar al usuario al historial", async () => {
+    const user = userEvent.setup();
+    render(
+      <POSManager
+        {...buildPOSManagerProps({
+          services: [
+            { id: "service-1", name: "Corte clásico", price: "25000.00", durationMinutes: 30 },
+          ],
+        })}
+      />,
+    );
+
+    await user.click(screen.getByText("Corte clásico"));
+    await user.click(screen.getByRole("button", { name: "Cobrar" }));
+
+    expect(await screen.findByText("¡Venta Exitosa!")).toBeInTheDocument();
+    expect(mocks.toastSuccess).toHaveBeenCalledWith("Cobro registrado correctamente");
+    await user.click(screen.getByRole("button", { name: "Continuar" }));
+    expect(screen.getByRole("button", { name: "Servicios" })).toBeInTheDocument();
   });
 
   it("presenta el detalle del historial y abre la edición con campos accesibles", async () => {

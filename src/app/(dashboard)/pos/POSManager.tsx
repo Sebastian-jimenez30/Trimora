@@ -47,6 +47,8 @@ export default function POSManager({
   const [cart, setCart] = useState<CartItem[]>([]);
 
   const [selectedClientId, setSelectedClientId] = useState<string>("");
+  const [clientSearch, setClientSearch] = useState("");
+  const [isClientPickerOpen, setIsClientPickerOpen] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<string>("CASH");
   const [currentAppointmentId, setCurrentAppointmentId] = useState<string>("");
 
@@ -79,6 +81,7 @@ export default function POSManager({
       if (!app) return;
 
       setSelectedClientId(app.clientId);
+      setClientSearch(`${app.clientName || ""} ${app.clientLastName || ""}`.trim());
       setCurrentAppointmentId(app.id);
 
       const service = services.find((candidate) => candidate.id === app.serviceId);
@@ -200,6 +203,11 @@ export default function POSManager({
 
   const cartTotal = cart.reduce((acc, item) => acc + item.price * item.quantity, 0);
   const cartCount = cart.reduce((acc, item) => acc + item.quantity, 0);
+  const filteredClients = clients.filter((client) =>
+    `${client.firstName} ${client.lastName || ""}`
+      .toLowerCase()
+      .includes(clientSearch.trim().toLowerCase()),
+  );
 
   const handleCheckout = () => {
     if (cart.length === 0) return;
@@ -221,10 +229,11 @@ export default function POSManager({
       if (result.success && result.transactionId) {
         setCart([]);
         setSelectedClientId("");
+        setClientSearch("");
         setCurrentAppointmentId("");
         setInitialPaidAmount("");
         setSuccessTxId(result.transactionId); // Abrir modal de éxito
-        setActiveTab("HISTORY");
+        toast.success("Cobro registrado correctamente");
       } else {
         toast.error(result.error || "Error al procesar la venta");
       }
@@ -256,6 +265,15 @@ export default function POSManager({
     setReceivableToPay(receivable);
     setReceivablePaymentAmount(payInFull ? receivable.totalDebt : "");
     setReceivablePaymentMethod("CASH");
+  };
+
+  const openMovementPayment = (transactionId: string, remaining: number) => {
+    const amount = remaining.toFixed(2);
+    setSelectedReceivable(null);
+    setSelectedTxId(transactionId);
+    setPaymentAmount(amount);
+    setPaymentRemaining(amount);
+    setIsPaymentModalOpen(true);
   };
 
   const handleReceivablePayment = (event: React.FormEvent<HTMLFormElement>) => {
@@ -877,8 +895,17 @@ export default function POSManager({
                   </button>
                 </div>
               </div>
-              <div className="overflow-x-auto lg:overflow-x-visible">
-                <table className="w-full text-left border-collapse whitespace-nowrap lg:whitespace-normal min-w-[680px] lg:min-w-0">
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[760px] table-fixed text-left border-collapse whitespace-nowrap">
+                  <colgroup>
+                    <col className="w-[15%]" />
+                    <col className="w-[10%]" />
+                    <col className="w-[24%]" />
+                    <col className="w-[14%]" />
+                    <col className="w-[13%]" />
+                    <col className="w-[11%]" />
+                    <col className="w-[13%]" />
+                  </colgroup>
                   <thead>
                     <tr>
                       <th className="py-3 px-5 text-xs text-[#888] font-medium border-b border-white/10">
@@ -940,9 +967,14 @@ export default function POSManager({
                                     : "GASTO"}
                             </span>
                           </td>
-                          <td className="py-3 px-5 text-sm text-sterling">
-                            <div className="flex items-center gap-2">
-                              <span className="truncate">{tx.description}</span>
+                          <td className="py-3 px-5 text-sm text-sterling overflow-hidden">
+                            <div className="flex min-w-0 items-center gap-2">
+                              <span
+                                className="block min-w-0 flex-1 truncate"
+                                title={tx.description}
+                              >
+                                {tx.description}
+                              </span>
                               {tx.canEdit ? (
                                 <button
                                   onClick={(event) => {
@@ -972,7 +1004,12 @@ export default function POSManager({
                               )}
                             </div>
                           </td>
-                          <td className="py-3 px-5 text-sm text-[#888]">{tx.clientName}</td>
+                          <td
+                            className="py-3 px-5 text-sm text-[#888] truncate"
+                            title={tx.clientName}
+                          >
+                            {tx.clientName}
+                          </td>
                           <td className="py-3 px-5">
                             {isPending ? (
                               <div className="flex flex-col">
@@ -1169,22 +1206,99 @@ export default function POSManager({
           </div>
 
           <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-5">
-            <div className="flex flex-col gap-2">
-              <label className="text-xs text-charcoal uppercase tracking-wider">
+            <div className="flex flex-col gap-2 relative">
+              <label
+                htmlFor="checkout-client"
+                className="text-xs text-charcoal uppercase tracking-wider"
+              >
                 Cliente (Opcional)
               </label>
-              <select
-                value={selectedClientId}
-                onChange={(e) => setSelectedClientId(e.target.value)}
-                className="bg-pitch border border-white/10 text-sterling px-3 py-2.5 rounded-lg text-sm focus:outline-none focus:border-[#8B4513] w-full"
-              >
-                <option value="">Cliente General</option>
-                {clients.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.firstName} {c.lastName}
-                  </option>
-                ))}
-              </select>
+              <div className="relative">
+                <input
+                  id="checkout-client"
+                  type="text"
+                  role="combobox"
+                  aria-expanded={isClientPickerOpen}
+                  aria-controls="checkout-client-options"
+                  aria-autocomplete="list"
+                  value={clientSearch}
+                  placeholder="Cliente General o buscar cliente..."
+                  onFocus={() => setIsClientPickerOpen(true)}
+                  onBlur={() => setTimeout(() => setIsClientPickerOpen(false), 150)}
+                  onChange={(event) => {
+                    setClientSearch(event.target.value);
+                    setSelectedClientId("");
+                    setCurrentAppointmentId("");
+                    setIsClientPickerOpen(true);
+                  }}
+                  className="bg-pitch border border-white/10 text-sterling px-3 py-2.5 pr-9 rounded-lg text-sm focus:outline-none focus:border-[#8B4513] w-full"
+                />
+                <button
+                  type="button"
+                  aria-label="Mostrar clientes"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => setIsClientPickerOpen((open) => !open)}
+                  className="absolute inset-y-0 right-0 px-3 text-charcoal hover:text-sterling"
+                >
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  >
+                    <polyline points="6 9 12 15 18 9" />
+                  </svg>
+                </button>
+              </div>
+              {isClientPickerOpen && (
+                <div
+                  id="checkout-client-options"
+                  role="listbox"
+                  className="absolute z-40 top-full left-0 right-0 mt-1 max-h-56 overflow-y-auto rounded-lg border border-white/10 bg-[#181818] shadow-2xl"
+                >
+                  <button
+                    type="button"
+                    role="option"
+                    aria-selected={!selectedClientId}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => {
+                      setSelectedClientId("");
+                      setClientSearch("");
+                      setCurrentAppointmentId("");
+                      setIsClientPickerOpen(false);
+                    }}
+                    className="block w-full px-3 py-2.5 text-left text-sm text-sterling hover:bg-white/10"
+                  >
+                    Cliente General
+                  </button>
+                  {filteredClients.map((client) => {
+                    const name = `${client.firstName} ${client.lastName || ""}`.trim();
+                    return (
+                      <button
+                        key={client.id}
+                        type="button"
+                        role="option"
+                        aria-selected={selectedClientId === client.id}
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => {
+                          setSelectedClientId(client.id);
+                          setClientSearch(name);
+                          setCurrentAppointmentId("");
+                          setIsClientPickerOpen(false);
+                        }}
+                        className="block w-full px-3 py-2.5 text-left text-sm text-sterling hover:bg-white/10"
+                      >
+                        {name}
+                      </button>
+                    );
+                  })}
+                  {filteredClients.length === 0 && (
+                    <p className="px-3 py-3 text-sm text-charcoal">No se encontraron clientes.</p>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="border-t border-white/5 pt-4 flex-1">
@@ -1444,6 +1558,15 @@ export default function POSManager({
                     ))}
                   </div>
                 )}
+                <div className="mt-3 flex justify-end border-t border-white/5 pt-3">
+                  <button
+                    type="button"
+                    onClick={() => openMovementPayment(movement.transactionId, movement.remaining)}
+                    className="rounded-lg border border-orange-500/40 bg-orange-500/15 px-3 py-2 text-xs font-bold text-orange-400 transition-colors hover:bg-orange-500/30"
+                  >
+                    Pagar este movimiento
+                  </button>
+                </div>
               </div>
             ))}
           </div>
@@ -1566,10 +1689,14 @@ export default function POSManager({
             <p className="text-xs text-[#888] mb-4">Ingrese el monto a abonar a la deuda.</p>
             <form onSubmit={handlePayment} className="flex flex-col gap-4">
               <div>
-                <label className="text-xs text-charcoal uppercase tracking-wider block mb-1">
+                <label
+                  htmlFor="movement-payment-amount"
+                  className="text-xs text-charcoal uppercase tracking-wider block mb-1"
+                >
                   Monto ($)
                 </label>
                 <input
+                  id="movement-payment-amount"
                   type="number"
                   step="0.01"
                   min="0.01"

@@ -155,6 +155,8 @@ export default function ServicesManager({ services, products: initialProducts }:
     startTransition(async () => {
       const res = await deleteService(serviceToDelete);
       if (res.success) {
+        setIsServiceModalOpen(false);
+        setEditingId(null);
         toast.success("Servicio eliminado permanentemente");
       } else {
         toast.error(res.error || "Error al eliminar");

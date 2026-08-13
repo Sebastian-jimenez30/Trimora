@@ -69,6 +69,22 @@ describe("frontera de acciones de agenda", () => {
     );
   });
 
+  it("permite registrar una cita retroactiva para conservar su trazabilidad", async () => {
+    const formData = appointmentForm();
+    formData.set("startTime", "2020-01-01T10:00:00.000Z");
+    formData.set("endTime", "2020-01-01T10:30:00.000Z");
+
+    const result = await createAppointment(formData);
+
+    expect(result).toEqual({ success: true });
+    expect(mocks.insertValues).toHaveBeenCalledWith(
+      expect.objectContaining({
+        startTime: new Date("2020-01-01T10:00:00.000Z"),
+        endTime: new Date("2020-01-01T10:30:00.000Z"),
+      }),
+    );
+  });
+
   it("rechaza un identificador que no resuelve dentro de la organización", async () => {
     mocks.client.mockResolvedValue(undefined);
 
