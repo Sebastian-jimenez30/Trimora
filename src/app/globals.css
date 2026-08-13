@@ -1,13 +1,13 @@
 @import "tailwindcss";
 
 :root {
-  --pitch-black: #0A0A0A;
-  --midnight-slate: #2C2C2C;
+  --pitch-black: #0a0a0a;
+  --midnight-slate: #2c2c2c;
   --charcoal-grey: #888888;
-  --sterling-silver: #FFFFFF;
-  --deep-cognac: #8B4513;
+  --sterling-silver: #ffffff;
+  --deep-cognac: #8b4513;
   --deep-cognac-hover: #9d5017;
-  
+
   --background: var(--pitch-black);
   --foreground: var(--sterling-silver);
 }
@@ -21,7 +21,7 @@
   --color-sterling: var(--sterling-silver);
   --color-cognac: var(--deep-cognac);
   --color-cognac-hover: var(--deep-cognac-hover);
-  
+
   --font-sans: var(--font-inter);
   --font-serif: var(--font-playfair);
 }
@@ -38,7 +38,13 @@ body {
 }
 
 @keyframes shine {
-  0% { left: -100%; }
-  20% { left: 200%; }
-  100% { left: 200%; }
+  0% {
+    left: -100%;
+  }
+  20% {
+    left: 200%;
+  }
+  100% {
+    left: 200%;
+  }
 }
