@@ -123,6 +123,7 @@ export default function InventoryManager({ initialProducts }: { initialProducts:
           return next;
         });
         closeConfirmModal();
+        closeCreateModal();
         toast.success("Producto eliminado exitosamente");
       } else {
         toast.error(result.error || "Error al eliminar producto");
@@ -231,6 +232,7 @@ export default function InventoryManager({ initialProducts }: { initialProducts:
                         </div>
                         <button
                           onClick={() => openEditModal(product)}
+                          aria-label={`Editar ${product.name}`}
                           className="opacity-0 group-hover:opacity-100 p-1 text-charcoal hover:text-white transition-all bg-white/5 rounded ml-2 shrink-0"
                         >
                           <svg

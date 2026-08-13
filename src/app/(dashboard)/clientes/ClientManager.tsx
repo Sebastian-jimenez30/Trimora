@@ -75,6 +75,7 @@ export default function ClientManager({ initialClients }: { initialClients: Clie
       if (!result.success) {
         toast.error(result.error || "Error al eliminar el cliente");
       } else {
+        closeModal();
         toast.success("Cliente eliminado exitosamente");
       }
       setClientToDelete(null);

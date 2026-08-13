@@ -3,7 +3,7 @@
 import { db } from "@/core/database/db";
 import { appointments, clients, services, organizationMembers } from "@/core/database/schema";
 import { requireActor } from "@/core/auth/server/actor";
-import { eq, and, lt, gte, lte, inArray } from "drizzle-orm";
+import { eq, and, lt, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import {
   appointmentInputSchema,
@@ -47,10 +47,6 @@ export async function createAppointment(formData: FormData) {
       notes: formData.get("notes") || null,
     });
     await validateAppointmentResources(organizationId, input);
-
-    if (input.startTime < new Date()) {
-      return { success: false, error: "No se pueden agendar citas en el pasado." };
-    }
 
     await db.insert(appointments).values({
       organizationId,
@@ -141,11 +137,6 @@ export async function getPendingAppointmentsForToday() {
     const { organizationId } = await requireActor();
 
     const now = new Date();
-    const startOfDay = new Date(now);
-    startOfDay.setHours(0, 0, 0, 0);
-    const endOfDay = new Date(now);
-    endOfDay.setHours(23, 59, 59, 999);
-
     const pendingAppointments = await db
       .select({
         id: appointments.id,
@@ -167,9 +158,7 @@ export async function getPendingAppointmentsForToday() {
         and(
           eq(appointments.organizationId, organizationId),
           inArray(appointments.status, ["PENDING", "CONFIRMED"]),
-          lt(appointments.startTime, now), // Mostrar desde que INICIA la cita, no esperar a que termine
-          gte(appointments.startTime, startOfDay),
-          lte(appointments.startTime, endOfDay),
+          lt(appointments.startTime, now), // Incluye citas vencidas para poder cobrarlas con trazabilidad
         ),
       )
       .orderBy(appointments.startTime);

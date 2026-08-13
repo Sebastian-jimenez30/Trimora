@@ -1,12 +1,16 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import InventoryManager, { type ProductType } from "../InventoryManager";
+
+const mocks = vi.hoisted(() => ({
+  deleteProduct: vi.fn(),
+}));
 
 vi.mock("@/modules/inventory/actions", () => ({
   createProduct: vi.fn(),
   updateProduct: vi.fn(),
-  deleteProduct: vi.fn(),
+  deleteProduct: mocks.deleteProduct,
 }));
 vi.mock("@/components/ai/ImportExportModal", () => ({
   default: () => <button>Importar o exportar</button>,
@@ -28,6 +32,11 @@ const product: ProductType = {
 };
 
 describe("InventoryManager", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.deleteProduct.mockResolvedValue({ success: true });
+  });
+
   it("cubre estados vacio y busqueda sin perder la tabla adaptable", async () => {
     const user = userEvent.setup();
     const { rerender } = render(<InventoryManager initialProducts={[]} />);
@@ -46,5 +55,19 @@ describe("InventoryManager", () => {
 
     expect(screen.getByRole("dialog", { name: "Nuevo Producto" })).toBeInTheDocument();
     expect(screen.getByLabelText("Nombre del Producto *")).toHaveFocus();
+  });
+
+  it("cierra el formulario de edición después de eliminar el producto", async () => {
+    const user = userEvent.setup();
+    render(<InventoryManager initialProducts={[product]} />);
+    await user.click(screen.getByRole("button", { name: "Editar Cera mate" }));
+
+    const editor = screen.getByRole("dialog", { name: "Editar Producto" });
+    await user.click(within(editor).getByRole("button", { name: "Eliminar Producto" }));
+    await user.click(screen.getByRole("button", { name: "Confirmar" }));
+
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog", { name: "Editar Producto" })).not.toBeInTheDocument(),
+    );
   });
 });

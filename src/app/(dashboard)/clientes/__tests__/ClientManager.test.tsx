@@ -33,7 +33,22 @@ const client: ClientType = {
 
 describe("ClientManager", () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     mocks.createCustomer.mockResolvedValue({ success: true });
+    mocks.deleteCustomer.mockResolvedValue({ success: true });
+  });
+
+  it("cierra la confirmación inmediatamente después de eliminar", async () => {
+    const user = userEvent.setup();
+    render(<ClientManager initialClients={[client]} />);
+
+    await user.click(screen.getByRole("button", { name: "Eliminar" }));
+    expect(screen.getByRole("dialog", { name: "Eliminar Cliente" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Confirmar" }));
+
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog", { name: "Eliminar Cliente" })).not.toBeInTheDocument(),
+    );
   });
 
   it("muestra el estado vacio y filtra por datos visibles", async () => {
