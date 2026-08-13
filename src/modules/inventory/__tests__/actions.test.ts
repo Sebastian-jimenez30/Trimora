@@ -1,63 +1,87 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { batchImportProducts } from '../actions'
-import { db } from '@/core/database/db'
-import { revalidatePath } from 'next/cache'
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-describe('Inventory Module Actions - batchImportProducts', () => {
+const mocks = vi.hoisted(() => ({
+  insert: vi.fn(),
+  insertValues: vi.fn(),
+  revalidatePath: vi.fn(),
+  select: vi.fn(),
+  selectFrom: vi.fn(),
+  selectLimit: vi.fn(),
+  selectWhere: vi.fn(),
+}));
+
+vi.mock("@/core/database/db", () => ({
+  db: {
+    insert: mocks.insert,
+    select: mocks.select,
+  },
+}));
+
+vi.mock("@/core/auth/server/actor", () => ({
+  requireActor: vi.fn(async () => ({
+    userId: "mock-user-id",
+    organizationId: "mock-org-id",
+    role: "ADMIN",
+  })),
+}));
+
+vi.mock("next/cache", () => ({
+  revalidatePath: mocks.revalidatePath,
+}));
+
+import { batchImportProducts } from "../actions";
+
+describe("Inventory Module Actions - batchImportProducts", () => {
   beforeEach(() => {
-    vi.clearAllMocks()
-  })
+    vi.clearAllMocks();
+    mocks.selectLimit.mockResolvedValue([{ organizationId: "mock-org-id" }]);
+    mocks.selectWhere.mockReturnValue({ limit: mocks.selectLimit });
+    mocks.selectFrom.mockReturnValue({ where: mocks.selectWhere });
+    mocks.select.mockReturnValue({ from: mocks.selectFrom });
+    mocks.insertValues.mockResolvedValue(undefined);
+    mocks.insert.mockReturnValue({ values: mocks.insertValues });
+  });
 
-  it('debería retornar error si no se envían productos (array vacío)', async () => {
-    const result = await batchImportProducts([])
-    expect(result.success).toBe(false)
-    expect(result.error).toBe('No hay productos para importar o formato inválido')
-  })
+  it("debería retornar error si no se envían productos", async () => {
+    const result = await batchImportProducts([]);
 
-  it('debería retornar error si un producto no tiene categoría válida', async () => {
-    const invalidItems = [
-      { name: 'Cera', category: 'INVALIDA' }
-    ]
-    
-    const result = await batchImportProducts(invalidItems)
-    expect(result.success).toBe(false)
-    expect(result.error).toContain('Error validando el producto "Cera"')
-  })
+    expect(result).toEqual({
+      success: false,
+      error: "No hay productos para importar o formato inválido",
+    });
+  });
 
-  it('debería insertar los productos correctamente si la validación pasa', async () => {
-    const validItems = [
-      { name: 'Gel', category: 'VENTA', salePrice: 15 },
-      { name: 'Shampoo', category: 'CONSUMO' }
-    ]
+  it("debería retornar error si un producto no tiene categoría válida", async () => {
+    const result = await batchImportProducts([{ name: "Cera", category: "INVALIDA" }]);
 
-    // Ejecutamos la función
-    const result = await batchImportProducts(validItems)
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('Error validando el producto "Cera"');
+  });
 
-    // Validamos el resultado
-    expect(result.success).toBe(true)
+  it("debería insertar los productos saneados y revalidar inventario", async () => {
+    const result = await batchImportProducts([
+      { name: "Gel", category: "VENTA", salePrice: 15 },
+      { name: "Shampoo", category: "CONSUMO" },
+    ]);
 
-    // Validamos que se haya llamado a la base de datos con los datos correctos
-    expect(db.insert).toHaveBeenCalledTimes(1)
-    
-    // Validamos que los datos se hayan saneado (ej. strings/numbers a strings, defaults)
-    expect(db.values).toHaveBeenCalledWith(
+    expect(result.success).toBe(true);
+    expect(mocks.insert).toHaveBeenCalledTimes(1);
+    expect(mocks.insertValues).toHaveBeenCalledWith(
       expect.arrayContaining([
         expect.objectContaining({
-          name: 'Gel',
-          category: 'VENTA',
+          name: "Gel",
+          category: "VENTA",
           salePrice: "15",
-          organizationId: 'mock-org-id' // Viniendo del mock de Supabase
+          organizationId: "mock-org-id",
         }),
         expect.objectContaining({
-          name: 'Shampoo',
-          category: 'CONSUMO',
-          currentStock: '0', // Valor default transformado por Zod
-          organizationId: 'mock-org-id'
-        })
-      ])
-    )
-
-    // Validamos que Next.js revalide el path del inventario
-    expect(revalidatePath).toHaveBeenCalledWith('/inventario')
-  })
-})
+          name: "Shampoo",
+          category: "CONSUMO",
+          currentStock: "0",
+          organizationId: "mock-org-id",
+        }),
+      ]),
+    );
+    expect(mocks.revalidatePath).toHaveBeenCalledWith("/inventario");
+  });
+});

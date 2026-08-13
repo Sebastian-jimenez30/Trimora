@@ -1,45 +1,64 @@
 import { db } from "@/core/database/db";
-import { transactions, transactionItems, products, services, clients, organizations } from "@/core/database/schema";
+import {
+  transactions,
+  transactionItems,
+  products,
+  services,
+  clients,
+  organizations,
+} from "@/core/database/schema";
 import { eq, inArray, and } from "drizzle-orm";
-import { createClient } from "@/core/database/server";
+import { requireActor } from "@/core/auth/server/actor";
 import { notFound } from "next/navigation";
 import PrintReceiptClient from "./PrintReceiptClient";
+import { z } from "zod";
 
 export default async function ReceiptPage(props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
-  const transactionId = params.id;
+  const parsedTransactionId = z.string().uuid().safeParse(params.id);
+  if (!parsedTransactionId.success) notFound();
+  const transactionId = parsedTransactionId.data;
 
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user || !user.user_metadata?.organization_id) notFound();
-  const orgId = user.user_metadata.organization_id;
+  const { organizationId: orgId } = await requireActor();
 
-  const [tx] = await db.select().from(transactions).where(and(eq(transactions.id, transactionId), eq(transactions.organizationId, orgId)));
+  const [tx] = await db
+    .select()
+    .from(transactions)
+    .where(and(eq(transactions.id, transactionId), eq(transactions.organizationId, orgId)));
   if (!tx) notFound();
 
   const [org] = await db.select().from(organizations).where(eq(organizations.id, orgId));
   const orgName = org?.name || "Empresa";
 
-  const items = await db.select().from(transactionItems).where(eq(transactionItems.transactionId, transactionId));
-  
+  const items = await db
+    .select()
+    .from(transactionItems)
+    .where(eq(transactionItems.transactionId, transactionId));
+
   // Resolve item names efficiently (N+1 fix)
-  const productIds = items.filter(i => i.itemType === "PRODUCT").map(i => i.itemId);
-  const serviceIds = items.filter(i => i.itemType === "SERVICE").map(i => i.itemId);
+  const productIds = items.filter((i) => i.itemType === "PRODUCT").map((i) => i.itemId);
+  const serviceIds = items.filter((i) => i.itemType === "SERVICE").map((i) => i.itemId);
 
   const productNames: Record<string, string> = {};
   const serviceNames: Record<string, string> = {};
 
   if (productIds.length > 0) {
-    const pData = await db.select({ id: products.id, name: products.name }).from(products).where(inArray(products.id, productIds));
-    pData.forEach(p => productNames[p.id] = p.name);
+    const pData = await db
+      .select({ id: products.id, name: products.name })
+      .from(products)
+      .where(and(inArray(products.id, productIds), eq(products.organizationId, orgId)));
+    pData.forEach((p) => (productNames[p.id] = p.name));
   }
 
   if (serviceIds.length > 0) {
-    const sData = await db.select({ id: services.id, name: services.name }).from(services).where(inArray(services.id, serviceIds));
-    sData.forEach(s => serviceNames[s.id] = s.name);
+    const sData = await db
+      .select({ id: services.id, name: services.name })
+      .from(services)
+      .where(and(inArray(services.id, serviceIds), eq(services.organizationId, orgId)));
+    sData.forEach((s) => (serviceNames[s.id] = s.name));
   }
 
-  const itemsWithNames = items.map(item => {
+  const itemsWithNames = items.map((item) => {
     let name = "Item";
     if (item.itemType === "PRODUCT") name = productNames[item.itemId] || name;
     else if (item.itemType === "SERVICE") name = serviceNames[item.itemId] || name;
@@ -48,12 +67,17 @@ export default async function ReceiptPage(props: { params: Promise<{ id: string 
 
   let clientName = "Consumidor Final";
   if (tx.clientId) {
-    const [c] = await db.select().from(clients).where(eq(clients.id, tx.clientId));
+    const [c] = await db
+      .select()
+      .from(clients)
+      .where(and(eq(clients.id, tx.clientId), eq(clients.organizationId, orgId)));
     if (c) clientName = `${c.firstName} ${c.lastName || ""}`;
   }
 
-  const isPending = tx.status === 'PENDING';
-  const remaining = isPending ? (parseFloat(tx.totalAmount) - parseFloat(tx.paidAmount || '0')).toFixed(2) : '0.00';
+  const isPending = tx.status === "PENDING";
+  const remaining = isPending
+    ? (parseFloat(tx.totalAmount) - parseFloat(tx.paidAmount || "0")).toFixed(2)
+    : "0.00";
 
   return (
     <div className="bg-white min-h-screen text-black font-mono text-[12px] print:m-0 print:p-0">
@@ -62,7 +86,10 @@ export default async function ReceiptPage(props: { params: Promise<{ id: string 
         <div className="text-center mb-4 border-b border-dashed border-black/50 pb-4">
           <h1 className="text-lg font-bold uppercase">{orgName}</h1>
           <p className="mt-1">Ticket: {tx.id.substring(0, 8).toUpperCase()}</p>
-          <p>Fecha: {new Date(tx.createdAt).toLocaleDateString()} {new Date(tx.createdAt).toLocaleTimeString()}</p>
+          <p>
+            Fecha: {new Date(tx.createdAt).toLocaleDateString()}{" "}
+            {new Date(tx.createdAt).toLocaleTimeString()}
+          </p>
           <p>Cliente: {clientName}</p>
         </div>
 
@@ -76,7 +103,7 @@ export default async function ReceiptPage(props: { params: Promise<{ id: string 
             </tr>
           </thead>
           <tbody>
-            {itemsWithNames.map(item => (
+            {itemsWithNames.map((item) => (
               <tr key={item.id}>
                 <td className="py-1 align-top">{item.quantity}</td>
                 <td className="py-1">{item.name}</td>
@@ -92,19 +119,19 @@ export default async function ReceiptPage(props: { params: Promise<{ id: string 
             <span>TOTAL</span>
             <span>${tx.totalAmount}</span>
           </div>
-          {tx.paymentMethod === 'CREDIT' && (
-             <>
-               <div className="flex justify-between mt-1">
-                 <span>Abonado</span>
-                 <span>${tx.paidAmount}</span>
-               </div>
-               <div className="flex justify-between mt-1 text-sm font-bold">
-                 <span>Saldo Pendiente</span>
-                 <span>${remaining}</span>
-               </div>
-             </>
+          {tx.paymentMethod === "CREDIT" && (
+            <>
+              <div className="flex justify-between mt-1">
+                <span>Abonado</span>
+                <span>${tx.paidAmount}</span>
+              </div>
+              <div className="flex justify-between mt-1 text-sm font-bold">
+                <span>Saldo Pendiente</span>
+                <span>${remaining}</span>
+              </div>
+            </>
           )}
-          {tx.paymentMethod !== 'CREDIT' && (
+          {tx.paymentMethod !== "CREDIT" && (
             <div className="flex justify-between mt-1">
               <span>Pagado ({tx.paymentMethod})</span>
               <span>${tx.totalAmount}</span>
@@ -117,7 +144,7 @@ export default async function ReceiptPage(props: { params: Promise<{ id: string 
           <p>¡Gracias por su preferencia!</p>
           <p>Generado por Trimora</p>
         </div>
-        
+
         {/* Cliente para auto-impresión */}
         <PrintReceiptClient />
       </div>

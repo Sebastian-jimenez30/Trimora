@@ -1,0 +1,258 @@
+{
+  "version": 1,
+  "components": {
+    "auth-access": {
+      "paths": [
+        "src/core/auth/",
+        "src/modules/auth/",
+        "src/modules/collaborators/",
+        "src/modules/invitations/",
+        "src/modules/profile/",
+        "src/modules/superadmin/",
+        "src/core/services/email.ts",
+        "src/core/database/server.ts",
+        "src/core/database/admin.ts",
+        "src/proxy.ts",
+        "src/app/(auth)/",
+        "src/app/auth/",
+        "src/app/invite/",
+        "src/app/superadmin/",
+        "src/app/(dashboard)/equipo/",
+        "src/app/(dashboard)/perfil/"
+      ],
+      "testRoots": [
+        "src/core/auth",
+        "src/modules/auth",
+        "src/modules/collaborators",
+        "src/modules/invitations",
+        "src/modules/profile",
+        "src/modules/superadmin",
+        "src/app/(auth)",
+        "src/app/superadmin",
+        "src/app/(dashboard)/equipo",
+        "src/app/(dashboard)/perfil"
+      ],
+      "coverage": [
+        "src/core/auth/**/*.ts",
+        "src/modules/auth/**/*.ts",
+        "src/modules/collaborators/**/*.ts",
+        "src/modules/invitations/**/*.ts",
+        "src/modules/profile/**/*.ts",
+        "src/modules/superadmin/**/*.ts"
+      ],
+      "e2e": ["auth-session", "roles-tenancy"],
+      "triggers": [
+        "pos-finance",
+        "inventory-services",
+        "agenda-appointments",
+        "clients",
+        "analytics",
+        "ai-integrations",
+        "shared-ui"
+      ]
+    },
+    "pos-finance": {
+      "paths": ["src/modules/pos/", "src/modules/cash/", "src/app/(dashboard)/pos/"],
+      "testRoots": ["src/modules/pos", "src/modules/cash", "src/app/(dashboard)/pos"],
+      "coverage": [
+        "src/modules/pos/**/*.ts",
+        "src/modules/cash/**/*.ts",
+        "src/app/(dashboard)/pos/**/*.tsx"
+      ],
+      "e2e": ["pos-sales", "receivables", "history-analytics", "performance"],
+      "triggers": ["inventory-services", "clients", "analytics"]
+    },
+    "inventory-services": {
+      "paths": [
+        "src/modules/inventory/",
+        "src/modules/services/",
+        "src/app/inventario/",
+        "src/app/(dashboard)/inventario/",
+        "src/app/(dashboard)/servicios/"
+      ],
+      "testRoots": [
+        "src/modules/inventory",
+        "src/modules/services",
+        "src/app/inventario",
+        "src/app/(dashboard)/inventario",
+        "src/app/(dashboard)/servicios"
+      ],
+      "coverage": [
+        "src/modules/inventory/**/*.ts",
+        "src/modules/services/**/*.ts",
+        "src/app/(dashboard)/inventario/**/*.tsx",
+        "src/app/(dashboard)/servicios/**/*.tsx"
+      ],
+      "e2e": ["pos-sales", "inventory"],
+      "triggers": ["pos-finance", "agenda-appointments", "analytics"]
+    },
+    "agenda-appointments": {
+      "paths": [
+        "src/modules/agenda/",
+        "src/modules/appointments/",
+        "src/app/agenda/",
+        "src/app/(dashboard)/agenda/",
+        "src/app/(dashboard)/calendar/"
+      ],
+      "testRoots": [
+        "src/modules/agenda",
+        "src/modules/appointments",
+        "src/app/(dashboard)/agenda",
+        "src/app/(dashboard)/calendar"
+      ],
+      "coverage": [
+        "src/modules/agenda/**/*.ts",
+        "src/modules/appointments/**/*.ts",
+        "src/app/(dashboard)/agenda/**/*.tsx",
+        "src/app/(dashboard)/calendar/**/*.tsx"
+      ],
+      "e2e": ["agenda", "pos-sales", "performance"],
+      "triggers": ["pos-finance"]
+    },
+    "clients": {
+      "paths": ["src/modules/clients/", "src/app/clientes/", "src/app/(dashboard)/clientes/"],
+      "testRoots": ["src/modules/clients", "src/app/clientes", "src/app/(dashboard)/clientes"],
+      "coverage": ["src/modules/clients/**/*.ts", "src/app/(dashboard)/clientes/**/*.tsx"],
+      "e2e": [
+        "clients",
+        "agenda",
+        "pos-sales",
+        "receivables",
+        "history-analytics",
+        "roles-tenancy"
+      ],
+      "triggers": ["agenda-appointments", "pos-finance", "analytics"]
+    },
+    "analytics": {
+      "paths": [
+        "src/modules/analytics/",
+        "src/app/(dashboard)/analitica/",
+        "src/app/(dashboard)/dashboard/"
+      ],
+      "testRoots": [
+        "src/modules/analytics",
+        "src/app/(dashboard)/analitica",
+        "src/app/(dashboard)/dashboard"
+      ],
+      "coverage": [
+        "src/modules/analytics/**/*.ts",
+        "src/app/(dashboard)/analitica/**/*.tsx",
+        "src/app/(dashboard)/dashboard/**/*.tsx"
+      ],
+      "e2e": ["history-analytics", "performance"],
+      "triggers": []
+    },
+    "ai-integrations": {
+      "paths": [
+        "src/modules/ai/",
+        "src/components/ai/",
+        "src/app/api/chat/",
+        "src/app/api/import/",
+        "src/app/api/webhooks/"
+      ],
+      "testRoots": [
+        "src/modules/ai",
+        "src/components/ai",
+        "src/app/api/chat",
+        "src/app/api/import",
+        "src/app/api/webhooks"
+      ],
+      "coverage": ["src/modules/ai/**/*.ts", "src/components/ai/**/*.tsx", "src/app/api/**/*.ts"],
+      "e2e": [],
+      "triggers": ["agenda-appointments", "pos-finance", "inventory-services", "clients"]
+    },
+    "shared-ui": {
+      "paths": [
+        "src/components/shared/",
+        "src/components/layout/",
+        "src/components/FeaturesCarousel.tsx",
+        "src/app/globals.css",
+        "src/app/layout.tsx",
+        "src/app/page.tsx"
+      ],
+      "testRoots": ["src/components/shared", "src/components/layout", "src/components", "src/app"],
+      "coverage": ["src/components/**/*.tsx"],
+      "e2e": ["accessibility", "performance"],
+      "triggers": [
+        "auth-access",
+        "pos-finance",
+        "inventory-services",
+        "agenda-appointments",
+        "clients",
+        "analytics",
+        "ai-integrations"
+      ]
+    },
+    "database": {
+      "paths": ["src/core/database/", "drizzle.config.ts", "supabase/"],
+      "testRoots": ["src/core/database", "supabase/tests"],
+      "coverage": ["src/core/database/**/*.ts"],
+      "e2e": [
+        "auth-session",
+        "clients",
+        "agenda",
+        "pos-sales",
+        "inventory",
+        "receivables",
+        "history-analytics",
+        "roles-tenancy"
+      ],
+      "triggers": [
+        "auth-access",
+        "pos-finance",
+        "inventory-services",
+        "agenda-appointments",
+        "clients",
+        "analytics",
+        "ai-integrations"
+      ]
+    },
+    "tooling": {
+      "paths": [
+        ".github/workflows/",
+        "ci/",
+        "scripts/ci/",
+        "scripts/release/",
+        "src/test/",
+        "src/core/observability/",
+        "src/instrumentation.ts",
+        "package.json",
+        "package-lock.json",
+        "eslint.config.mjs",
+        "next.config.mjs",
+        "next.config.ts",
+        "tsconfig.json",
+        "vitest.config.ts",
+        ".prettierrc.json",
+        ".prettierignore",
+        ".nvmrc",
+        ".env.test.example",
+        "vercel.json"
+      ],
+      "testRoots": ["scripts/ci"],
+      "coverage": ["scripts/ci/**/*.mjs", "scripts/release/**/*.mjs"],
+      "e2e": [
+        "auth-session",
+        "clients",
+        "agenda",
+        "pos-sales",
+        "inventory",
+        "receivables",
+        "history-analytics",
+        "roles-tenancy",
+        "accessibility"
+      ],
+      "triggers": [
+        "auth-access",
+        "pos-finance",
+        "inventory-services",
+        "agenda-appointments",
+        "clients",
+        "analytics",
+        "ai-integrations",
+        "shared-ui",
+        "database"
+      ]
+    }
+  }
+}

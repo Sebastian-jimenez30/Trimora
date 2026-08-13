@@ -11,37 +11,41 @@ Trimora es una plataforma Multi-tenant, lo que significa que su arquitectura de 
 Las funcionalidades principales del sistema incluyen:
 
 ### Autenticación y Administración Segura
-*   Autenticación robusta que incluye inicio de sesión tradicional (correo/contraseña), recuperación de contraseñas y verificación de correo electrónico.
-*   Integración con Google OAuth para acceso rápido y sin fricciones.
-*   Panel de Superadministración para gestión total de la base de datos y la creación y aprovisionamiento de nuevas organizaciones (barberías) clientes.
-*   Sistema de invitación por correo electrónico (mediante SendGrid) para agregar colaboradores (ej. barberos, recepcionistas) a una organización específica.
+
+- Autenticación robusta que incluye inicio de sesión tradicional (correo/contraseña), recuperación de contraseñas y verificación de correo electrónico.
+- Integración con Google OAuth para acceso rápido y sin fricciones.
+- Panel de Superadministración para gestión total de la base de datos y la creación y aprovisionamiento de nuevas organizaciones (barberías) clientes.
+- Sistema de invitación por correo electrónico (mediante SendGrid) para agregar colaboradores (ej. barberos, recepcionistas) a una organización específica.
 
 ### Operaciones e Inteligencia Artificial
-*   Asistente de Inteligencia Artificial (Chatbot) integrado capaz de procesar lenguaje natural. Este agente actúa de forma tanto informativa (ej. consultando servicios) como operativa (ej. ejecutando agendamientos de citas de forma automatizada).
-*   Gestión avanzada de Agenda y Citas, con asignación estructurada de clientes, servicios y colaboradores, y un sistema de notificaciones para recordar y asegurar el cobro de los servicios prestados.
-*   Gestión de Clientes (CRM) para trazabilidad completa del ciclo de vida, ticket promedio e historial del consumidor.
+
+- Asistente de Inteligencia Artificial (Chatbot) integrado capaz de procesar lenguaje natural. Este agente actúa de forma tanto informativa (ej. consultando servicios) como operativa (ej. ejecutando agendamientos de citas de forma automatizada).
+- Gestión avanzada de Agenda y Citas, con asignación estructurada de clientes, servicios y colaboradores, y un sistema de notificaciones para recordar y asegurar el cobro de los servicios prestados.
+- Gestión de Clientes (CRM) para trazabilidad completa del ciclo de vida, ticket promedio e historial del consumidor.
 
 ### Gestión de Catálogo e Inventario
-*   Módulo completo (CRUD) para administrar Servicios (con precio y duración) e Inventario de Productos.
-*   Clasificación de inventario entre "Productos para la venta" e "Insumos de consumo interno".
-*   Capacidad de importación masiva de inventario inicial a través de archivos o reconocimiento fotográfico.
-*   Automatización de deducción de stock: Al completar y cobrar un servicio en caja, el sistema descuenta automáticamente los insumos utilizados según la formulación del servicio.
+
+- Módulo completo (CRUD) para administrar Servicios (con precio y duración) e Inventario de Productos.
+- Clasificación de inventario entre "Productos para la venta" e "Insumos de consumo interno".
+- Capacidad de importación masiva de inventario inicial a través de archivos o reconocimiento fotográfico.
+- Automatización de deducción de stock: Al completar y cobrar un servicio en caja, el sistema descuenta automáticamente los insumos utilizados según la formulación del servicio.
 
 ### Punto de Venta (POS) y Flujo de Caja
-*   Caja centralizada para procesar servicios, productos adicionales e impuestos en una sola transacción.
-*   Sistema integral de préstamos ("fiados") que soporta pagos y abonos parciales, manteniendo la deuda de cada cliente trazable a lo largo del tiempo.
-*   Generación automática de facturas y tickets de venta.
-*   Generación de reportes y resúmenes financieros diarios para un análisis profundo del rendimiento económico del negocio.
+
+- Caja centralizada para procesar servicios, productos adicionales e impuestos en una sola transacción.
+- Sistema integral de préstamos ("fiados") que soporta pagos y abonos parciales, manteniendo la deuda de cada cliente trazable a lo largo del tiempo.
+- Generación automática de facturas y tickets de venta.
+- Generación de reportes y resúmenes financieros diarios para un análisis profundo del rendimiento económico del negocio.
 
 ## Stack Tecnológico
 
 El ecosistema de Trimora está construido sobre tecnologías de vanguardia enfocadas en rendimiento, escalabilidad y tipado estricto:
 
-*   **Frontend y Backend:** Next.js (App Router), React 19 y Server Actions para manejo seguro de mutaciones.
-*   **Interfaz de Usuario:** Tailwind CSS v4 para diseño atómico moderno.
-*   **Base de Datos y Autenticación:** Supabase (PostgreSQL) garantizando políticas estrictas de Row Level Security (RLS) para la arquitectura Multi-tenant.
-*   **ORM:** Drizzle ORM para consultas fuertemente tipadas e inferencia de esquemas.
-*   **Inteligencia Artificial:** Vercel AI SDK para la orquestación del chatbot de lenguaje natural (con soporte para proveedores como OpenAI, Google, Groq).
+- **Frontend y Backend:** Next.js (App Router), React 19 y Server Actions para manejo seguro de mutaciones.
+- **Interfaz de Usuario:** Tailwind CSS v4 para diseño atómico moderno.
+- **Base de Datos y Autenticación:** Supabase (PostgreSQL) garantizando políticas estrictas de Row Level Security (RLS) para la arquitectura Multi-tenant.
+- **ORM:** Drizzle ORM para consultas fuertemente tipadas e inferencia de esquemas.
+- **Inteligencia Artificial:** Vercel AI SDK para la orquestación del chatbot de lenguaje natural con proveedores OpenAI y Google.
 
 ## Documentación Técnica Interna
 
@@ -57,6 +61,7 @@ Hemos elaborado una documentación técnica exhaustiva para facilitar el desarro
 Para inicializar el proyecto en un entorno de desarrollo local:
 
 1. Clonar el repositorio e instalar las dependencias:
+
    ```bash
    npm install
    ```

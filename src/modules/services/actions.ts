@@ -1,210 +1,180 @@
-"use server"
+"use server";
 
+import { requireActor } from "@/core/auth/server/actor";
 import { db } from "@/core/database/db";
-import { services, serviceMaterials, products, inventoryMovements } from "@/core/database/schema";
-import { createClient } from "@/core/database/server";
-import { eq, and } from "drizzle-orm";
+import { inventoryMovements, products, serviceMaterials, services } from "@/core/database/schema";
+import { getErrorMessage } from "@/core/errors";
+import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
+import { createServiceCatalogEntry, updateServiceCatalogEntry } from "./server/catalog";
 
-// Helper para validar sesión y organización
-async function requireAuth() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("No autenticado");
-  
-  const organizationId = user.user_metadata?.organization_id;
-  if (!organizationId) throw new Error("Usuario sin organización");
+type MaterialInput = { productId: string; quantityUsed: number };
 
-  return { user, organizationId };
+const resourceIdSchema = z.string().uuid();
+const serviceFormSchema = z.object({
+  name: z.string().trim().min(1).max(255),
+  description: z.string().trim().max(2_000),
+  durationMinutes: z.coerce.number().int().positive().max(1_440),
+  price: z.coerce.number().finite().nonnegative().max(99_999_999),
+  isActive: z.boolean(),
+});
+const quickProductSchema = z.object({
+  name: z.string().trim().min(1).max(255),
+  costPrice: z.coerce.number().finite().nonnegative().max(99_999_999),
+  currentStock: z.coerce.number().finite().nonnegative().max(99_999_999),
+  minimumStock: z.coerce.number().finite().nonnegative().max(99_999_999),
+});
+const materialsSchema = z
+  .array(
+    z.object({
+      productId: resourceIdSchema,
+      quantityUsed: z.number().finite().positive().max(100_000),
+    }),
+  )
+  .max(200);
+const serviceImportSchema = z
+  .array(
+    z.object({
+      name: z.string().trim().min(1).max(255),
+      description: z.string().max(2_000).nullish(),
+      durationMinutes: z.number().int().positive().max(1_440).default(30),
+      price: z.number().finite().nonnegative().max(99_999_999),
+    }),
+  )
+  .min(1)
+  .max(1_000);
+
+function parseService(formData: FormData) {
+  return serviceFormSchema.parse({
+    name: formData.get("name"),
+    description: formData.get("description") || "",
+    durationMinutes: formData.get("durationMinutes"),
+    price: formData.get("price"),
+    isActive: formData.get("isActive") === "true",
+  });
 }
-
-type MaterialInput = {
-  productId: string;
-  quantityUsed: number;
-};
 
 export async function createServiceWithMaterials(formData: FormData, materials: MaterialInput[]) {
   try {
-    const { organizationId } = await requireAuth();
-    
-    const name = formData.get("name") as string;
-    const description = formData.get("description") as string;
-    const durationMinutes = parseInt(formData.get("durationMinutes") as string);
-    const price = parseFloat(formData.get("price") as string);
-    const isActive = formData.get("isActive") === "true";
-
-    if (!name || isNaN(durationMinutes) || durationMinutes < 1 || isNaN(price)) {
-      throw new Error("Faltan datos obligatorios del servicio");
-    }
-
-    // Insert Service
-    const [service] = await db.insert(services).values({
+    const { organizationId } = await requireActor({ roles: ["ADMIN"] });
+    await createServiceCatalogEntry({
       organizationId,
-      name,
-      description,
-      durationMinutes,
-      price: price.toString(),
-      isActive
-    }).returning();
-
-    // Insert Materials
-    if (materials.length > 0) {
-      await db.insert(serviceMaterials).values(
-        materials.map(m => ({
-          serviceId: service.id,
-          productId: m.productId,
-          quantityUsed: m.quantityUsed.toString()
-        }))
-      );
-    }
-
-    revalidatePath('/servicios');
+      values: parseService(formData),
+      materials: materialsSchema.parse(materials),
+    });
+    revalidatePath("/servicios");
     return { success: true };
-  } catch (error: any) {
-    return { success: false, error: error.message };
+  } catch (error: unknown) {
+    return { success: false, error: getErrorMessage(error) };
   }
 }
 
-export async function updateServiceWithMaterials(serviceId: string, formData: FormData, materials: MaterialInput[]) {
+export async function updateServiceWithMaterials(
+  serviceId: string,
+  formData: FormData,
+  materials: MaterialInput[],
+) {
   try {
-    const { organizationId } = await requireAuth();
-    
-    const name = formData.get("name") as string;
-    const description = formData.get("description") as string;
-    const durationMinutes = parseInt(formData.get("durationMinutes") as string);
-    const price = parseFloat(formData.get("price") as string);
-    const isActive = formData.get("isActive") === "true";
-
-    if (!name || isNaN(durationMinutes) || durationMinutes < 1 || isNaN(price)) {
-      throw new Error("Faltan datos obligatorios del servicio");
-    }
-
-    // Asegurarse de que el servicio pertenece a la org
-    const existing = await db.select().from(services).where(and(
-      eq(services.id, serviceId),
-      eq(services.organizationId, organizationId)
-    ));
-    if (existing.length === 0) throw new Error("Servicio no encontrado");
-
-    // Update Service
-    await db.update(services).set({
-      name,
-      description,
-      durationMinutes,
-      price: price.toString(),
-      isActive
-    }).where(eq(services.id, serviceId));
-
-    // Update Materials: Delete all existing, insert new ones
-    await db.delete(serviceMaterials).where(eq(serviceMaterials.serviceId, serviceId));
-
-    if (materials.length > 0) {
-      await db.insert(serviceMaterials).values(
-        materials.map(m => ({
-          serviceId,
-          productId: m.productId,
-          quantityUsed: m.quantityUsed.toString()
-        }))
-      );
-    }
-
-    revalidatePath('/servicios');
-    revalidatePath('/agenda');
+    const { organizationId } = await requireActor({ roles: ["ADMIN"] });
+    await updateServiceCatalogEntry({
+      organizationId,
+      serviceId: resourceIdSchema.parse(serviceId),
+      values: parseService(formData),
+      materials: materialsSchema.parse(materials),
+    });
+    revalidatePath("/servicios");
+    revalidatePath("/agenda");
     return { success: true };
-  } catch (error: any) {
-    return { success: false, error: error.message };
+  } catch (error: unknown) {
+    return { success: false, error: getErrorMessage(error) };
   }
 }
 
 export async function deleteService(serviceId: string) {
   try {
-    const { organizationId } = await requireAuth();
-
-    const existing = await db.select().from(services).where(and(
-      eq(services.id, serviceId),
-      eq(services.organizationId, organizationId)
-    ));
-    if (existing.length === 0) throw new Error("Servicio no encontrado");
-
-    // Delete materials first due to foreign key
-    await db.delete(serviceMaterials).where(eq(serviceMaterials.serviceId, serviceId));
-    
-    // Delete service
-    await db.delete(services).where(eq(services.id, serviceId));
-
-    revalidatePath('/servicios');
+    const { organizationId } = await requireActor({ roles: ["ADMIN"] });
+    const validServiceId = resourceIdSchema.parse(serviceId);
+    await db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select({ id: services.id })
+        .from(services)
+        .where(and(eq(services.id, validServiceId), eq(services.organizationId, organizationId)))
+        .for("update");
+      if (!existing) throw new Error("Servicio no encontrado");
+      await tx.delete(serviceMaterials).where(eq(serviceMaterials.serviceId, validServiceId));
+      await tx
+        .delete(services)
+        .where(and(eq(services.id, validServiceId), eq(services.organizationId, organizationId)));
+    });
+    revalidatePath("/servicios");
     return { success: true };
-  } catch (error: any) {
-    return { success: false, error: error.message };
+  } catch (error: unknown) {
+    return { success: false, error: getErrorMessage(error) };
   }
 }
 
 export async function quickCreateProduct(formData: FormData) {
   try {
-    const { organizationId } = await requireAuth();
+    const { organizationId } = await requireActor({ roles: ["ADMIN"] });
+    const input = quickProductSchema.parse({
+      name: formData.get("name"),
+      costPrice: formData.get("costPrice"),
+      currentStock: formData.get("currentStock"),
+      minimumStock: formData.get("minimumStock") || 0,
+    });
 
-    const name = formData.get("name") as string;
-    const costPrice = parseFloat(formData.get("costPrice") as string);
-    const currentStock = parseFloat(formData.get("currentStock") as string);
-    const minimumStock = parseFloat(formData.get("minimumStock") as string) || 0;
-
-    if (!name || isNaN(costPrice) || isNaN(currentStock)) {
-      throw new Error("Faltan datos obligatorios del producto");
-    }
-
-    // Insert Product as CONSUMO
-    const [product] = await db.insert(products).values({
-      organizationId,
-      name,
-      category: 'CONSUMO',
-      costPrice: costPrice.toString(),
-      salePrice: '0', // Not for sale
-      currentStock: currentStock.toString(),
-      minimumStock: minimumStock.toString(),
-      isActive: true
-    }).returning();
-
-    // Log initial stock in inventory_movements if > 0
-    if (currentStock > 0) {
-      await db.insert(inventoryMovements).values({
-        organizationId,
-        productId: product.id,
-        type: 'IN',
-        quantity: Math.floor(currentStock), // Note: Movement quantity is integer in schema currently
-        previousStock: 0,
-        newStock: Math.floor(currentStock),
-        notes: 'Ajuste inicial desde creación rápida'
-      });
-    }
-
-    revalidatePath('/servicios');
-    return { success: true, data: product };
-  } catch (error: any) {
-    return { success: false, error: error.message };
-  }
-}
-
-export async function batchImportServices(items: any[]) {
-  try {
-    const { organizationId } = await requireAuth();
-    
-    if (!items || items.length === 0) return { success: false, error: "No hay servicios para importar" };
-
-    const inserts = items.map(item => ({
-      organizationId,
-      name: item.name,
-      description: item.description || null,
-      durationMinutes: item.durationMinutes || 30,
-      price: item.price.toString(),
-      isActive: true,
-    }));
-    
-    await db.insert(services).values(inserts);
+    const product = await db.transaction(async (tx) => {
+      const [created] = await tx
+        .insert(products)
+        .values({
+          organizationId,
+          name: input.name,
+          category: "CONSUMO",
+          costPrice: input.costPrice.toFixed(2),
+          salePrice: "0.00",
+          currentStock: input.currentStock.toFixed(4),
+          minimumStock: input.minimumStock.toFixed(4),
+          isActive: true,
+        })
+        .returning();
+      if (input.currentStock > 0) {
+        await tx.insert(inventoryMovements).values({
+          organizationId,
+          productId: created.id,
+          type: "IN",
+          quantity: input.currentStock,
+          previousStock: 0,
+          newStock: input.currentStock,
+          notes: "Ajuste inicial desde creacion rapida",
+        });
+      }
+      return created;
+    });
     revalidatePath("/servicios");
-    
-    return { success: true };
-  } catch (error: any) {
-    return { success: false, error: error.message };
+    return { success: true, data: product };
+  } catch (error: unknown) {
+    return { success: false, error: getErrorMessage(error) };
   }
 }
 
+export async function batchImportServices(items: unknown[]) {
+  try {
+    const { organizationId } = await requireActor({ roles: ["ADMIN"] });
+    const validItems = serviceImportSchema.parse(items);
+    await db.insert(services).values(
+      validItems.map((item) => ({
+        organizationId,
+        name: item.name,
+        description: item.description || null,
+        durationMinutes: item.durationMinutes,
+        price: item.price.toFixed(2),
+        isActive: true,
+      })),
+    );
+    revalidatePath("/servicios");
+    return { success: true };
+  } catch (error: unknown) {
+    return { success: false, error: getErrorMessage(error) };
+  }
+}

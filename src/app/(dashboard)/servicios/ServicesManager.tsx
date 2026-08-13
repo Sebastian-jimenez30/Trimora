@@ -1,37 +1,43 @@
-"use client"
+"use client";
 
 import { useState, useTransition } from "react";
-import { createServiceWithMaterials, updateServiceWithMaterials, deleteService, quickCreateProduct } from "@/modules/services/actions";
+import {
+  createServiceWithMaterials,
+  updateServiceWithMaterials,
+  deleteService,
+  quickCreateProduct,
+} from "@/modules/services/actions";
 import ImportExportModal from "@/components/ai/ImportExportModal";
 import { toast } from "react-hot-toast";
 import ConfirmModal from "@/components/shared/ConfirmModal";
+import Dialog from "@/components/shared/Dialog";
 
-type Product = {
+export type ServiceProduct = {
   id: string;
   name: string;
   category: string;
   currentStock: string;
 };
 
-type Material = {
+export type ServiceMaterial = {
   productId: string;
   quantityUsed: string | number;
   productName?: string | null;
 };
 
-type Service = {
+export type ServiceItem = {
   id: string;
   name: string;
   description: string | null;
   durationMinutes: number;
   price: string;
   isActive: boolean;
-  materials: Material[];
+  materials: ServiceMaterial[];
 };
 
 type Props = {
-  services: Service[];
-  products: Product[];
+  services: ServiceItem[];
+  products: ServiceProduct[];
 };
 
 export default function ServicesManager({ services, products: initialProducts }: Props) {
@@ -41,20 +47,20 @@ export default function ServicesManager({ services, products: initialProducts }:
   // Modals state
   const [isServiceModalOpen, setIsServiceModalOpen] = useState(false);
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
-  
+
   // Current editing service
   const [editingId, setEditingId] = useState<string | null>(null);
-  
+
   // Confirm Delete State
   const [serviceToDelete, setServiceToDelete] = useState<string | null>(null);
-  
+
   // Service Form State
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [duration, setDuration] = useState(30);
   const [price, setPrice] = useState("");
   const [isActive, setIsActive] = useState(true);
-  const [materials, setMaterials] = useState<Material[]>([]);
+  const [materials, setMaterials] = useState<ServiceMaterial[]>([]);
 
   // Product Form State (Quick create)
   const [prodName, setProdName] = useState("");
@@ -74,14 +80,16 @@ export default function ServicesManager({ services, products: initialProducts }:
     setIsServiceModalOpen(true);
   };
 
-  const openEditService = (service: Service) => {
+  const openEditService = (service: ServiceItem) => {
     setEditingId(service.id);
     setName(service.name);
     setDescription(service.description || "");
     setDuration(service.durationMinutes);
     setPrice(service.price.toString());
     setIsActive(service.isActive);
-    setMaterials(service.materials.map(m => ({ productId: m.productId, quantityUsed: m.quantityUsed })));
+    setMaterials(
+      service.materials.map((m) => ({ productId: m.productId, quantityUsed: m.quantityUsed })),
+    );
     setIsServiceModalOpen(true);
   };
 
@@ -93,7 +101,7 @@ export default function ServicesManager({ services, products: initialProducts }:
     setMaterials(materials.filter((_, i) => i !== index));
   };
 
-  const updateMaterial = (index: number, field: keyof Material, value: string) => {
+  const updateMaterial = (index: number, field: keyof ServiceMaterial, value: string) => {
     const newMats = [...materials];
     newMats[index] = { ...newMats[index], [field]: value };
     setMaterials(newMats);
@@ -101,13 +109,20 @@ export default function ServicesManager({ services, products: initialProducts }:
 
   const handleSaveService = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     // Filtrar filas vacías (donde no seleccionaron ningún producto)
-    const validMaterials = materials.filter(m => m.productId);
+    const validMaterials = materials
+      .filter((material) => material.productId)
+      .map((material) => ({
+        productId: material.productId,
+        quantityUsed: Number(material.quantityUsed),
+      }));
 
     // Validar cantidades de los materiales que sí se seleccionaron
-    if (validMaterials.some(m => Number(m.quantityUsed) <= 0)) {
-      toast.error("Por favor, ingresa una cantidad válida mayor a 0 para los consumibles seleccionados.");
+    if (validMaterials.some((m) => Number(m.quantityUsed) <= 0)) {
+      toast.error(
+        "Por favor, ingresa una cantidad válida mayor a 0 para los consumibles seleccionados.",
+      );
       return;
     }
 
@@ -121,9 +136,9 @@ export default function ServicesManager({ services, products: initialProducts }:
     startTransition(async () => {
       let res;
       if (editingId) {
-        res = await updateServiceWithMaterials(editingId, formData, validMaterials as any);
+        res = await updateServiceWithMaterials(editingId, formData, validMaterials);
       } else {
-        res = await createServiceWithMaterials(formData, validMaterials as any);
+        res = await createServiceWithMaterials(formData, validMaterials);
       }
 
       if (res.success) {
@@ -161,10 +176,10 @@ export default function ServicesManager({ services, products: initialProducts }:
     startTransition(async () => {
       const res = await quickCreateProduct(formData);
       if (res.success && res.data) {
-        setProducts([...products, res.data as any]);
+        setProducts([...products, res.data]);
         setIsProductModalOpen(false);
         // Llenar la primera fila vacía si existe, de lo contrario agregar una nueva
-        const emptyIndex = materials.findIndex(m => m.productId === "");
+        const emptyIndex = materials.findIndex((m) => m.productId === "");
         if (emptyIndex !== -1) {
           const newMats = [...materials];
           newMats[emptyIndex] = { ...newMats[emptyIndex], productId: res.data.id };
@@ -172,7 +187,10 @@ export default function ServicesManager({ services, products: initialProducts }:
         } else {
           setMaterials([...materials, { productId: res.data.id, quantityUsed: 1 }]);
         }
-        setProdName(""); setProdCost(""); setProdStock("0"); setProdMinStock("0");
+        setProdName("");
+        setProdCost("");
+        setProdStock("0");
+        setProdMinStock("0");
       } else {
         setProdMsg({ text: res.error || "Error al crear", type: "error" });
       }
@@ -181,17 +199,26 @@ export default function ServicesManager({ services, products: initialProducts }:
 
   return (
     <div className="space-y-8">
-      
       {/* Barra superior */}
       <div className="flex justify-between items-center bg-[#141414] p-4 rounded-xl border border-white/10 gap-4 shrink-0 mb-4">
         <h2 className="text-xl font-serif text-white">Catálogo de Servicios</h2>
         <div className="flex gap-2">
           <ImportExportModal entityType="services" />
-          <button 
+          <button
             onClick={openNewService}
             className="bg-cognac hover:bg-cognac-hover text-white px-6 py-2.5 rounded-lg font-medium transition-all shadow-[0_4px_15px_rgba(139,69,19,0.3)] active:scale-95 flex items-center gap-2"
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
+              <line x1="12" y1="5" x2="12" y2="19"></line>
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
             Nuevo Servicio
           </button>
         </div>
@@ -212,7 +239,7 @@ export default function ServicesManager({ services, products: initialProducts }:
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5 text-sm text-sterling">
-              {services.map(srv => (
+              {services.map((srv) => (
                 <tr key={srv.id} className="hover:bg-white/5 transition-colors">
                   <td className="p-4">
                     <p className="font-semibold text-white">{srv.name}</p>
@@ -231,21 +258,25 @@ export default function ServicesManager({ services, products: initialProducts }:
                   </td>
                   <td className="p-4">
                     {srv.isActive ? (
-                      <span className="px-2.5 py-1 bg-green-500/10 text-green-400 rounded-full text-xs border border-green-500/20">Activo</span>
+                      <span className="px-2.5 py-1 bg-green-500/10 text-green-400 rounded-full text-xs border border-green-500/20">
+                        Activo
+                      </span>
                     ) : (
-                      <span className="px-2.5 py-1 bg-red-500/10 text-red-400 rounded-full text-xs border border-red-500/20">Inactivo</span>
+                      <span className="px-2.5 py-1 bg-red-500/10 text-red-400 rounded-full text-xs border border-red-500/20">
+                        Inactivo
+                      </span>
                     )}
                   </td>
                   <td className="p-4 text-right">
                     <div className="flex items-center justify-end gap-2">
-                      <button 
+                      <button
                         onClick={() => openEditService(srv)}
                         disabled={isPending}
                         className="text-sterling hover:text-white px-2 py-1 transition-colors disabled:opacity-50"
                       >
                         Editar
                       </button>
-                      <button 
+                      <button
                         onClick={() => setServiceToDelete(srv.id)}
                         disabled={isPending}
                         className="text-red-400 hover:text-red-300 px-2 py-1 transition-colors disabled:opacity-50"
@@ -257,7 +288,11 @@ export default function ServicesManager({ services, products: initialProducts }:
                 </tr>
               ))}
               {services.length === 0 && (
-                <tr><td colSpan={6} className="p-8 text-center text-charcoal">No hay servicios registrados.</td></tr>
+                <tr>
+                  <td colSpan={6} className="p-8 text-center text-charcoal">
+                    No hay servicios registrados.
+                  </td>
+                </tr>
               )}
             </tbody>
           </table>
@@ -266,167 +301,258 @@ export default function ServicesManager({ services, products: initialProducts }:
 
       {/* MODAL PRINCIPAL: SERVICIO */}
       {isServiceModalOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto">
-          <div className="bg-[#141414] border border-white/10 rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden my-8">
-            <div className="p-6 border-b border-white/10 flex justify-between items-center bg-[#1a1a1a] sticky top-0 z-10">
-              <h3 className="text-xl font-serif text-white">{editingId ? "Editar Servicio" : "Nuevo Servicio"}</h3>
-              <button onClick={() => setIsServiceModalOpen(false)} className="text-charcoal hover:text-white transition-colors">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        <Dialog
+          label={editingId ? "Editar Servicio" : "Nuevo Servicio"}
+          onClose={() => setIsServiceModalOpen(false)}
+          overlayClassName="z-[60] overflow-y-auto"
+          className="bg-[#141414] border border-white/10 rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden my-8"
+        >
+          <div className="p-6 border-b border-white/10 flex justify-between items-center bg-[#1a1a1a] sticky top-0 z-10">
+            <h3 className="text-xl font-serif text-white">
+              {editingId ? "Editar Servicio" : "Nuevo Servicio"}
+            </h3>
+            <button
+              type="button"
+              onClick={() => setIsServiceModalOpen(false)}
+              aria-label="Cerrar formulario de servicio"
+              className="text-charcoal hover:text-white transition-colors"
+            >
+              <svg
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+          </div>
+
+          <form onSubmit={handleSaveService} className="p-6 space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <div className="md:col-span-2">
+                <label
+                  htmlFor="service-name"
+                  className="block text-sm font-medium text-sterling mb-1.5"
+                >
+                  Nombre del Servicio
+                </label>
+                <input
+                  id="service-name"
+                  data-autofocus
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Ej. Corte Clásico"
+                  className="w-full px-4 py-2.5 bg-pitch/80 border border-charcoal/30 rounded-xl focus:outline-none focus:border-cognac focus:ring-1 focus:ring-cognac text-white"
+                  required
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <label
+                  htmlFor="service-description"
+                  className="block text-sm font-medium text-sterling mb-1.5"
+                >
+                  Descripción (Opcional)
+                </label>
+                <textarea
+                  id="service-description"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  rows={2}
+                  className="w-full px-4 py-2.5 bg-pitch/80 border border-charcoal/30 rounded-xl focus:outline-none focus:border-cognac focus:ring-1 focus:ring-cognac text-white resize-none"
+                />
+              </div>
+
+              <div>
+                <label
+                  htmlFor="service-price"
+                  className="block text-sm font-medium text-sterling mb-1.5"
+                >
+                  Precio ($)
+                </label>
+                <input
+                  id="service-price"
+                  type="number"
+                  step="0.01"
+                  value={price}
+                  onChange={(e) => setPrice(e.target.value)}
+                  placeholder="25.00"
+                  className="w-full px-4 py-2.5 bg-pitch/80 border border-charcoal/30 rounded-xl focus:outline-none focus:border-cognac focus:ring-1 focus:ring-cognac text-white"
+                  required
+                />
+              </div>
+
+              <div>
+                <label
+                  htmlFor="service-duration"
+                  className="block text-sm font-medium text-sterling mb-1.5"
+                >
+                  Duración
+                </label>
+                <input
+                  id="service-duration"
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={duration}
+                  onChange={(e) => setDuration(Math.max(1, Number(e.target.value) || 1))}
+                  className="w-full px-4 py-2.5 bg-pitch/80 border border-charcoal/30 rounded-xl focus:outline-none focus:border-cognac focus:ring-1 focus:ring-cognac text-white"
+                  required
+                />
+                <p className="mt-1.5 text-xs text-charcoal">
+                  Ingresa la duración exacta en minutos. Agenda aplicará este tiempo al distribuir
+                  las citas.
+                </p>
+              </div>
+            </div>
+
+            {/* MATERIALES CONSUMIBLES */}
+            <div className="pt-4 border-t border-white/10">
+              <div className="flex justify-between items-center mb-4">
+                <div>
+                  <h4 className="text-white font-medium">Materiales Consumidos</h4>
+                  <p className="text-xs text-charcoal">
+                    Inventario que se descuenta automáticamente por cita.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={addMaterialRow}
+                  className="text-xs font-medium text-cognac hover:text-cognac-hover border border-cognac/30 px-3 py-1.5 rounded-lg flex items-center gap-1"
+                >
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  >
+                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                  </svg>
+                  Añadir Consumible
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                {materials.map((mat, index) => (
+                  <div
+                    key={index}
+                    className="flex gap-3 items-start bg-white/5 p-3 rounded-xl border border-white/5"
+                  >
+                    <div className="flex-1">
+                      <label
+                        htmlFor={`service-material-${index}`}
+                        className="block text-[10px] uppercase text-charcoal mb-1"
+                      >
+                        Producto
+                      </label>
+                      <select
+                        id={`service-material-${index}`}
+                        value={mat.productId}
+                        onChange={(e) => updateMaterial(index, "productId", e.target.value)}
+                        className="w-full px-3 py-2 bg-pitch border border-charcoal/30 rounded-lg text-sm text-white focus:border-cognac"
+                        required
+                      >
+                        <option value="">Selecciona un producto...</option>
+                        {products
+                          .filter((p) => p.category === "CONSUMO")
+                          .map((p) => (
+                            <option key={p.id} value={p.id}>
+                              {p.name} (Stock: {Number(p.currentStock)})
+                            </option>
+                          ))}
+                      </select>
+                    </div>
+                    <div className="w-24 shrink-0">
+                      <label
+                        htmlFor={`service-material-quantity-${index}`}
+                        className="block text-[10px] uppercase text-charcoal mb-1"
+                      >
+                        Cantidad
+                      </label>
+                      <input
+                        id={`service-material-quantity-${index}`}
+                        type="number"
+                        step="0.01"
+                        min="0.01"
+                        value={mat.quantityUsed}
+                        onChange={(e) => updateMaterial(index, "quantityUsed", e.target.value)}
+                        className="w-full px-3 py-2 bg-pitch border border-charcoal/30 rounded-lg text-sm text-white focus:border-cognac"
+                        required
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removeMaterialRow(index)}
+                      className="mt-5 p-2 text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+                    >
+                      <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                      >
+                        <polyline points="3 6 5 6 21 6"></polyline>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                      </svg>
+                    </button>
+                  </div>
+                ))}
+
+                {materials.length > 0 && (
+                  <div className="mt-2 text-right">
+                    <button
+                      type="button"
+                      onClick={() => setIsProductModalOpen(true)}
+                      className="text-xs text-blue-400 hover:text-blue-300 underline underline-offset-2"
+                    >
+                      ¿No encuentras el producto? Créalo rápidamente
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 pt-2">
+              <input
+                type="checkbox"
+                id="isActive"
+                checked={isActive}
+                onChange={(e) => setIsActive(e.target.checked)}
+                className="w-4 h-4 rounded border-gray-600 bg-pitch text-cognac focus:ring-cognac"
+              />
+              <label htmlFor="isActive" className="text-sm text-sterling">
+                Servicio Activo (Visible para agendar)
+              </label>
+            </div>
+
+            <div className="pt-4 flex justify-end gap-3 border-t border-white/10 mt-4">
+              <button
+                type="button"
+                onClick={() => setIsServiceModalOpen(false)}
+                className="px-5 py-2.5 text-sterling hover:text-white font-medium"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={isPending}
+                className="px-6 py-2.5 bg-cognac hover:bg-cognac-hover text-white font-medium rounded-full shadow-lg transition-all active:scale-95 disabled:opacity-50"
+              >
+                {isPending ? "Guardando..." : "Guardar Servicio"}
               </button>
             </div>
-            
-            <form onSubmit={handleSaveService} className="p-6 space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-sterling mb-1.5">Nombre del Servicio</label>
-                  <input 
-                    type="text" 
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="Ej. Corte Clásico"
-                    className="w-full px-4 py-2.5 bg-pitch/80 border border-charcoal/30 rounded-xl focus:outline-none focus:border-cognac focus:ring-1 focus:ring-cognac text-white"
-                    required
-                  />
-                </div>
-                
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-sterling mb-1.5">Descripción (Opcional)</label>
-                  <textarea 
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    rows={2}
-                    className="w-full px-4 py-2.5 bg-pitch/80 border border-charcoal/30 rounded-xl focus:outline-none focus:border-cognac focus:ring-1 focus:ring-cognac text-white resize-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-sterling mb-1.5">Precio ($)</label>
-                  <input 
-                    type="number" 
-                    step="0.01"
-                    value={price}
-                    onChange={(e) => setPrice(e.target.value)}
-                    placeholder="25.00"
-                    className="w-full px-4 py-2.5 bg-pitch/80 border border-charcoal/30 rounded-xl focus:outline-none focus:border-cognac focus:ring-1 focus:ring-cognac text-white"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-sterling mb-1.5">Duración</label>
-                  <input
-                    type="number"
-                    min="1"
-                    step="1"
-                    value={duration}
-                    onChange={(e) => setDuration(Math.max(1, Number(e.target.value) || 1))}
-                    className="w-full px-4 py-2.5 bg-pitch/80 border border-charcoal/30 rounded-xl focus:outline-none focus:border-cognac focus:ring-1 focus:ring-cognac text-white"
-                    required
-                  />
-                  <p className="mt-1.5 text-xs text-charcoal">Ingresa la duración exacta en minutos. Agenda aplicará este tiempo al distribuir las citas.</p>
-                </div>
-              </div>
-
-              {/* MATERIALES CONSUMIBLES */}
-              <div className="pt-4 border-t border-white/10">
-                <div className="flex justify-between items-center mb-4">
-                  <div>
-                    <h4 className="text-white font-medium">Materiales Consumidos</h4>
-                    <p className="text-xs text-charcoal">Inventario que se descuenta automáticamente por cita.</p>
-                  </div>
-                  <button 
-                    type="button" 
-                    onClick={addMaterialRow}
-                    className="text-xs font-medium text-cognac hover:text-cognac-hover border border-cognac/30 px-3 py-1.5 rounded-lg flex items-center gap-1"
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                    Añadir Consumible
-                  </button>
-                </div>
-
-                <div className="space-y-3">
-                  {materials.map((mat, index) => (
-                    <div key={index} className="flex gap-3 items-start bg-white/5 p-3 rounded-xl border border-white/5">
-                      <div className="flex-1">
-                        <label className="block text-[10px] uppercase text-charcoal mb-1">Producto</label>
-                        <select
-                          value={mat.productId}
-                          onChange={(e) => updateMaterial(index, 'productId', e.target.value)}
-                          className="w-full px-3 py-2 bg-pitch border border-charcoal/30 rounded-lg text-sm text-white focus:border-cognac"
-                          required
-                        >
-                          <option value="">Selecciona un producto...</option>
-                          {products.filter(p => p.category === "CONSUMO").map(p => (
-                            <option key={p.id} value={p.id}>{p.name} (Stock: {Number(p.currentStock)})</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="w-24 shrink-0">
-                        <label className="block text-[10px] uppercase text-charcoal mb-1">Cantidad</label>
-                        <input 
-                          type="number"
-                          step="0.01"
-                          min="0.01"
-                          value={mat.quantityUsed}
-                          onChange={(e) => updateMaterial(index, 'quantityUsed', e.target.value)}
-                          className="w-full px-3 py-2 bg-pitch border border-charcoal/30 rounded-lg text-sm text-white focus:border-cognac"
-                          required
-                        />
-                      </div>
-                      <button 
-                        type="button" 
-                        onClick={() => removeMaterialRow(index)}
-                        className="mt-5 p-2 text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
-                      >
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-                      </button>
-                    </div>
-                  ))}
-                  
-                  {materials.length > 0 && (
-                    <div className="mt-2 text-right">
-                      <button 
-                        type="button"
-                        onClick={() => setIsProductModalOpen(true)}
-                        className="text-xs text-blue-400 hover:text-blue-300 underline underline-offset-2"
-                      >
-                        ¿No encuentras el producto? Créalo rápidamente
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2 pt-2">
-                <input 
-                  type="checkbox" 
-                  id="isActive" 
-                  checked={isActive}
-                  onChange={(e) => setIsActive(e.target.checked)}
-                  className="w-4 h-4 rounded border-gray-600 bg-pitch text-cognac focus:ring-cognac"
-                />
-                <label htmlFor="isActive" className="text-sm text-sterling">Servicio Activo (Visible para agendar)</label>
-              </div>
-
-              <div className="pt-4 flex justify-end gap-3 border-t border-white/10 mt-4">
-                <button 
-                  type="button" 
-                  onClick={() => setIsServiceModalOpen(false)}
-                  className="px-5 py-2.5 text-sterling hover:text-white font-medium"
-                >
-                  Cancelar
-                </button>
-                <button 
-                  type="submit"
-                  disabled={isPending}
-                  className="px-6 py-2.5 bg-cognac hover:bg-cognac-hover text-white font-medium rounded-full shadow-lg transition-all active:scale-95 disabled:opacity-50"
-                >
-                  {isPending ? "Guardando..." : "Guardar Servicio"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+          </form>
+        </Dialog>
       )}
 
       {/* MODAL SECUNDARIO: CREACIÓN RÁPIDA DE PRODUCTO */}
@@ -435,15 +561,30 @@ export default function ServicesManager({ services, products: initialProducts }:
           <div className="bg-[#1a1a1a] border border-white/10 rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
             <div className="p-5 border-b border-white/10 flex justify-between items-center">
               <h3 className="text-lg font-serif text-white">Nuevo Consumible</h3>
-              <button onClick={() => setIsProductModalOpen(false)} className="text-charcoal hover:text-white">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+              <button
+                onClick={() => setIsProductModalOpen(false)}
+                className="text-charcoal hover:text-white"
+              >
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
               </button>
             </div>
             <form onSubmit={handleQuickCreateProduct} className="p-5 space-y-4">
               <div>
-                <label className="block text-xs font-medium text-sterling mb-1">Nombre del Producto</label>
-                <input 
-                  type="text" 
+                <label className="block text-xs font-medium text-sterling mb-1">
+                  Nombre del Producto
+                </label>
+                <input
+                  type="text"
                   value={prodName}
                   onChange={(e) => setProdName(e.target.value)}
                   className="w-full px-3 py-2 bg-pitch border border-charcoal/30 rounded-lg text-sm text-white focus:border-cognac"
@@ -452,9 +593,13 @@ export default function ServicesManager({ services, products: initialProducts }:
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-medium text-sterling mb-1">Costo Unit. ($)</label>
-                  <input 
-                    type="number" step="0.01" min="0"
+                  <label className="block text-xs font-medium text-sterling mb-1">
+                    Costo Unit. ($)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
                     value={prodCost}
                     onChange={(e) => setProdCost(e.target.value)}
                     className="w-full px-3 py-2 bg-pitch border border-charcoal/30 rounded-lg text-sm text-white focus:border-cognac"
@@ -462,9 +607,13 @@ export default function ServicesManager({ services, products: initialProducts }:
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-sterling mb-1">Stock Actual</label>
-                  <input 
-                    type="number" step="1" min="0"
+                  <label className="block text-xs font-medium text-sterling mb-1">
+                    Stock Actual
+                  </label>
+                  <input
+                    type="number"
+                    step="1"
+                    min="0"
                     value={prodStock}
                     onChange={(e) => setProdStock(e.target.value)}
                     className="w-full px-3 py-2 bg-pitch border border-charcoal/30 rounded-lg text-sm text-white focus:border-cognac"
@@ -472,14 +621,28 @@ export default function ServicesManager({ services, products: initialProducts }:
                   />
                 </div>
               </div>
-              
+
               {prodMsg.text && (
-                <p className={`text-xs ${prodMsg.type === 'error' ? 'text-red-400' : 'text-green-400'}`}>{prodMsg.text}</p>
+                <p
+                  className={`text-xs ${prodMsg.type === "error" ? "text-red-400" : "text-green-400"}`}
+                >
+                  {prodMsg.text}
+                </p>
               )}
 
               <div className="pt-2 flex justify-end gap-2">
-                <button type="button" onClick={() => setIsProductModalOpen(false)} className="px-3 py-1.5 text-xs text-sterling hover:text-white">Cancelar</button>
-                <button type="submit" disabled={isPending} className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded-full font-medium transition-colors disabled:opacity-50">
+                <button
+                  type="button"
+                  onClick={() => setIsProductModalOpen(false)}
+                  className="px-3 py-1.5 text-xs text-sterling hover:text-white"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isPending}
+                  className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded-full font-medium transition-colors disabled:opacity-50"
+                >
                   Crear y Usar
                 </button>
               </div>
@@ -488,7 +651,7 @@ export default function ServicesManager({ services, products: initialProducts }:
         </div>
       )}
 
-      <ConfirmModal 
+      <ConfirmModal
         isOpen={!!serviceToDelete}
         title="Eliminar Servicio"
         message="¿Estás seguro que deseas eliminar este servicio de forma permanente? Esta acción no se puede deshacer."
