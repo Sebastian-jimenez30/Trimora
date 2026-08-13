@@ -3,8 +3,10 @@ import "server-only";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import * as schema from "./schema";
+import { resolveDatabasePoolConfig } from "./pool-config";
 
 const connectionString = process.env.DATABASE_URL;
+const poolConfig = resolveDatabasePoolConfig();
 const globalForDatabase = globalThis as typeof globalThis & {
   trimoraPostgresClient?: ReturnType<typeof postgres>;
 };
@@ -14,9 +16,9 @@ const client =
   globalForDatabase.trimoraPostgresClient ??
   postgres(connectionString as string, {
     prepare: false,
-    max: 1,
-    idle_timeout: 20,
-    connect_timeout: 10,
+    max: poolConfig.max,
+    idle_timeout: poolConfig.idleTimeout,
+    connect_timeout: poolConfig.connectTimeout,
   });
 
 globalForDatabase.trimoraPostgresClient = client;

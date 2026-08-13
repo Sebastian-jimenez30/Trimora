@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "components": {
+    "pos-finance": {
+      "properties": ["src/modules/pos/domain/__tests__/money.property.test.ts"],
+      "mutationTargets": [
+        {
+          "file": "src/modules/pos/domain/money.ts",
+          "tests": [
+            "src/modules/pos/domain/__tests__/money.test.ts",
+            "src/modules/pos/domain/__tests__/money.property.test.ts"
+          ],
+          "mutations": [
+            {
+              "id": "money-scale",
+              "description": "reduce la precision monetaria de centavos a decimas",
+              "find": "const MONEY_SCALE = 100;",
+              "replace": "const MONEY_SCALE = 10;"
+            },
+            {
+              "id": "quantity-scale",
+              "description": "reduce la precision de inventario de cuatro a tres decimales",
+              "find": "const QUANTITY_SCALE = 10_000;",
+              "replace": "const QUANTITY_SCALE = 1_000;"
+            },
+            {
+              "id": "rounding-mode",
+              "description": "redondea siempre hacia arriba en lugar de al entero mas cercano",
+              "find": "const scaled = Math.round(parsed * scale);",
+              "replace": "const scaled = Math.ceil(parsed * scale);"
+            },
+            {
+              "id": "finite-validation",
+              "description": "invierte la validacion de numeros finitos",
+              "find": "if (!Number.isFinite(parsed))",
+              "replace": "if (Number.isFinite(parsed))"
+            },
+            {
+              "id": "money-addition",
+              "description": "resta valores al acumular dinero",
+              "find": "total + toMoneyCents(value)",
+              "replace": "total - toMoneyCents(value)"
+            }
+          ]
+        }
+      ],
+      "database": ["src/modules/pos/__tests__/resilience.integration.test.ts"]
+    },
+    "database": {
+      "properties": [],
+      "mutationTargets": [],
+      "database": ["supabase/tests/database/05_performance_plans.test.sql"]
+    },
+    "shared-ui": {
+      "properties": [],
+      "mutationTargets": [],
+      "database": [],
+      "e2e": ["performance"]
+    }
+  }
+}

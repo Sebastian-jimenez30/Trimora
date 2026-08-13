@@ -15,6 +15,8 @@
     "test:server": "vitest run --project server",
     "test:client": "vitest run --project client",
     "test:component": "node scripts/ci/run-component-tests.mjs",
+    "test:properties": "node scripts/ci/run-property-tests.mjs",
+    "test:mutation": "node scripts/ci/run-mutation-tests.mjs",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
     "test:e2e:ci": "node scripts/ci/run-e2e-tests.mjs",

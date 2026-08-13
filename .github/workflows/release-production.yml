@@ -1,0 +1,208 @@
+name: Despliegue coordinado de produccion
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Inspeccionar el plan o migrar y desplegar
+        required: true
+        default: plan
+        type: choice
+        options:
+          - plan
+          - deploy
+      baseline_legacy:
+        description: Autorizar el registro de 0000 sin ejecutar su SQL destructivo
+        required: true
+        default: false
+        type: boolean
+      backup_confirmed:
+        description: Confirmo que el respaldo recuperable fue verificado
+        required: true
+        default: false
+        type: boolean
+      confirmation:
+        description: Para deploy escribe exactamente MIGRATE_AND_DEPLOY
+        required: false
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: production-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Migrar esquema y desplegar aplicacion
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: production
+    env:
+      NODE_VERSION: "22"
+      PRODUCTION_DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+    steps:
+      - name: Validar autorizacion de despliegue
+        shell: bash
+        env:
+          RELEASE_MODE: ${{ inputs.mode }}
+          BACKUP_CONFIRMED: ${{ inputs.backup_confirmed }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          if [[ "$RELEASE_MODE" == "deploy" ]]; then
+            [[ "$BACKUP_CONFIRMED" == "true" ]] || {
+              echo "::error::Confirma primero un respaldo recuperable de Supabase."
+              exit 1
+            }
+            [[ "$CONFIRMATION" == "MIGRATE_AND_DEPLOY" ]] || {
+              echo "::error::La confirmacion de produccion no coincide."
+              exit 1
+            }
+          fi
+          if [[ "$PRODUCTION_DATABASE_URL" == *":6543/"* ]]; then
+            echo "::error::PRODUCTION_DATABASE_URL debe usar Session Pooler 5432, no Transaction Pooler 6543."
+            exit 1
+          fi
+
+      - name: Descargar exactamente el commit seleccionado
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Exigir CI y seguridad verdes para este commit
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const requiredWorkflows = ["ci.yml", "security.yml"];
+            for (const workflow_id of requiredWorkflows) {
+              const { data } = await github.rest.actions.listWorkflowRuns({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                workflow_id,
+                head_sha: context.sha,
+                event: "push",
+                per_page: 30,
+              });
+              const successfulRun = data.workflow_runs.find(
+                (run) => run.status === "completed" && run.conclusion === "success",
+              );
+              if (!successfulRun) {
+                core.setFailed(`No existe una ejecucion exitosa de ${workflow_id} para ${context.sha}.`);
+              }
+            }
+
+      - name: Configurar Node.js y cache npm
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Instalar dependencias reproducibles
+        run: npm ci
+
+      - name: Inspeccionar linea base, historial y duplicados
+        id: preflight
+        run: node scripts/release/check-production-schema.mjs preflight
+        env:
+          ALLOW_BASELINE_REPAIR: ${{ inputs.baseline_legacy }}
+
+      - name: Configurar Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: 2.101.0
+
+      - name: Mostrar historial local y remoto
+        shell: bash
+        run: |
+          set -o pipefail
+          supabase migration list --db-url "$PRODUCTION_DATABASE_URL" | tee migration-history.txt
+
+      - name: Documentar linea base pendiente en modo plan
+        if: inputs.mode == 'plan' && steps.preflight.outputs.baseline_recorded != 'true'
+        shell: bash
+        run: |
+          {
+            echo "La base historica es compatible, pero 0000 no esta registrada."
+            echo "El despliegue debe registrar 0000 como aplicada sin ejecutar 0000_unusual_garia.sql."
+            echo "Despues, el plan remoto esperado es 0001 a 0007 en ese orden."
+          } | tee migration-plan.txt
+
+      - name: Preparar artefacto de Vercel antes de modificar la base
+        if: inputs.mode == 'deploy'
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          npm install --global vercel@58.1.0
+          vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+          vercel build --prod --token="$VERCEL_TOKEN"
+
+      - name: Registrar linea base historica sin ejecutar 0000
+        if: inputs.mode == 'deploy' && steps.preflight.outputs.baseline_recorded != 'true'
+        shell: bash
+        run: >-
+          supabase migration repair 0000 --status applied
+          --db-url "$PRODUCTION_DATABASE_URL"
+
+      - name: Calcular migraciones pendientes sin aplicarlas
+        if: inputs.mode == 'deploy' || steps.preflight.outputs.baseline_recorded == 'true'
+        shell: bash
+        run: |
+          set -o pipefail
+          supabase db push --include-all --dry-run \
+            --db-url "$PRODUCTION_DATABASE_URL" 2>&1 | tee migration-plan.txt
+
+      - name: Impedir que el plan ejecute la migracion destructiva 0000
+        if: inputs.mode == 'deploy' || steps.preflight.outputs.baseline_recorded == 'true'
+        shell: bash
+        run: |
+          if grep -q "0000_unusual_garia" migration-plan.txt; then
+            echo "::error::El plan intento incluir 0000_unusual_garia.sql y fue bloqueado."
+            exit 1
+          fi
+
+      - name: Publicar plan e historial de migracion
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: production-migration-plan-${{ github.run_id }}
+          path: |
+            migration-history.txt
+            migration-plan.txt
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Aplicar exclusivamente las migraciones pendientes
+        if: inputs.mode == 'deploy'
+        shell: bash
+        run: >-
+          supabase db push --include-all
+          --db-url "$PRODUCTION_DATABASE_URL"
+
+      - name: Verificar esquema, historial, indices y RLS finales
+        if: inputs.mode == 'deploy'
+        run: node scripts/release/check-production-schema.mjs postflight
+
+      - name: Publicar en Vercel el artefacto ya construido
+        if: inputs.mode == 'deploy'
+        id: vercel
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          deployment_url="$(vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN")"
+          echo "$deployment_url" | tee deployment-url.txt
+          echo "deployment_url=$deployment_url" >> "$GITHUB_OUTPUT"
+
+      - name: Comprobar que el login publico responde
+        if: inputs.mode == 'deploy'
+        shell: bash
+        run: >-
+          curl --fail --location --silent --show-error
+          --retry 6 --retry-delay 5 --retry-all-errors
+          "${{ steps.vercel.outputs.deployment_url }}/login" > /dev/null

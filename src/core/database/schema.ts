@@ -205,6 +205,14 @@ export const transactions = pgTable(
       table.status,
       table.createdAt,
     ),
+    index("transactions_org_client_type_status_created_id_idx").on(
+      table.organizationId,
+      table.clientId,
+      table.type,
+      table.status,
+      table.createdAt,
+      table.id,
+    ),
   ],
 );
 
@@ -269,6 +277,7 @@ export const inventoryMovements = pgTable(
       table.createdAt,
     ),
     index("inventory_movements_transaction_idx").on(table.transactionId),
+    index("inventory_movements_org_transaction_idx").on(table.organizationId, table.transactionId),
     foreignKey({
       columns: [table.organizationId, table.transactionId],
       foreignColumns: [transactions.organizationId, transactions.id],

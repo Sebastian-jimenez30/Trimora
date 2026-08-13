@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "policy": "manual-only-not-importable",
+  "scripts": [
+    "scripts/add-notes-column.ts",
+    "scripts/alter-transactions.ts",
+    "scripts/check.js",
+    "scripts/cleanup_data.ts",
+    "scripts/create-chat-table.ts",
+    "scripts/create_inventory_movements.ts",
+    "scripts/delete_users.ts",
+    "scripts/migrate.js",
+    "scripts/migrate_invitations.ts",
+    "scripts/patch-metadata.ts",
+    "scripts/query_services.ts",
+    "scripts/seed.ts",
+    "scripts/setup_storage.ts",
+    "scripts/test-laguna-prompt.ts",
+    "scripts/test-laguna-tools.ts",
+    "scripts/test-laguna.ts",
+    "scripts/test-qwen-prompt.ts",
+    "scripts/test-tool-results.ts",
+    "scripts/test-tools.ts",
+    "scripts/test-tools2.ts"
+  ]
+}
