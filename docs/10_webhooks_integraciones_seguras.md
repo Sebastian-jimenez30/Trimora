@@ -2,7 +2,7 @@
 
 - **Etapa:** 04
 - **Rama:** `architecture/04-webhook-hardening`
-- **Estado:** implementada; pendiente de pipeline y aceptación del propietario
+- **Estado:** completada y aceptada por el propietario
 
 ## 1. Frontera de confianza
 

@@ -2,7 +2,7 @@
 
 - **Etapa:** 03
 - **Rama:** `architecture/03-database-security`
-- **Estado:** implementada; pendiente de pipeline y aceptación del propietario
+- **Estado:** completada y aceptada por el propietario
 
 ## 1. Objetivo y límites
 
@@ -108,9 +108,9 @@ La migración `0001_analytics_indexes.sql` ahora declara `transaction_payments` 
 índices. `0004_database_security.sql` reconcilia las tablas y columnas que existían en la aplicación
 pero no en el historial, y después aplica restricciones, índices, privilegios y RLS.
 
-`src/core/database/schema.sql` queda deliberadamente sin DDL: contenía un prototipo MVP incompatible
-con el modelo multiempresa. Las únicas fuentes canónicas son las migraciones y el esquema tipado de
-Drizzle.
+Las únicas fuentes canónicas son `supabase/migrations/*.sql` y el esquema tipado de Drizzle. El
+prototipo SQL anterior fue retirado para impedir que se use accidentalmente como mecanismo de
+creación o restauración.
 
 El pipeline de base de datos, activado únicamente cuando el selector marca el componente `database`,
 ejecuta:

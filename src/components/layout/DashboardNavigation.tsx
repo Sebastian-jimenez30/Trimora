@@ -88,12 +88,9 @@ export default function DashboardNavigation({
 
   const isHome = pathname === "/dashboard";
   const pageTitle =
-    [
-      ...navLinks,
-      { href: "/calendar", label: "Calendario" },
-      { href: "/perfil", label: "Perfil" },
-    ].find((link) => pathname === link.href || pathname.startsWith(`${link.href}/`))?.label ??
-    "Trimora";
+    [...navLinks, { href: "/perfil", label: "Perfil" }].find(
+      (link) => pathname === link.href || pathname.startsWith(`${link.href}/`),
+    )?.label ?? "Trimora";
 
   const closeMenu = () => setIsOpen(false);
 

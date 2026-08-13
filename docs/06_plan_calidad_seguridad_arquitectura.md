@@ -1,8 +1,9 @@
 # Plan rector de calidad, seguridad y arquitectura
 
-**Estado:** Vigente  
+**Estado:** Completado y aceptado por el propietario
 **Proyecto:** Trimora  
 **Fecha de adopción:** 2026-08-04  
+**Fecha de cierre:** 2026-08-13
 **Propósito:** Guiar la evolución completa de Trimora antes de publicar parcialmente cambios de arquitectura, seguridad o lógica de negocio.
 
 ## 1. Objetivo
@@ -188,7 +189,7 @@ En PR se medirá la cobertura de cada componente afectado. La cobertura global s
 
 **Rama:** `architecture/01-ci-foundation`
 
-**Estado:** Implementada; pendiente de validación por pipeline y aceptación del propietario.
+**Estado:** aceptada por el propietario con pipeline en verde.
 
 **Cambios previstos:**
 
@@ -223,8 +224,8 @@ En PR se medirá la cobertura de cada componente afectado. La cobertura global s
 
 **Rama:** `architecture/02-server-boundaries`
 
-**Estado:** implementada, pendiente de validación del pipeline y aceptación funcional. La decisión
-y las pruebas manuales están documentadas en `docs/08_fronteras_servidor_autorizacion.md`.
+**Estado:** aceptada por el propietario con pipeline en verde. La decisión y las pruebas manuales
+están documentadas en `docs/08_fronteras_servidor_autorizacion.md`.
 
 **Cambios previstos:**
 
@@ -253,8 +254,8 @@ El selector deberá clasificar esta etapa como cambio transversal de `auth-acces
 
 **Rama:** `architecture/03-database-security`
 
-**Estado:** implementada, pendiente de validación del pipeline y aceptación funcional. La matriz de
-acceso, las decisiones de RLS y las pruebas manuales están documentadas en
+**Estado:** aceptada por el propietario con pipeline en verde. La matriz de acceso, las decisiones
+de RLS y las pruebas manuales están documentadas en
 `docs/09_seguridad_integridad_base_datos.md`.
 
 **Cambios previstos:**
@@ -285,7 +286,7 @@ Todo cambio en esquema, migraciones, RLS o conexión activará `database`, las i
 
 **Rama:** `architecture/04-webhook-hardening`
 
-**Estado:** implementada; pendiente de pipeline y aceptación del propietario.
+**Estado:** aceptada por el propietario con pipeline en verde.
 
 **Cambios previstos:**
 
@@ -437,8 +438,8 @@ documentadas en `docs/13_e2e_accesibilidad_seguridad_ci.md`.
 
 **Rama:** `architecture/08-resilience-performance`
 
-**Estado de trabajo:** implementada; pendiente de validación por pipeline y aceptación del
-propietario. Las decisiones, presupuestos y pruebas manuales están documentados en
+**Estado de trabajo:** aceptada por el propietario con pipeline en verde. Las decisiones,
+presupuestos y pruebas manuales están documentados en
 `docs/14_resiliencia_mutacion_rendimiento.md`.
 
 **Cambios previstos:**

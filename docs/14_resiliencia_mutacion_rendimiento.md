@@ -94,12 +94,12 @@ ejecucion. No registra cuerpo, cookies, parametros, tokens, SQL ni mensaje compl
 El evento puede ser ingerido posteriormente por el proveedor de observabilidad elegido sin volver
 a instrumentar la aplicacion.
 
-## 7. Aislamiento de scripts historicos
+## 7. Eliminación de scripts históricos
 
-Los scripts manuales heredados quedan inventariados en `ci/legacy-scripts.json`. Una prueba impide
-que `src`, `package.json` o los workflows los importen o ejecuten. No se borran porque pueden servir
-como evidencia para reconstruir una migracion, pero no forman parte de la aplicacion ni del proceso
-oficial. Las reglas operativas estan en `scripts/README.md`.
+Los scripts manuales heredados fueron retirados al cerrar el programa. Ninguno era consumido por la
+aplicación, `package.json` o los workflows, y su propósito ya está cubierto por migraciones
+versionadas y ejecutores reproducibles de `scripts/ci` y `scripts/release`. Las reglas para evitar
+que reaparezca esta deuda están en `scripts/README.md`.
 
 ## 8. Seleccion del pipeline
 

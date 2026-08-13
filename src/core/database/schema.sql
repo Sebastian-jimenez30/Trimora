@@ -1,8 +1,0 @@
--- Archivo de compatibilidad sin DDL ejecutable.
---
--- Fuentes canónicas del esquema Trimora:
---   1. supabase/migrations/*.sql para estructura, restricciones, privilegios y RLS.
---   2. src/core/database/schema.ts para el tipado y las consultas de Drizzle.
---
--- El esquema MVP que antes vivía aquí usaba user_id como tenant y políticas obsoletas.
--- No debe utilizarse para crear, restaurar ni modificar ninguna base de datos.

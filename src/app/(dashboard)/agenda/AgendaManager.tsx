@@ -92,6 +92,7 @@ export default function AgendaManager({
   const [clientSearch, setClientSearch] = useState("");
   const [isClientPickerOpen, setIsClientPickerOpen] = useState(false);
   const [appointmentToDelete, setAppointmentToDelete] = useState<string | null>(null);
+  const [appointmentOverrides, setAppointmentOverrides] = useState<Record<string, Appointment>>({});
 
   const [isPending, startTransition] = useTransition();
 
@@ -135,9 +136,9 @@ export default function AgendaManager({
 
   const getAppointmentsForDate = (date: Date) => {
     const dateKey = formatInTimeZone(date, TIMEZONE, "yyyy-MM-dd");
-    return initialAppointments.filter(
-      (app) => formatInTimeZone(app.startTime, TIMEZONE, "yyyy-MM-dd") === dateKey,
-    );
+    return initialAppointments
+      .map((app) => appointmentOverrides[app.id] ?? app)
+      .filter((app) => formatInTimeZone(app.startTime, TIMEZONE, "yyyy-MM-dd") === dateKey);
   };
 
   const openCreateModal = (timeStr?: string, date?: Date) => {
@@ -202,6 +203,23 @@ export default function AgendaManager({
       }
 
       if (result.success) {
+        if (editingAppointment) {
+          const notes = formData.get("notes");
+          const updatedAppointment: Appointment = {
+            ...editingAppointment,
+            clientId: selectedClientId,
+            staffId: String(formData.get("staffId")),
+            serviceId,
+            startTime: start.toISOString(),
+            endTime: end.toISOString(),
+            status: String(formData.get("status")),
+            notes: typeof notes === "string" && notes.length > 0 ? notes : null,
+          };
+          setAppointmentOverrides((current) => ({
+            ...current,
+            [updatedAppointment.id]: updatedAppointment,
+          }));
+        }
         closeModal();
         toast.success(editingAppointment ? "Cita actualizada" : "Cita creada");
       } else {

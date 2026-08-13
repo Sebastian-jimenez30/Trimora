@@ -4,7 +4,7 @@
 
 **Rama:** `architecture/07-e2e-security-ci`
 
-**Estado:** implementada; pendiente de evidencia del pipeline y aceptación del propietario.
+**Estado:** completada y aceptada por el propietario con pipeline en verde.
 
 ## 1. Resultado de la etapa
 

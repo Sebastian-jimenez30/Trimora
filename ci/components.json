@@ -145,28 +145,19 @@
     "ai-integrations": {
       "paths": [
         "src/modules/ai/",
-        "src/modules/whatsapp/",
         "src/components/ai/",
         "src/app/api/chat/",
         "src/app/api/import/",
-        "src/app/api/whatsapp/",
         "src/app/api/webhooks/"
       ],
       "testRoots": [
         "src/modules/ai",
-        "src/modules/whatsapp",
         "src/components/ai",
         "src/app/api/chat",
         "src/app/api/import",
-        "src/app/api/whatsapp",
         "src/app/api/webhooks"
       ],
-      "coverage": [
-        "src/modules/ai/**/*.ts",
-        "src/modules/whatsapp/**/*.ts",
-        "src/components/ai/**/*.tsx",
-        "src/app/api/**/*.ts"
-      ],
+      "coverage": ["src/modules/ai/**/*.ts", "src/components/ai/**/*.tsx", "src/app/api/**/*.ts"],
       "e2e": [],
       "triggers": ["agenda-appointments", "pos-finance", "inventory-services", "clients"]
     },
