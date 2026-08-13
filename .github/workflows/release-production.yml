@@ -129,7 +129,7 @@ jobs:
           {
             echo "La base historica es compatible, pero 0000 no esta registrada."
             echo "El despliegue debe registrar 0000 como aplicada sin ejecutar 0000_unusual_garia.sql."
-            echo "Despues, el plan remoto esperado es 0001 a 0007 en ese orden."
+            echo "Despues, el plan remoto esperado incluye 0001 a 0007 y 20260813183434 en ese orden."
           } | tee migration-plan.txt
 
       - name: Preparar artefacto de Vercel antes de modificar la base

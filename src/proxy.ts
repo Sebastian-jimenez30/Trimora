@@ -47,6 +47,8 @@ export async function proxy(request: NextRequest) {
     request.nextUrl.pathname.startsWith("/auth/callback") ||
     request.nextUrl.pathname.startsWith("/verify-email") ||
     request.nextUrl.pathname.startsWith("/invite") ||
+    request.nextUrl.pathname.startsWith("/reservar") ||
+    request.nextUrl.pathname.startsWith("/api/public") ||
     request.nextUrl.pathname.startsWith("/api/webhooks");
 
   // Proteger todas las demás rutas (si no hay usuario y no es ruta pública)

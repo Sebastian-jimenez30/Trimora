@@ -36,6 +36,7 @@ suite completa.
 | `clients`             | Clientes, totales y cuentas por cobrar                    |
 | `analytics`           | Métricas, trazabilidad y exportaciones                    |
 | `ai-integrations`     | IA, importaciones y webhooks                              |
+| `public-booking`      | Perfil público, reservas y autoservicio del cliente       |
 | `shared-ui`           | Navegación y componentes compartidos                      |
 | `database`            | Esquema, migraciones, conexión y RLS                      |
 | `tooling`             | CI, compilación, lint, formato y configuración de pruebas |
@@ -49,6 +50,11 @@ Cada entrada del manifiesto contiene:
 
 Agregar una carpeta funcional exige clasificarla en este manifiesto. Los cambios al propio
 manifiesto, al lockfile o a la configuración de herramientas ejecutan la suite completa.
+
+`public-booking` se valida además cuando cambian Auth, Agenda, Clientes, Servicios, Caja, IA,
+componentes compartidos o la base de datos, porque consume contratos de esas áreas. Un cambio
+aislado en la experiencia pública ejecuta únicamente sus propias pruebas hasta que tenga recorridos
+E2E públicos registrados en una etapa posterior.
 
 ## Entornos de Vitest
 

@@ -47,6 +47,18 @@ describe("selector de pruebas por componente", () => {
     );
   });
 
+  it("aísla cambios propios de public-booking y lo protege ante cambios de agenda", () => {
+    const publicImpact = analyzeImpact({
+      files: ["src/modules/public-booking/application/get-public-config.ts"],
+    });
+    const agendaImpact = analyzeImpact({ files: ["src/modules/appointments/actions.ts"] });
+
+    expect(publicImpact.directComponents).toEqual(["public-booking"]);
+    expect(publicImpact.affectedComponents).toEqual(["public-booking"]);
+    expect(publicImpact.testComponents).toEqual(["public-booking"]);
+    expect(agendaImpact.affectedComponents).toContain("public-booking");
+  });
+
   it("activa el fallback completo para archivos sin clasificar", () => {
     const result = analyzeImpact({ files: ["unknown-folder/new-file.ts"] });
 
