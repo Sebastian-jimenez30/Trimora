@@ -5,7 +5,8 @@ import { eq } from "drizzle-orm";
 import AgendaManager from "./AgendaManager";
 
 export default async function AgendaPage() {
-  const { organizationId } = await requireActor();
+  const actor = await requireActor();
+  const { organizationId } = actor;
 
   // Obtener datos relacionados para la agenda
   const appointmentsData = await db
@@ -45,6 +46,7 @@ export default async function AgendaPage() {
         clients={clientsData}
         services={servicesData}
         staff={staffFormatted}
+        canConfigureAvailability={actor.role === "ADMIN"}
       />
     </div>
   );

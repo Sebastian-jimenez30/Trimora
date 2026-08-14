@@ -31,6 +31,19 @@ describe("release coordinado de produccion", () => {
     expect(RELEASE_INDEXES).toContain("organization_public_profiles_slug_uidx");
   });
 
+  it("incluye disponibilidad en el contrato coordinado de producción", () => {
+    expect(RELEASE_MIGRATIONS).toContain("20260814024136");
+    expect(RELEASE_TABLES).toEqual(
+      expect.arrayContaining([
+        "public_booking_settings",
+        "staff_services",
+        "availability_windows",
+        "availability_blocks",
+      ]),
+    );
+    expect(RELEASE_INDEXES).toContain("availability_blocks_org_starts_ends_idx");
+  });
+
   it("bloquea una base sin linea base cuando no existe autorizacion", () => {
     const result = evaluatePreflight({
       tables: legacyTables,

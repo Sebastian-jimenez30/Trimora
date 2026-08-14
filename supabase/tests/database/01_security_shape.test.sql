@@ -10,6 +10,10 @@ SELECT is(
       'public.organizations'::regclass,
       'public.organization_members'::regclass,
       'public.organization_public_profiles'::regclass,
+      'public.public_booking_settings'::regclass,
+      'public.staff_services'::regclass,
+      'public.availability_windows'::regclass,
+      'public.availability_blocks'::regclass,
       'public.invitations'::regclass,
       'public.services'::regclass,
       'public.products'::regclass,
@@ -28,7 +32,7 @@ SELECT is(
       'public.webhook_rate_limits'::regclass
     ]) AND relrowsecurity
   ),
-  19::bigint,
+  23::bigint,
   'todas las tablas privadas expuestas tienen RLS habilitado'
 );
 
@@ -40,6 +44,10 @@ SELECT is(
       'public.organizations'::regclass,
       'public.organization_members'::regclass,
       'public.organization_public_profiles'::regclass,
+      'public.public_booking_settings'::regclass,
+      'public.staff_services'::regclass,
+      'public.availability_windows'::regclass,
+      'public.availability_blocks'::regclass,
       'public.invitations'::regclass,
       'public.services'::regclass,
       'public.products'::regclass,
@@ -58,7 +66,7 @@ SELECT is(
       'public.webhook_rate_limits'::regclass
     ]) AND relforcerowsecurity
   ),
-  19::bigint,
+  23::bigint,
   'RLS también se fuerza para propietarios sin BYPASSRLS'
 );
 
@@ -68,7 +76,9 @@ SELECT is(
     FROM information_schema.tables
     WHERE table_schema = 'public'
       AND table_name = ANY (ARRAY[
-        'organizations', 'organization_members', 'organization_public_profiles', 'invitations',
+        'organizations', 'organization_members', 'organization_public_profiles',
+        'public_booking_settings', 'staff_services', 'availability_windows',
+        'availability_blocks', 'invitations',
         'services', 'products',
         'service_materials', 'clients', 'appointments', 'transactions', 'transaction_items',
         'transaction_payments', 'inventory_movements', 'daily_summaries', 'audit_logs',

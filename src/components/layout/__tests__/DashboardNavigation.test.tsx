@@ -38,6 +38,7 @@ describe("DashboardNavigation", () => {
     expect(screen.getByRole("heading", { name: "Hola, Andrea" })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Equipo" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Servicios" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Disponibilidad" })).not.toBeInTheDocument();
 
     mocks.pathname = "/clientes";
     rerender(
@@ -49,6 +50,7 @@ describe("DashboardNavigation", () => {
     expect(screen.queryByRole("heading", { name: "Hola, Andrea" })).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Equipo" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Servicios" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Disponibilidad" })).toBeInTheDocument();
   });
 
   it("cierra las notificaciones con Escape, con la campana y al pulsar fuera", async () => {

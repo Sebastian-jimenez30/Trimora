@@ -82,15 +82,17 @@ export default function DashboardNavigation({
   ];
 
   if (isAdmin) {
+    navLinks.splice(3, 0, { href: "/agenda/disponibilidad", label: "Disponibilidad" });
     navLinks.push({ href: "/servicios", label: "Servicios" });
     navLinks.push({ href: "/equipo", label: "Equipo" });
   }
 
   const isHome = pathname === "/dashboard";
+  const titledLinks = [...navLinks, { href: "/perfil", label: "Perfil" }];
   const pageTitle =
-    [...navLinks, { href: "/perfil", label: "Perfil" }].find(
-      (link) => pathname === link.href || pathname.startsWith(`${link.href}/`),
-    )?.label ?? "Trimora";
+    titledLinks.find((link) => pathname === link.href)?.label ??
+    titledLinks.find((link) => pathname.startsWith(`${link.href}/`))?.label ??
+    "Trimora";
 
   const closeMenu = () => setIsOpen(false);
 
