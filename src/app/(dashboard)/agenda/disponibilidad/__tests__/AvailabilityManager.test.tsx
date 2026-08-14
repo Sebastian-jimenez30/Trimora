@@ -9,11 +9,13 @@ const actions = vi.hoisted(() => ({
   replaceStaffServices: vi.fn(),
   createAvailabilityBlock: vi.fn(),
   deleteAvailabilityBlock: vi.fn(),
+  setCustomerIdentityPilotEnabled: vi.fn(),
 }));
 
 vi.mock("@/modules/public-booking/server/availability-actions", () => actions);
 
 const props = {
+  identityPilot: { enabled: false, slug: "barberia-demo" },
   policy: {
     timeZone: "America/Bogota",
     minimumNoticeMinutes: 60,
@@ -42,13 +44,13 @@ describe("configuración administrativa de disponibilidad", () => {
     Object.values(actions).forEach((action) => action.mockResolvedValue({ success: true }));
   });
 
-  it("presenta política, horarios y asignaciones sin habilitar funciones públicas", () => {
+  it("presenta política, horarios, asignaciones y activación explícita del piloto", () => {
     render(<AvailabilityManager {...props} />);
 
     expect(screen.getByRole("heading", { name: "Política de reservas" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Horario semanal" })).toBeInTheDocument();
     expect(screen.getByRole("checkbox", { name: /Corte/u })).toBeChecked();
-    expect(screen.queryByText(/habilitar reservas públicas/iu)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Habilitar acceso piloto" })).toBeInTheDocument();
   });
 
   it("envía al servidor la política y el horario general normalizados", async () => {
@@ -63,5 +65,15 @@ describe("configuración administrativa de disponibilidad", () => {
       staffId: null,
       windows: [{ dayOfWeek: 1, startMinute: 540, endMinute: 1080 }],
     });
+  });
+
+  it("activa el piloto mediante una acción protegida sin habilitar reservas", async () => {
+    const user = userEvent.setup();
+    render(<AvailabilityManager {...props} />);
+
+    await user.click(screen.getByRole("button", { name: "Habilitar acceso piloto" }));
+
+    expect(actions.setCustomerIdentityPilotEnabled).toHaveBeenCalledWith(true);
+    expect(screen.queryByText(/habilitar reservas públicas/iu)).not.toBeInTheDocument();
   });
 });

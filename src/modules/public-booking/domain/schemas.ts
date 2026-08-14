@@ -69,3 +69,19 @@ export const availabilityBlockInputSchema = z
     message: "La fecha final debe ser posterior a la inicial",
     path: ["endsAt"],
   });
+
+export const publicContactChannelSchema = z.enum(["EMAIL", "PHONE"]);
+
+export const publicIdentityRequestSchema = z.object({
+  channel: publicContactChannelSchema,
+  contact: z.string().trim().min(3).max(254),
+});
+
+export const publicIdentityVerificationSchema = publicIdentityRequestSchema.extend({
+  challengeId: z.string().uuid(),
+  name: z.string().trim().min(2).max(120),
+  token: z
+    .string()
+    .trim()
+    .regex(/^\d{6,8}$/u),
+});

@@ -186,7 +186,7 @@
         "src/app/(public)/reservar/**/*.tsx",
         "src/app/api/public/**/*.ts"
       ],
-      "e2e": [],
+      "e2e": ["public-booking"],
       "triggers": []
     },
     "shared-ui": {

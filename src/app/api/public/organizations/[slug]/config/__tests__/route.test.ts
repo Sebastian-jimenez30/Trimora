@@ -49,6 +49,7 @@ describe("GET configuracion publica", () => {
       features: {
         catalog: false,
         booking: false,
+        identity: false,
         selfService: false,
         chat: false,
         reminders: false,
@@ -73,6 +74,7 @@ describe("GET configuracion publica", () => {
         features: {
           catalog: false,
           booking: false,
+          identity: false,
           selfService: false,
           chat: false,
           reminders: false,

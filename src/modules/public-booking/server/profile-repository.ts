@@ -18,6 +18,7 @@ export const publicOrganizationProfileRepository: PublicOrganizationProfileReade
         timeZone: organizationPublicProfiles.timeZone,
         catalog: organizationPublicProfiles.publicCatalogEnabled,
         booking: organizationPublicProfiles.publicBookingEnabled,
+        identity: organizationPublicProfiles.publicIdentityEnabled,
         selfService: organizationPublicProfiles.publicSelfServiceEnabled,
         chat: organizationPublicProfiles.publicChatEnabled,
         reminders: organizationPublicProfiles.remindersEnabled,
@@ -41,6 +42,7 @@ export const publicOrganizationProfileRepository: PublicOrganizationProfileReade
       features: {
         catalog: profile.catalog,
         booking: profile.booking,
+        identity: profile.identity,
         selfService: profile.selfService,
         chat: profile.chat,
         reminders: profile.reminders,

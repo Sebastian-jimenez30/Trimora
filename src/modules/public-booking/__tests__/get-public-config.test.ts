@@ -24,6 +24,7 @@ describe("configuración pública de una organización", () => {
       features: {
         catalog: true,
         booking: false,
+        identity: false,
         selfService: false,
         chat: false,
         reminders: false,
@@ -42,6 +43,7 @@ describe("configuración pública de una organización", () => {
       features: {
         catalog: true,
         booking: false,
+        identity: false,
         selfService: false,
         chat: false,
         reminders: false,

@@ -11,6 +11,7 @@ import {
   uniqueIndex,
   foreignKey,
 } from "drizzle-orm/pg-core";
+import { isNotNull, isNull } from "drizzle-orm";
 
 // ----------------------------------------------------------------------
 // 1. NÚCLEO SAAS
@@ -33,6 +34,7 @@ export const organizationPublicProfiles = pgTable(
     publicProfileEnabled: boolean("public_profile_enabled").notNull().default(false),
     publicCatalogEnabled: boolean("public_catalog_enabled").notNull().default(false),
     publicBookingEnabled: boolean("public_booking_enabled").notNull().default(false),
+    publicIdentityEnabled: boolean("public_identity_enabled").notNull().default(false),
     publicSelfServiceEnabled: boolean("public_self_service_enabled").notNull().default(false),
     publicChatEnabled: boolean("public_chat_enabled").notNull().default(false),
     remindersEnabled: boolean("reminders_enabled").notNull().default(false),
@@ -53,6 +55,33 @@ export const publicBookingSettings = pgTable("public_booking_settings", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
+
+export const publicIdentityChallenges = pgTable(
+  "public_identity_challenges",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .references(() => organizations.id, { onDelete: "cascade" })
+      .notNull(),
+    channel: text("channel").notNull(),
+    contactHash: varchar("contact_hash", { length: 64 }).notNull(),
+    ipHash: varchar("ip_hash", { length: 64 }),
+    attemptCount: integer("attempt_count").notNull().default(0),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    consumedAt: timestamp("consumed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("public_identity_challenges_org_contact_created_idx").on(
+      table.organizationId,
+      table.contactHash,
+      table.createdAt,
+    ),
+    index("public_identity_challenges_ip_created_idx")
+      .on(table.ipHash, table.createdAt)
+      .where(isNotNull(table.ipHash)),
+  ],
+);
 
 export const organizationMembers = pgTable(
   "organization_members",
@@ -278,7 +307,79 @@ export const clients = pgTable(
     lastVisit: timestamp("last_visit", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
-  (table) => [index("clients_org_idx").on(table.organizationId)],
+  (table) => [
+    uniqueIndex("clients_org_id_uidx").on(table.organizationId, table.id),
+    index("clients_org_idx").on(table.organizationId),
+  ],
+);
+
+export const customerIdentities = pgTable(
+  "customer_identities",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .references(() => organizations.id, { onDelete: "cascade" })
+      .notNull(),
+    clientId: uuid("client_id")
+      .references(() => clients.id, { onDelete: "cascade" })
+      .notNull(),
+    authUserId: uuid("auth_user_id").notNull(),
+    channel: text("channel").notNull(),
+    contactHash: varchar("contact_hash", { length: 64 }).notNull(),
+    verifiedAt: timestamp("verified_at", { withTimezone: true }).defaultNow().notNull(),
+    lastAuthenticatedAt: timestamp("last_authenticated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("customer_identities_active_contact_uidx")
+      .on(table.organizationId, table.channel, table.contactHash)
+      .where(isNull(table.revokedAt)),
+    uniqueIndex("customer_identities_active_user_channel_uidx")
+      .on(table.organizationId, table.authUserId, table.channel)
+      .where(isNull(table.revokedAt)),
+    index("customer_identities_org_user_active_idx")
+      .on(table.organizationId, table.authUserId)
+      .where(isNull(table.revokedAt)),
+    index("customer_identities_client_idx").on(table.clientId),
+    foreignKey({
+      columns: [table.organizationId, table.clientId],
+      foreignColumns: [clients.organizationId, clients.id],
+      name: "customer_identities_org_client_fk",
+    }).onDelete("cascade"),
+  ],
+);
+
+export const publicIdentityEvents = pgTable(
+  "public_identity_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .references(() => organizations.id, { onDelete: "cascade" })
+      .notNull(),
+    challengeId: uuid("challenge_id").references(() => publicIdentityChallenges.id, {
+      onDelete: "set null",
+    }),
+    identityId: uuid("identity_id").references(() => customerIdentities.id, {
+      onDelete: "set null",
+    }),
+    authUserId: uuid("auth_user_id"),
+    eventType: text("event_type").notNull(),
+    outcome: text("outcome").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("public_identity_events_org_created_idx").on(table.organizationId, table.createdAt),
+    index("public_identity_events_challenge_idx")
+      .on(table.challengeId)
+      .where(isNotNull(table.challengeId)),
+    index("public_identity_events_identity_idx")
+      .on(table.identityId)
+      .where(isNotNull(table.identityId)),
+  ],
 );
 
 export const appointments = pgTable(
