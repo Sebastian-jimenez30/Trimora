@@ -8,3 +8,20 @@ export type PublicBookingConfigDto = Readonly<{
   }>;
   features: EnabledPublicOrganizationProfile["features"];
 }>;
+
+export type PublicAvailabilitySlotDto = Readonly<{
+  startsAt: string;
+  endsAt: string;
+  availableStaffCount: number;
+}>;
+
+export type PublicAvailabilityDto = Readonly<{
+  date: string;
+  timeZone: string;
+  service: Readonly<{
+    id: string;
+    name: string;
+    durationMinutes: number;
+  }>;
+  slots: readonly PublicAvailabilitySlotDto[];
+}>;

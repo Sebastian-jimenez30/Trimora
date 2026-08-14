@@ -42,6 +42,18 @@ export const organizationPublicProfiles = pgTable(
   (table) => [uniqueIndex("organization_public_profiles_slug_uidx").on(table.slug)],
 );
 
+export const publicBookingSettings = pgTable("public_booking_settings", {
+  organizationId: uuid("organization_id")
+    .primaryKey()
+    .references(() => organizations.id, { onDelete: "cascade" }),
+  minimumNoticeMinutes: integer("minimum_notice_minutes").notNull().default(60),
+  maximumAdvanceDays: integer("maximum_advance_days").notNull().default(60),
+  slotIntervalMinutes: integer("slot_interval_minutes").notNull().default(15),
+  bufferMinutes: integer("buffer_minutes").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
 export const organizationMembers = pgTable(
   "organization_members",
   {
@@ -141,6 +153,109 @@ export const serviceMaterials = pgTable(
   (table) => [
     uniqueIndex("service_materials_service_product_uidx").on(table.serviceId, table.productId),
     index("service_materials_product_idx").on(table.productId),
+  ],
+);
+
+export const staffServices = pgTable(
+  "staff_services",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .references(() => organizations.id, { onDelete: "cascade" })
+      .notNull(),
+    staffId: uuid("staff_id")
+      .references(() => organizationMembers.id, { onDelete: "cascade" })
+      .notNull(),
+    serviceId: uuid("service_id")
+      .references(() => services.id, { onDelete: "cascade" })
+      .notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("staff_services_org_staff_service_uidx").on(
+      table.organizationId,
+      table.staffId,
+      table.serviceId,
+    ),
+    index("staff_services_org_service_staff_idx").on(
+      table.organizationId,
+      table.serviceId,
+      table.staffId,
+    ),
+    foreignKey({
+      columns: [table.organizationId, table.staffId],
+      foreignColumns: [organizationMembers.organizationId, organizationMembers.id],
+      name: "staff_services_org_staff_fk",
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [table.organizationId, table.serviceId],
+      foreignColumns: [services.organizationId, services.id],
+      name: "staff_services_org_service_fk",
+    }).onDelete("cascade"),
+  ],
+);
+
+export const availabilityWindows = pgTable(
+  "availability_windows",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .references(() => organizations.id, { onDelete: "cascade" })
+      .notNull(),
+    staffId: uuid("staff_id").references(() => organizationMembers.id, {
+      onDelete: "cascade",
+    }),
+    dayOfWeek: integer("day_of_week").notNull(),
+    startMinute: integer("start_minute").notNull(),
+    endMinute: integer("end_minute").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("availability_windows_org_staff_day_idx").on(
+      table.organizationId,
+      table.staffId,
+      table.dayOfWeek,
+    ),
+    foreignKey({
+      columns: [table.organizationId, table.staffId],
+      foreignColumns: [organizationMembers.organizationId, organizationMembers.id],
+      name: "availability_windows_org_staff_fk",
+    }).onDelete("cascade"),
+  ],
+);
+
+export const availabilityBlocks = pgTable(
+  "availability_blocks",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .references(() => organizations.id, { onDelete: "cascade" })
+      .notNull(),
+    staffId: uuid("staff_id").references(() => organizationMembers.id, {
+      onDelete: "cascade",
+    }),
+    kind: text("kind").notNull(),
+    startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
+    endsAt: timestamp("ends_at", { withTimezone: true }).notNull(),
+    notes: text("notes"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("availability_blocks_org_starts_ends_idx").on(
+      table.organizationId,
+      table.startsAt,
+      table.endsAt,
+    ),
+    index("availability_blocks_org_staff_starts_idx").on(
+      table.organizationId,
+      table.staffId,
+      table.startsAt,
+    ),
+    foreignKey({
+      columns: [table.organizationId, table.staffId],
+      foreignColumns: [organizationMembers.organizationId, organizationMembers.id],
+      name: "availability_blocks_org_staff_fk",
+    }).onDelete("cascade"),
   ],
 );
 

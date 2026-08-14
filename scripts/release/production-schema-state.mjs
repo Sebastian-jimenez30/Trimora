@@ -9,6 +9,7 @@ export const RELEASE_MIGRATIONS = [
   "0006",
   "0007",
   "20260813183434",
+  "20260814024136",
 ];
 
 export const LEGACY_TABLES = [
@@ -31,6 +32,10 @@ export const RELEASE_TABLES = [
   "chat_messages",
   "invitations",
   "organization_public_profiles",
+  "public_booking_settings",
+  "staff_services",
+  "availability_windows",
+  "availability_blocks",
   "platform_admins",
   "transaction_payments",
   "webhook_events",
@@ -41,6 +46,9 @@ export const RELEASE_INDEXES = [
   "appointments_org_start_idx",
   "inventory_movements_org_transaction_idx",
   "organization_public_profiles_slug_uidx",
+  "staff_services_org_service_staff_idx",
+  "availability_windows_org_staff_day_idx",
+  "availability_blocks_org_starts_ends_idx",
   "transaction_payments_created_transaction_idx",
   "transactions_org_created_idx",
 ];
@@ -113,6 +121,10 @@ export function evaluatePostflight({
   const missingProtection = missingValues(protectedTables, [
     "inventory_movements",
     "organization_public_profiles",
+    "public_booking_settings",
+    "staff_services",
+    "availability_windows",
+    "availability_blocks",
     "transactions",
     "transaction_items",
     "transaction_payments",

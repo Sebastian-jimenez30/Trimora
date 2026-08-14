@@ -6,6 +6,15 @@
 **Propósito:** Incorporar reservas públicas, autoservicio y chat para clientes finales mediante
 entregas pequeñas, compatibles hacia atrás y verificables en producción.
 
+## Estado de ejecución
+
+| Etapa                  | Estado       | Evidencia operativa                                                        |
+| ---------------------- | ------------ | -------------------------------------------------------------------------- |
+| 00 — Plan rector       | Integrada    | Documento aprobado e incorporado a `main`.                                 |
+| 01 — Fundación pública | Integrada    | Esquema aplicado con `supabase db push`; capacidades públicas apagadas.    |
+| 02 — Disponibilidad    | Implementada | Migración aplicada; pendiente CI, PR y validación funcional en producción. |
+| 03 a 09                | Pendientes   | No se iniciarán antes de validar la etapa anterior en producción.          |
+
 ## 1. Objetivo
 
 Trimora incorporará una experiencia pública independiente del dashboard administrativo para que
