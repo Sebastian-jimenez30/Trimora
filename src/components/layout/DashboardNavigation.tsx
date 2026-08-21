@@ -82,7 +82,6 @@ export default function DashboardNavigation({
   ];
 
   if (isAdmin) {
-    navLinks.splice(3, 0, { href: "/agenda/disponibilidad", label: "Disponibilidad" });
     navLinks.push({ href: "/servicios", label: "Servicios" });
     navLinks.push({ href: "/equipo", label: "Equipo" });
   }

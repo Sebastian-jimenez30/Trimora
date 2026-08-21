@@ -50,7 +50,7 @@ describe("DashboardNavigation", () => {
     expect(screen.queryByRole("heading", { name: "Hola, Andrea" })).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Equipo" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Servicios" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Disponibilidad" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Disponibilidad" })).not.toBeInTheDocument();
   });
 
   it("cierra las notificaciones con Escape, con la campana y al pulsar fuera", async () => {

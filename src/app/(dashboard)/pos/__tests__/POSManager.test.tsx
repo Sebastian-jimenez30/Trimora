@@ -38,8 +38,18 @@ const receivable = buildPOSReceivable({
       paidAmount: "5000.00",
       remaining: 20000,
       itemDetails: [
-        { name: "Corte", quantity: "1.00", unitPrice: "25000.00", subtotal: "25000.00" },
+        {
+          id: "item-1",
+          itemType: "SERVICE",
+          name: "Corte",
+          quantity: "1.00",
+          unitPrice: "25000.00",
+          subtotal: "25000.00",
+          paidAmount: "5000.00",
+          remaining: 20000,
+        },
       ],
+      allocationStatus: "EXACT",
     },
     {
       transactionId: "transaction-2",
@@ -49,8 +59,18 @@ const receivable = buildPOSReceivable({
       paidAmount: "0.00",
       remaining: 15000,
       itemDetails: [
-        { name: "Cera", quantity: "1.00", unitPrice: "15000.00", subtotal: "15000.00" },
+        {
+          id: "item-2",
+          itemType: "PRODUCT",
+          name: "Cera",
+          quantity: "1.00",
+          unitPrice: "15000.00",
+          subtotal: "15000.00",
+          paidAmount: "0.00",
+          remaining: 15000,
+        },
       ],
+      allocationStatus: "EXACT",
     },
   ],
 });
@@ -71,34 +91,40 @@ describe("POSManager", () => {
     expect(screen.getByText("No hay cuentas pendientes por cobrar.")).toBeInTheDocument();
   });
 
-  it("agrupa la deuda por cliente y permite inspeccionar sus movimientos", async () => {
+  it("agrupa la deuda por cliente y presenta los conceptos sin exponer movimientos", async () => {
     const user = userEvent.setup();
     render(<POSManager {...buildPOSManagerProps({ receivables: [receivable] })} />);
     await user.click(screen.getByRole("button", { name: "Por cobrar" }));
     await user.click(screen.getByText("Ana Lopez"));
 
     const detail = screen.getByRole("dialog", { name: "Cuenta por cobrar de Ana Lopez" });
-    expect(detail).toHaveTextContent("2 movimientos pendientes");
+    expect(detail).toHaveTextContent("2 conceptos pendientes");
+    expect(detail).not.toHaveTextContent("Saldo de este movimiento");
     expect(detail).toHaveTextContent("Corte");
     expect(detail).toHaveTextContent("Cera");
 
-    await user.click(within(detail).getByRole("button", { name: "Pagar completo" }));
-    expect(screen.getByRole("dialog", { name: "Abonar a Ana Lopez" })).toBeInTheDocument();
+    await user.click(within(detail).getByRole("button", { name: "Pagar toda la deuda" }));
+    expect(
+      screen.getByRole("dialog", { name: "Pagar toda la deuda de Ana Lopez" }),
+    ).toBeInTheDocument();
     expect(screen.getByLabelText("Monto ($)")).toHaveValue(35000);
   });
 
-  it("permite pagar completamente un movimiento específico de una cuenta", async () => {
+  it("permite pagar completamente un producto específico conservando su trazabilidad", async () => {
     const user = userEvent.setup();
     render(<POSManager {...buildPOSManagerProps({ receivables: [receivable] })} />);
     await user.click(screen.getByRole("button", { name: "Por cobrar" }));
     await user.click(screen.getByText("Ana Lopez"));
 
     const detail = screen.getByRole("dialog", { name: "Cuenta por cobrar de Ana Lopez" });
-    await user.click(within(detail).getAllByRole("button", { name: "Pagar este movimiento" })[1]);
+    await user.click(within(detail).getAllByRole("button", { name: "Pagar completo" })[1]);
+    expect(screen.getByRole("dialog", { name: "Abonar a Cera" })).toBeInTheDocument();
     expect(screen.getByLabelText("Monto ($)")).toHaveValue(15000);
 
     await user.click(screen.getByRole("button", { name: "Confirmar" }));
-    expect(mocks.registerPayment).toHaveBeenCalledWith("transaction-2", 15000, "CASH");
+    expect(mocks.registerPayment).toHaveBeenCalledWith("transaction-2", 15000, "CASH", [
+      { transactionItemId: "item-2", amount: 15000 },
+    ]);
   });
 
   it("permite buscar y seleccionar el cliente desde el ticket de venta", async () => {
@@ -124,6 +150,56 @@ describe("POSManager", () => {
     await user.click(screen.getByRole("option", { name: "Carlos Perez" }));
 
     expect(clientPicker).toHaveValue("Carlos Perez");
+  });
+
+  it("registra en una sola venta cuanto se paga y cuanto se fia de cada concepto", async () => {
+    const user = userEvent.setup();
+    render(
+      <POSManager
+        {...buildPOSManagerProps({
+          services: [
+            { id: "service-1", name: "Corte clásico", price: "25000.00", durationMinutes: 30 },
+          ],
+          products: [
+            {
+              id: "product-1",
+              name: "Gel",
+              salePrice: "15000.00",
+              currentStock: "10.00",
+              category: "VENTA",
+            },
+          ],
+          clients: [{ id: "client-1", firstName: "Ana", lastName: "Lopez" }],
+        })}
+      />,
+    );
+
+    await user.click(screen.getByText("Corte clásico"));
+    await user.click(screen.getByText("Gel"));
+    await user.click(screen.getByRole("combobox", { name: "Cliente (Opcional)" }));
+    await user.click(screen.getByRole("option", { name: "Ana Lopez" }));
+    await user.click(screen.getByRole("button", { name: "Fiado" }));
+    expect(screen.queryByLabelText("Abono inicial de Corte clásico")).not.toBeInTheDocument();
+    await user.click(screen.getAllByRole("button", { name: "Pago" })[0]);
+    expect(screen.queryByLabelText("Abono inicial de Corte clásico")).not.toBeInTheDocument();
+    await user.click(screen.getAllByRole("button", { name: "Abono" })[0]);
+    expect(screen.getByLabelText("Abono inicial de Corte clásico")).toBeInTheDocument();
+    await user.click(screen.getAllByRole("button", { name: "Pago" })[0]);
+    await user.click(screen.getAllByRole("button", { name: "Abono" })[1]);
+    await user.type(screen.getByLabelText("Abono inicial de Gel"), "5000");
+    await user.click(screen.getByRole("button", { name: "Cobrar" }));
+
+    expect(mocks.processSale).toHaveBeenCalledWith(
+      [
+        expect.objectContaining({ id: "service-1", paidAmount: 25000 }),
+        expect.objectContaining({ id: "product-1", paidAmount: 5000 }),
+      ],
+      "client-1",
+      "CREDIT",
+      undefined,
+      30000,
+      "CASH",
+    );
   });
 
   it("confirma el cobro sin enviar al usuario al historial", async () => {

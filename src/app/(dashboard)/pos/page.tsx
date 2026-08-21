@@ -6,12 +6,13 @@ import {
   organizationMembers,
   transactions,
   transactionItems,
+  transactionPaymentAllocations,
   auditLogs,
 } from "@/core/database/schema";
 import { requireActor } from "@/core/auth/server/actor";
 import { getCashEntries } from "@/modules/pos/cash-flow";
 import type { POSHistoryEntry } from "@/modules/pos/ui/types";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { addDays, format, startOfWeek } from "date-fns";
 import { fromZonedTime, toZonedTime } from "date-fns-tz";
 import POSManager from "./POSManager";
@@ -120,7 +121,7 @@ export default async function POSPage({ searchParams }: POSPageProps) {
       ...allPendingTransactions.map((transaction) => transaction.id),
     ]),
   ];
-  const [relatedTransactions, historyItems, historyLogs] =
+  const [relatedTransactions, historyItems, historyAllocations, historyLogs] =
     transactionIds.length > 0
       ? await Promise.all([
           db
@@ -132,7 +133,21 @@ export default async function POSPage({ searchParams }: POSPageProps) {
           db
             .select()
             .from(transactionItems)
-            .where(inArray(transactionItems.transactionId, transactionIds)),
+            .where(inArray(transactionItems.transactionId, transactionIds))
+            .orderBy(asc(transactionItems.transactionId), asc(transactionItems.id)),
+          db
+            .select({
+              transactionId: transactionPaymentAllocations.transactionId,
+              transactionItemId: transactionPaymentAllocations.transactionItemId,
+              amount: transactionPaymentAllocations.amount,
+            })
+            .from(transactionPaymentAllocations)
+            .where(
+              and(
+                eq(transactionPaymentAllocations.organizationId, orgId),
+                inArray(transactionPaymentAllocations.transactionId, transactionIds),
+              ),
+            ),
           db
             .select()
             .from(auditLogs)
@@ -140,7 +155,7 @@ export default async function POSPage({ searchParams }: POSPageProps) {
               and(eq(auditLogs.organizationId, orgId), inArray(auditLogs.entityId, transactionIds)),
             ),
         ])
-      : [[], [], []];
+      : [[], [], [], []];
 
   const servicesById = new Map(activeServices.map((service) => [service.id, service]));
   const productsById = new Map(activeProducts.map((product) => [product.id, product]));
@@ -149,12 +164,19 @@ export default async function POSPage({ searchParams }: POSPageProps) {
     relatedTransactions.map((transaction) => [transaction.id, transaction]),
   );
   const itemsByTransaction = new Map<string, typeof historyItems>();
+  const allocationsByItem = new Map<string, number>();
   const descriptionsByTransaction = new Map<string, string>();
 
   for (const item of historyItems) {
     const items = itemsByTransaction.get(item.transactionId) ?? [];
     items.push(item);
     itemsByTransaction.set(item.transactionId, items);
+  }
+  for (const allocation of historyAllocations) {
+    allocationsByItem.set(
+      allocation.transactionItemId,
+      (allocationsByItem.get(allocation.transactionItemId) ?? 0) + Number(allocation.amount),
+    );
   }
   for (const log of historyLogs) {
     if (log.entityId && !descriptionsByTransaction.has(log.entityId)) {
@@ -164,14 +186,33 @@ export default async function POSPage({ searchParams }: POSPageProps) {
 
   const mapTransactionDetails = (tx: (typeof relatedTransactions)[number]) => {
     const items = itemsByTransaction.get(tx.id) ?? [];
+    const explicitlyAllocated = items.reduce(
+      (sum, item) => sum + (allocationsByItem.get(item.id) ?? 0),
+      0,
+    );
+    const isDirectlySettled = tx.paymentMethod !== "CREDIT" && tx.status === "COMPLETED";
+    let legacyPaid = isDirectlySettled
+      ? 0
+      : Math.max(0, Number(tx.paidAmount) - explicitlyAllocated);
     const itemDetails = items.map((item) => {
       const catalogItem =
         item.itemType === "SERVICE" ? servicesById.get(item.itemId) : productsById.get(item.itemId);
+      const subtotal = Number(item.subtotal);
+      const allocated = allocationsByItem.get(item.id) ?? 0;
+      const legacyApplied = isDirectlySettled
+        ? subtotal
+        : Math.min(legacyPaid, Math.max(0, subtotal - allocated));
+      legacyPaid -= legacyApplied;
+      const paidAmount = Math.min(subtotal, allocated + legacyApplied);
       return {
+        id: item.id,
+        itemType: item.itemType as "SERVICE" | "PRODUCT",
         name: catalogItem?.name || (item.itemType === "SERVICE" ? "Servicio" : "Producto"),
         quantity: item.quantity,
         unitPrice: item.unitPrice,
         subtotal: item.subtotal,
+        paidAmount: paidAmount.toFixed(2),
+        remaining: Math.max(0, subtotal - paidAmount),
       };
     });
 
@@ -199,6 +240,10 @@ export default async function POSPage({ searchParams }: POSPageProps) {
       notes: tx.notes,
       clientName: tx.type === "INCOME" ? clientName : "---",
       itemDetails,
+      allocationStatus:
+        !isDirectlySettled && Number(tx.paidAmount) > explicitlyAllocated
+          ? ("LEGACY_ESTIMATED" as const)
+          : ("EXACT" as const),
     };
   };
 
@@ -261,6 +306,7 @@ export default async function POSPage({ searchParams }: POSPageProps) {
         paidAmount: string;
         remaining: number;
         itemDetails: ReturnType<typeof mapTransactionDetails>["itemDetails"];
+        allocationStatus: "EXACT" | "LEGACY_ESTIMATED";
       }>;
     }
   >();
@@ -286,6 +332,7 @@ export default async function POSPage({ searchParams }: POSPageProps) {
       paidAmount: transaction.paidAmount,
       remaining,
       itemDetails: details.itemDetails,
+      allocationStatus: details.allocationStatus,
     });
     receivablesByClient.set(transaction.clientId, account);
   }

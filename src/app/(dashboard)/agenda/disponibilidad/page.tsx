@@ -36,8 +36,6 @@ export default async function AvailabilityPage() {
     db
       .select({
         timeZone: organizationPublicProfiles.timeZone,
-        slug: organizationPublicProfiles.slug,
-        identityPilotEnabled: organizationPublicProfiles.publicIdentityEnabled,
       })
       .from(organizationPublicProfiles)
       .where(eq(organizationPublicProfiles.organizationId, organizationId))
@@ -123,10 +121,6 @@ export default async function AvailabilityPage() {
       </div>
 
       <AvailabilityManager
-        identityPilot={{
-          enabled: profileRows[0]?.identityPilotEnabled ?? false,
-          slug: profileRows[0]?.slug ?? "",
-        }}
         policy={{
           timeZone: profileRows[0]?.timeZone ?? "America/Bogota",
           minimumNoticeMinutes: settings?.minimumNoticeMinutes ?? 60,

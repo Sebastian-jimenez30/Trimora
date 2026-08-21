@@ -35,10 +35,14 @@ export type POSAppointment = {
 };
 
 export type POSItemDetail = {
+  id: string;
+  itemType: "SERVICE" | "PRODUCT";
   name: string;
   quantity: string;
   unitPrice: string;
   subtotal: string;
+  paidAmount: string;
+  remaining: number;
 };
 
 export type POSHistoryEntry = {
@@ -59,6 +63,7 @@ export type POSHistoryEntry = {
   notes: string | null;
   clientName: string;
   itemDetails: POSItemDetail[];
+  allocationStatus: "EXACT" | "LEGACY_ESTIMATED";
 };
 
 export type POSReceivableMovement = {
@@ -69,6 +74,7 @@ export type POSReceivableMovement = {
   paidAmount: string;
   remaining: number;
   itemDetails: POSItemDetail[];
+  allocationStatus: "EXACT" | "LEGACY_ESTIMATED";
 };
 
 export type POSReceivable = {

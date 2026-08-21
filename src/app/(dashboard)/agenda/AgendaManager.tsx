@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import Link from "next/link";
 import { createAppointment, updateAppointment, deleteAppointment } from "@/modules/agenda/actions";
 import { createCustomer } from "@/modules/clients/actions";
 import { toast } from "react-hot-toast";
@@ -74,13 +73,11 @@ export default function AgendaManager({
   clients,
   services,
   staff,
-  canConfigureAvailability = false,
 }: {
   initialAppointments: Appointment[];
   clients: AgendaClient[];
   services: AgendaService[];
   staff: AgendaStaff[];
-  canConfigureAvailability?: boolean;
 }) {
   const [currentDate, setCurrentDate] = useState(getBogotaToday());
   const [view, setView] = useState<"day" | "week" | "month">("day");
@@ -669,14 +666,6 @@ export default function AgendaManager({
         </div>
 
         <div className="flex items-center gap-3 md:gap-5">
-          {canConfigureAvailability && (
-            <Link
-              href="/agenda/disponibilidad"
-              className="hidden rounded-full border border-cognac/60 px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-cognac/20 lg:flex"
-            >
-              Configurar disponibilidad
-            </Link>
-          )}
           <button
             onClick={setToday}
             className="hidden md:flex border border-white/10 text-sterling px-4 py-1.5 rounded-full text-sm hover:bg-white/5 transition-colors font-medium"
