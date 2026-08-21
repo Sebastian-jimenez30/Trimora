@@ -11,6 +11,7 @@ import {
   serviceMaterials,
   services,
   transactionItems,
+  transactionPaymentAllocations,
   transactionPayments,
   transactions,
 } from "@/core/database/schema";
@@ -26,6 +27,7 @@ export type SaleLine = {
   type: "PRODUCT" | "SERVICE";
   quantity: number;
   staffId?: string;
+  paidAmount?: number;
 };
 
 export type CreateSaleInput = {
@@ -47,7 +49,74 @@ export type SaleExecutionHooks = {
 type TrustedSaleLine = SaleLine & {
   name: string;
   unitPriceCents: number;
+  subtotalCents: number;
+  paidCents: number;
 };
+
+export type ItemPaymentAllocation = {
+  transactionItemId: string;
+  amount: number;
+};
+
+type AllocationItemState = {
+  id: string;
+  subtotalCents: number;
+  allocatedCents: number;
+};
+
+function resolveItemAllocations(
+  items: AllocationItemState[],
+  currentPaidCents: number,
+  paymentCents: number,
+  requested?: ItemPaymentAllocation[],
+) {
+  const allocatedTotal = items.reduce((sum, item) => sum + item.allocatedCents, 0);
+  if (allocatedTotal > currentPaidCents) {
+    throw new Error("Las asignaciones registradas superan el total abonado");
+  }
+
+  let legacyUnallocatedCents = currentPaidCents - allocatedTotal;
+  const availableByItem = new Map<string, number>();
+  for (const item of items) {
+    const unallocatedCapacity = Math.max(0, item.subtotalCents - item.allocatedCents);
+    const legacyApplied = Math.min(legacyUnallocatedCents, unallocatedCapacity);
+    legacyUnallocatedCents -= legacyApplied;
+    availableByItem.set(item.id, unallocatedCapacity - legacyApplied);
+  }
+
+  if (requested) {
+    const seen = new Set<string>();
+    const normalized = requested.map((allocation) => {
+      if (seen.has(allocation.transactionItemId)) {
+        throw new Error("Un item no puede repetirse en la distribucion del abono");
+      }
+      seen.add(allocation.transactionItemId);
+      const amountCents = toMoneyCents(allocation.amount);
+      const availableCents = availableByItem.get(allocation.transactionItemId);
+      if (amountCents <= 0) throw new Error("Cada asignacion debe ser mayor a cero");
+      if (availableCents === undefined) throw new Error("El item no pertenece a la transaccion");
+      if (amountCents > availableCents) {
+        throw new Error("La asignacion supera el saldo pendiente del item");
+      }
+      return { transactionItemId: allocation.transactionItemId, amountCents };
+    });
+    if (normalized.reduce((sum, allocation) => sum + allocation.amountCents, 0) !== paymentCents) {
+      throw new Error("La distribucion por items debe coincidir con el abono");
+    }
+    return normalized;
+  }
+
+  let remainingCents = paymentCents;
+  const automatic: Array<{ transactionItemId: string; amountCents: number }> = [];
+  for (const item of items) {
+    if (remainingCents === 0) break;
+    const allocationCents = Math.min(remainingCents, availableByItem.get(item.id) ?? 0);
+    if (allocationCents <= 0) continue;
+    automatic.push({ transactionItemId: item.id, amountCents: allocationCents });
+    remainingCents -= allocationCents;
+  }
+  return automatic;
+}
 
 function itemQuantity(value: number) {
   const scaled = Math.round(value * 100);
@@ -76,6 +145,11 @@ export async function createSale(
     if (input.paymentMethod === "CREDIT" && !input.clientId) {
       throw new Error("Debe seleccionar un cliente para las ventas a credito");
     }
+    const lineKeys = input.cart.map((line) => `${line.type}:${line.id}`);
+    if (new Set(lineKeys).size !== lineKeys.length) {
+      throw new Error("Cada articulo debe aparecer una sola vez en la venta");
+    }
+    const hasItemizedInitialPayment = input.cart.some((line) => line.paidAmount !== undefined);
 
     const productIds = [
       ...new Set(input.cart.filter((line) => line.type === "PRODUCT").map((line) => line.id)),
@@ -167,23 +241,35 @@ export async function createSale(
       if (!catalog || catalog.price === null)
         throw new Error("El articulo no tiene un precio valido");
       itemQuantity(line.quantity);
+      const unitPriceCents = toMoneyCents(catalog.price);
+      const subtotalCents = Math.round(unitPriceCents * line.quantity);
+      if (!Number.isSafeInteger(subtotalCents))
+        throw new Error("El total del articulo excede el rango permitido");
+      const paidLineCents =
+        input.paymentMethod === "CREDIT" && hasItemizedInitialPayment
+          ? toMoneyCents(line.paidAmount ?? 0)
+          : 0;
+      if (paidLineCents < 0 || paidLineCents > subtotalCents) {
+        throw new Error("El abono de un articulo no puede superar su subtotal");
+      }
       return {
         ...line,
         name: catalog.name,
-        unitPriceCents: toMoneyCents(catalog.price),
+        unitPriceCents,
+        subtotalCents,
+        paidCents: paidLineCents,
       };
     });
 
-    const totalCents = trustedCart.reduce((total, line) => {
-      const lineCents = Math.round(line.unitPriceCents * line.quantity);
-      if (!Number.isSafeInteger(lineCents))
-        throw new Error("El total de la venta excede el rango permitido");
-      return total + lineCents;
-    }, 0);
+    const totalCents = trustedCart.reduce((total, line) => total + line.subtotalCents, 0);
     if (totalCents <= 0) throw new Error("El total de la venta debe ser mayor a cero");
 
     const paidCents =
-      input.paymentMethod === "CREDIT" ? toMoneyCents(input.initialPaidAmount ?? 0) : totalCents;
+      input.paymentMethod !== "CREDIT"
+        ? totalCents
+        : hasItemizedInitialPayment
+          ? trustedCart.reduce((sum, line) => sum + line.paidCents, 0)
+          : toMoneyCents(input.initialPaidAmount ?? 0);
     if (paidCents < 0 || paidCents > totalCents) {
       throw new Error("El abono inicial no puede ser mayor al total de la venta");
     }
@@ -262,24 +348,71 @@ export async function createSale(
       .returning({ id: transactions.id });
     await options.hooks?.afterTransactionCreated?.(sale.id);
 
-    await tx.insert(transactionItems).values(
-      trustedCart.map((line) => ({
-        transactionId: sale.id,
-        itemType: line.type,
-        itemId: line.id,
-        quantity: itemQuantity(line.quantity),
-        unitPrice: fromMoneyCents(line.unitPriceCents),
-        subtotal: fromMoneyCents(Math.round(line.unitPriceCents * line.quantity)),
-      })),
-    );
+    const storedItems = await tx
+      .insert(transactionItems)
+      .values(
+        trustedCart.map((line) => ({
+          transactionId: sale.id,
+          itemType: line.type,
+          itemId: line.id,
+          quantity: itemQuantity(line.quantity),
+          unitPrice: fromMoneyCents(line.unitPriceCents),
+          subtotal: fromMoneyCents(line.subtotalCents),
+        })),
+      )
+      .returning({
+        id: transactionItems.id,
+        itemType: transactionItems.itemType,
+        itemId: transactionItems.itemId,
+        subtotal: transactionItems.subtotal,
+      });
 
     if (input.paymentMethod === "CREDIT" && paidCents > 0) {
-      await tx.insert(transactionPayments).values({
-        transactionId: sale.id,
-        amount: fromMoneyCents(paidCents),
-        paymentMethod: input.initialPaymentMethod ?? "CASH",
-        createdAt: receivedAt,
-      });
+      const [payment] = await tx
+        .insert(transactionPayments)
+        .values({
+          transactionId: sale.id,
+          amount: fromMoneyCents(paidCents),
+          paymentMethod: input.initialPaymentMethod ?? "CASH",
+          createdAt: receivedAt,
+        })
+        .returning({ id: transactionPayments.id });
+      const requested = hasItemizedInitialPayment
+        ? trustedCart
+            .filter((line) => line.paidCents > 0)
+            .map((line) => {
+              const item = storedItems.find(
+                (candidate) => candidate.itemType === line.type && candidate.itemId === line.id,
+              );
+              if (!item) throw new Error("No fue posible relacionar el pago con el articulo");
+              return {
+                transactionItemId: item.id,
+                amount: Number(fromMoneyCents(line.paidCents)),
+              };
+            })
+        : undefined;
+      const allocations = resolveItemAllocations(
+        storedItems.map((item) => ({
+          id: item.id,
+          subtotalCents: toMoneyCents(item.subtotal),
+          allocatedCents: 0,
+        })),
+        0,
+        paidCents,
+        requested,
+      );
+      if (allocations.length > 0) {
+        await tx.insert(transactionPaymentAllocations).values(
+          allocations.map((allocation) => ({
+            organizationId: input.organizationId,
+            transactionId: sale.id,
+            paymentId: payment.id,
+            transactionItemId: allocation.transactionItemId,
+            amount: fromMoneyCents(allocation.amountCents),
+            createdAt: receivedAt,
+          })),
+        );
+      }
     }
 
     for (const productId of consumptionIds) {
@@ -390,6 +523,7 @@ export async function recordTransactionPayment(input: {
   transactionId: string;
   amount: number;
   paymentMethod: SettledPaymentMethod;
+  allocations?: ItemPaymentAllocation[];
   receivedAt?: Date;
   database?: LedgerDatabase;
 }) {
@@ -420,12 +554,64 @@ export async function recordTransactionPayment(input: {
 
     const nextPaidCents = currentPaidCents + amountCents;
     const nextStatus = nextPaidCents === totalCents ? "COMPLETED" : "PENDING";
-    await tx.insert(transactionPayments).values({
-      transactionId: transaction.id,
-      amount: fromMoneyCents(amountCents),
-      paymentMethod: input.paymentMethod,
-      createdAt: input.receivedAt ?? new Date(),
-    });
+    const [items, storedAllocations] = await Promise.all([
+      tx
+        .select({ id: transactionItems.id, subtotal: transactionItems.subtotal })
+        .from(transactionItems)
+        .where(eq(transactionItems.transactionId, transaction.id))
+        .orderBy(asc(transactionItems.id)),
+      tx
+        .select({
+          transactionItemId: transactionPaymentAllocations.transactionItemId,
+          amount: transactionPaymentAllocations.amount,
+        })
+        .from(transactionPaymentAllocations)
+        .where(
+          and(
+            eq(transactionPaymentAllocations.organizationId, input.organizationId),
+            eq(transactionPaymentAllocations.transactionId, transaction.id),
+          ),
+        ),
+    ]);
+    const allocatedByItem = new Map<string, number>();
+    for (const allocation of storedAllocations) {
+      allocatedByItem.set(
+        allocation.transactionItemId,
+        (allocatedByItem.get(allocation.transactionItemId) ?? 0) + toMoneyCents(allocation.amount),
+      );
+    }
+    const resolvedAllocations = resolveItemAllocations(
+      items.map((item) => ({
+        id: item.id,
+        subtotalCents: toMoneyCents(item.subtotal),
+        allocatedCents: allocatedByItem.get(item.id) ?? 0,
+      })),
+      currentPaidCents,
+      amountCents,
+      input.allocations,
+    );
+    const receivedAt = input.receivedAt ?? new Date();
+    const [payment] = await tx
+      .insert(transactionPayments)
+      .values({
+        transactionId: transaction.id,
+        amount: fromMoneyCents(amountCents),
+        paymentMethod: input.paymentMethod,
+        createdAt: receivedAt,
+      })
+      .returning({ id: transactionPayments.id });
+    if (resolvedAllocations.length > 0) {
+      await tx.insert(transactionPaymentAllocations).values(
+        resolvedAllocations.map((allocation) => ({
+          organizationId: input.organizationId,
+          transactionId: transaction.id,
+          paymentId: payment.id,
+          transactionItemId: allocation.transactionItemId,
+          amount: fromMoneyCents(allocation.amountCents),
+          createdAt: receivedAt,
+        })),
+      );
+    }
     await tx
       .update(transactions)
       .set({ paidAmount: fromMoneyCents(nextPaidCents), status: nextStatus })
@@ -481,12 +667,63 @@ export async function recordClientPayment(input: {
       if (allocationCents <= 0) continue;
 
       const nextPaidCents = paidCents + allocationCents;
-      await tx.insert(transactionPayments).values({
-        transactionId: transaction.id,
-        amount: fromMoneyCents(allocationCents),
-        paymentMethod: input.paymentMethod,
-        createdAt: receivedAt,
-      });
+      const [items, storedAllocations] = await Promise.all([
+        tx
+          .select({ id: transactionItems.id, subtotal: transactionItems.subtotal })
+          .from(transactionItems)
+          .where(eq(transactionItems.transactionId, transaction.id))
+          .orderBy(asc(transactionItems.id)),
+        tx
+          .select({
+            transactionItemId: transactionPaymentAllocations.transactionItemId,
+            amount: transactionPaymentAllocations.amount,
+          })
+          .from(transactionPaymentAllocations)
+          .where(
+            and(
+              eq(transactionPaymentAllocations.organizationId, input.organizationId),
+              eq(transactionPaymentAllocations.transactionId, transaction.id),
+            ),
+          ),
+      ]);
+      const allocatedByItem = new Map<string, number>();
+      for (const storedAllocation of storedAllocations) {
+        allocatedByItem.set(
+          storedAllocation.transactionItemId,
+          (allocatedByItem.get(storedAllocation.transactionItemId) ?? 0) +
+            toMoneyCents(storedAllocation.amount),
+        );
+      }
+      const resolvedAllocations = resolveItemAllocations(
+        items.map((item) => ({
+          id: item.id,
+          subtotalCents: toMoneyCents(item.subtotal),
+          allocatedCents: allocatedByItem.get(item.id) ?? 0,
+        })),
+        paidCents,
+        allocationCents,
+      );
+      const [payment] = await tx
+        .insert(transactionPayments)
+        .values({
+          transactionId: transaction.id,
+          amount: fromMoneyCents(allocationCents),
+          paymentMethod: input.paymentMethod,
+          createdAt: receivedAt,
+        })
+        .returning({ id: transactionPayments.id });
+      if (resolvedAllocations.length > 0) {
+        await tx.insert(transactionPaymentAllocations).values(
+          resolvedAllocations.map((allocation) => ({
+            organizationId: input.organizationId,
+            transactionId: transaction.id,
+            paymentId: payment.id,
+            transactionItemId: allocation.transactionItemId,
+            amount: fromMoneyCents(allocation.amountCents),
+            createdAt: receivedAt,
+          })),
+        );
+      }
       await tx
         .update(transactions)
         .set({

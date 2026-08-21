@@ -1,15 +1,12 @@
 import { requirePlatformAdmin } from "@/core/auth/server/actor";
 import Link from "next/link";
-import { logoutIdle } from "@/modules/auth/actions";
-import SessionTimeout from "@/components/layout/SessionTimeout";
+import { logout } from "@/modules/auth/actions";
 
 export default async function SuperAdminLayout({ children }: { children: React.ReactNode }) {
   await requirePlatformAdmin();
 
   return (
     <div className="flex h-screen bg-gray-950 text-white font-sans">
-      <SessionTimeout />
-
       {/* Sidebar */}
       <aside className="w-64 bg-black border-r border-gray-800 flex flex-col">
         <div className="p-6 border-b border-gray-800">
@@ -41,7 +38,7 @@ export default async function SuperAdminLayout({ children }: { children: React.R
         </nav>
 
         <div className="p-4 border-t border-gray-800">
-          <form action={logoutIdle}>
+          <form action={logout}>
             <button
               type="submit"
               className="w-full px-4 py-2 bg-red-900/50 hover:bg-red-900 text-red-200 rounded-lg transition"

@@ -6,6 +6,14 @@ export const optionalClientIdSchema = z.string().uuid().nullable();
 export const resourceIdSchema = z.string().uuid();
 export const moneySchema = z.number().finite().positive().max(99_999_999.99);
 export const nonNegativeMoneySchema = z.number().finite().nonnegative().max(99_999_999.99);
+export const itemPaymentAllocationsSchema = z
+  .array(
+    z.object({
+      transactionItemId: resourceIdSchema,
+      amount: moneySchema,
+    }),
+  )
+  .max(200);
 export const descriptionSchema = z.string().trim().min(1).max(500);
 export const transactionUpdateSchema = z.object({
   transactionId: resourceIdSchema,
@@ -28,6 +36,7 @@ export const cartSchema = z
       type: z.enum(["PRODUCT", "SERVICE"]),
       quantity: z.number().finite().positive().max(10_000),
       staffId: z.string().uuid().optional(),
+      paidAmount: nonNegativeMoneySchema.optional(),
     }),
   )
   .min(1)

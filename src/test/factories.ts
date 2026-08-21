@@ -74,6 +74,7 @@ export function buildPOSHistoryEntry(overrides: Partial<POSHistoryEntry> = {}): 
     notes: null,
     clientName: "Ana Lopez",
     itemDetails: [],
+    allocationStatus: "EXACT",
     ...overrides,
   };
 }

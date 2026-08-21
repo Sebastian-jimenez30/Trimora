@@ -196,9 +196,3 @@ export async function logout() {
   await supabase.auth.signOut();
   redirect("/login");
 }
-
-export async function logoutIdle() {
-  const supabase = await createClient();
-  await supabase.auth.signOut();
-  redirect("/login?message=Sesión cerrada por inactividad");
-}

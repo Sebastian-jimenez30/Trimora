@@ -17,6 +17,7 @@ import { buildFinancialReportCsv } from "./domain/csv";
 import {
   cartSchema,
   descriptionSchema,
+  itemPaymentAllocationsSchema,
   moneySchema,
   nonNegativeMoneySchema,
   optionalClientIdSchema,
@@ -42,6 +43,7 @@ export type CartItem = {
   price: number;
   quantity: number;
   staffId?: string;
+  paidAmount?: number;
 };
 
 function revalidateFinancialViews({ inventory = false, agenda = false } = {}) {
@@ -115,6 +117,7 @@ export async function registerPayment(
   transactionId: string,
   amount: number,
   paymentMethod: string,
+  allocations?: Array<{ transactionItemId: string; amount: number }>,
 ) {
   try {
     const { organizationId } = await requireActor();
@@ -123,6 +126,7 @@ export async function registerPayment(
       transactionId: resourceIdSchema.parse(transactionId),
       amount: moneySchema.parse(amount),
       paymentMethod: settledPaymentMethodSchema.parse(paymentMethod),
+      allocations: allocations ? itemPaymentAllocationsSchema.parse(allocations) : undefined,
     });
     revalidateFinancialViews();
     return { success: true, newStatus: result.newStatus };

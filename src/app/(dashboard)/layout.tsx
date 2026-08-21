@@ -3,7 +3,6 @@ import DashboardNavigation from "@/components/layout/DashboardNavigation";
 
 import { getPendingAppointmentsForToday } from "@/modules/agenda/actions";
 
-import SessionTimeout from "@/components/layout/SessionTimeout";
 import ChatWidget from "@/components/ai/ChatWidget";
 import { Toaster } from "react-hot-toast";
 
@@ -21,7 +20,6 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   return (
     <>
-      <SessionTimeout />
       <Toaster
         position="top-right"
         toastOptions={{

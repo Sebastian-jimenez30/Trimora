@@ -9,9 +9,11 @@ import {
   varchar,
   index,
   uniqueIndex,
+  unique,
   foreignKey,
+  check,
 } from "drizzle-orm/pg-core";
-import { isNotNull, isNull } from "drizzle-orm";
+import { isNotNull, isNull, sql } from "drizzle-orm";
 
 // ----------------------------------------------------------------------
 // 1. NÚCLEO SAAS
@@ -469,6 +471,7 @@ export const transactionItems = pgTable(
   (table) => [
     index("transaction_items_transaction_idx").on(table.transactionId),
     index("transaction_items_type_item_idx").on(table.itemType, table.itemId),
+    uniqueIndex("transaction_items_transaction_id_uidx").on(table.transactionId, table.id),
   ],
 );
 
@@ -486,6 +489,47 @@ export const transactionPayments = pgTable(
   (table) => [
     index("transaction_payments_transaction_idx").on(table.transactionId),
     index("transaction_payments_created_transaction_idx").on(table.createdAt, table.transactionId),
+    uniqueIndex("transaction_payments_transaction_id_uidx").on(table.transactionId, table.id),
+  ],
+);
+
+export const transactionPaymentAllocations = pgTable(
+  "transaction_payment_allocations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id").notNull(),
+    transactionId: uuid("transaction_id").notNull(),
+    paymentId: uuid("payment_id").notNull(),
+    transactionItemId: uuid("transaction_item_id").notNull(),
+    amount: numeric("amount", { precision: 10, scale: 2 }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.organizationId, table.transactionId],
+      foreignColumns: [transactions.organizationId, transactions.id],
+      name: "transaction_payment_allocations_org_transaction_fk",
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [table.transactionId, table.paymentId],
+      foreignColumns: [transactionPayments.transactionId, transactionPayments.id],
+      name: "transaction_payment_allocations_transaction_payment_fk",
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [table.transactionId, table.transactionItemId],
+      foreignColumns: [transactionItems.transactionId, transactionItems.id],
+      name: "transaction_payment_allocations_transaction_item_fk",
+    }).onDelete("cascade"),
+    unique("transaction_payment_allocations_payment_item_uidx").on(
+      table.paymentId,
+      table.transactionItemId,
+    ),
+    index("transaction_payment_allocations_org_transaction_idx").on(
+      table.organizationId,
+      table.transactionId,
+    ),
+    index("transaction_payment_allocations_item_idx").on(table.transactionItemId),
+    check("transaction_payment_allocations_amount_check", sql`${table.amount} > 0`),
   ],
 );
 

@@ -103,6 +103,10 @@ export default async function globalSetup() {
         (id, transaction_id, amount, payment_method, created_at) VALUES
         (${E2E_IDS.completedPayment}, ${E2E_IDS.completedTransaction}, 40000, 'CASH', ${now}),
         (${E2E_IDS.debtPayment}, ${E2E_IDS.debtTransaction}, 5000, 'CASH', ${now})`;
+      await transaction`INSERT INTO transaction_payment_allocations
+        (id, organization_id, transaction_id, payment_id, transaction_item_id, amount, created_at)
+        VALUES (${E2E_IDS.debtPaymentAllocation}, ${E2E_IDS.organization},
+          ${E2E_IDS.debtTransaction}, ${E2E_IDS.debtPayment}, ${E2E_IDS.debtItem}, 5000, ${now})`;
       await transaction`INSERT INTO inventory_movements
         (id, organization_id, product_id, transaction_id, type, quantity, previous_stock, new_stock, notes)
         VALUES (${E2E_IDS.inventoryMovement}, ${E2E_IDS.organization}, ${E2E_IDS.product},

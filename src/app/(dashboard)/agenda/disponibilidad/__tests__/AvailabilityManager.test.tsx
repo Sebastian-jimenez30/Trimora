@@ -15,7 +15,6 @@ const actions = vi.hoisted(() => ({
 vi.mock("@/modules/public-booking/server/availability-actions", () => actions);
 
 const props = {
-  identityPilot: { enabled: false, slug: "barberia-demo" },
   policy: {
     timeZone: "America/Bogota",
     minimumNoticeMinutes: 60,
@@ -44,13 +43,15 @@ describe("configuración administrativa de disponibilidad", () => {
     Object.values(actions).forEach((action) => action.mockResolvedValue({ success: true }));
   });
 
-  it("presenta política, horarios, asignaciones y activación explícita del piloto", () => {
+  it("presenta política, horarios y asignaciones sin publicar controles del piloto", () => {
     render(<AvailabilityManager {...props} />);
 
     expect(screen.getByRole("heading", { name: "Política de reservas" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Horario semanal" })).toBeInTheDocument();
     expect(screen.getByRole("checkbox", { name: /Corte/u })).toBeChecked();
-    expect(screen.getByRole("button", { name: "Habilitar acceso piloto" })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Habilitar acceso piloto" }),
+    ).not.toBeInTheDocument();
   });
 
   it("envía al servidor la política y el horario general normalizados", async () => {
@@ -67,13 +68,10 @@ describe("configuración administrativa de disponibilidad", () => {
     });
   });
 
-  it("activa el piloto mediante una acción protegida sin habilitar reservas", async () => {
-    const user = userEvent.setup();
+  it("mantiene ocultos los accesos al agendamiento público", () => {
     render(<AvailabilityManager {...props} />);
 
-    await user.click(screen.getByRole("button", { name: "Habilitar acceso piloto" }));
-
-    expect(actions.setCustomerIdentityPilotEnabled).toHaveBeenCalledWith(true);
-    expect(screen.queryByText(/habilitar reservas públicas/iu)).not.toBeInTheDocument();
+    expect(screen.queryByText("Acceso público piloto")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Abrir acceso piloto" })).not.toBeInTheDocument();
   });
 });

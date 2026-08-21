@@ -393,6 +393,73 @@ describe.skipIf(!enabled)("dominio critico sobre PostgreSQL real", () => {
     expect(settledTransaction).toEqual({ paid: "40.00", status: "COMPLETED" });
   });
 
+  it("conserva una venta unica y distribuye el pago entre servicios y productos", async () => {
+    const seed = (currentSeed = await seedCatalog());
+    const sale = await ledger.createSale(
+      {
+        organizationId: seed.organizationId,
+        clientId: seed.firstClientId,
+        paymentMethod: "CREDIT",
+        initialPaymentMethod: "CASH",
+        cart: [
+          { id: seed.serviceId, type: "SERVICE", quantity: 1, paidAmount: 20 },
+          { id: seed.saleProductId, type: "PRODUCT", quantity: 1, paidAmount: 5 },
+        ],
+      },
+      { database },
+    );
+
+    const [transaction] = await database
+      .select({
+        total: schema.transactions.totalAmount,
+        paid: schema.transactions.paidAmount,
+        status: schema.transactions.status,
+      })
+      .from(schema.transactions)
+      .where(eq(schema.transactions.id, sale.transactionId));
+    const items = await database
+      .select({
+        id: schema.transactionItems.id,
+        itemId: schema.transactionItems.itemId,
+      })
+      .from(schema.transactionItems)
+      .where(eq(schema.transactionItems.transactionId, sale.transactionId));
+    const allocations = await database
+      .select({
+        transactionItemId: schema.transactionPaymentAllocations.transactionItemId,
+        amount: schema.transactionPaymentAllocations.amount,
+      })
+      .from(schema.transactionPaymentAllocations)
+      .where(eq(schema.transactionPaymentAllocations.transactionId, sale.transactionId));
+    const itemIdByRow = new Map(items.map((item) => [item.id, item.itemId]));
+
+    expect(transaction).toEqual({ total: "30.00", paid: "25.00", status: "PENDING" });
+    expect(
+      Object.fromEntries(
+        allocations.map((allocation) => [
+          itemIdByRow.get(allocation.transactionItemId),
+          allocation.amount,
+        ]),
+      ),
+    ).toEqual({ [seed.serviceId]: "20.00", [seed.saleProductId]: "5.00" });
+
+    const productItem = items.find((item) => item.itemId === seed.saleProductId)!;
+    await ledger.recordTransactionPayment({
+      organizationId: seed.organizationId,
+      transactionId: sale.transactionId,
+      amount: 5,
+      paymentMethod: "TRANSFER",
+      allocations: [{ transactionItemId: productItem.id, amount: 5 }],
+      database,
+    });
+
+    const [settled] = await database
+      .select({ paid: schema.transactions.paidAmount, status: schema.transactions.status })
+      .from(schema.transactions)
+      .where(eq(schema.transactions.id, sale.transactionId));
+    expect(settled).toEqual({ paid: "30.00", status: "COMPLETED" });
+  });
+
   it("serializa abonos simultaneos y nunca cobra por encima de la deuda", async () => {
     const seed = (currentSeed = await seedCatalog());
     const sale = await ledger.createSale(

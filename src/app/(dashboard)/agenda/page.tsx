@@ -46,7 +46,6 @@ export default async function AgendaPage() {
         clients={clientsData}
         services={servicesData}
         staff={staffFormatted}
-        canConfigureAvailability={actor.role === "ADMIN"}
       />
     </div>
   );
