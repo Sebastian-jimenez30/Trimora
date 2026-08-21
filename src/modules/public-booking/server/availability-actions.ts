@@ -94,6 +94,40 @@ export async function saveBookingPolicy(rawInput: unknown) {
   }
 }
 
+export async function setCustomerIdentityPilotEnabled(rawEnabled: unknown) {
+  try {
+    const actor = await requireActor({ roles: ["ADMIN"] });
+    if (typeof rawEnabled !== "boolean") throw new Error("Estado de activación inválido");
+
+    await db.transaction(async (tx) => {
+      const [updated] = await tx
+        .update(organizationPublicProfiles)
+        .set(
+          rawEnabled
+            ? { publicProfileEnabled: true, publicIdentityEnabled: true }
+            : { publicIdentityEnabled: false },
+        )
+        .where(eq(organizationPublicProfiles.organizationId, actor.organizationId))
+        .returning({ id: organizationPublicProfiles.organizationId });
+      if (!updated) throw new Error("No existe el perfil público de la organización");
+      await tx
+        .insert(auditLogs)
+        .values(
+          availabilityAudit(
+            actor.organizationId,
+            actor.userId,
+            rawEnabled ? "ENABLE_CUSTOMER_IDENTITY_PILOT" : "DISABLE_CUSTOMER_IDENTITY_PILOT",
+          ),
+        );
+    });
+
+    revalidatePath(SETTINGS_PATH);
+    return { success: true } as const;
+  } catch (error: unknown) {
+    return { success: false, error: getErrorMessage(error) } as const;
+  }
+}
+
 export async function replaceWeeklyAvailability(rawInput: unknown) {
   try {
     const actor = await requireActor({ roles: ["ADMIN"] });

@@ -8,12 +8,13 @@ entregas pequeñas, compatibles hacia atrás y verificables en producción.
 
 ## Estado de ejecución
 
-| Etapa                  | Estado       | Evidencia operativa                                                        |
-| ---------------------- | ------------ | -------------------------------------------------------------------------- |
-| 00 — Plan rector       | Integrada    | Documento aprobado e incorporado a `main`.                                 |
-| 01 — Fundación pública | Integrada    | Esquema aplicado con `supabase db push`; capacidades públicas apagadas.    |
-| 02 — Disponibilidad    | Implementada | Migración aplicada; pendiente CI, PR y validación funcional en producción. |
-| 03 a 09                | Pendientes   | No se iniciarán antes de validar la etapa anterior en producción.          |
+| Etapa                  | Estado       | Evidencia operativa                                                      |
+| ---------------------- | ------------ | ------------------------------------------------------------------------ |
+| 00 — Plan rector       | Integrada    | Documento aprobado e incorporado a `main`.                               |
+| 01 — Fundación pública | Integrada    | Esquema aplicado con `supabase db push`; capacidades públicas apagadas.  |
+| 02 — Disponibilidad    | Integrada    | CI, migración, PR y validación de la etapa aprobados.                    |
+| 03 — Identidad pública | Implementada | Migración aplicada; pendiente CI, PR, piloto y validación en producción. |
+| 04 a 09                | Pendientes   | No se iniciarán antes de validar la etapa anterior en producción.        |
 
 ## 1. Objetivo
 
@@ -173,6 +174,7 @@ Cada organización tendrá configuración pública con valores seguros por defec
 public_profile_enabled = false
 public_catalog_enabled = false
 public_booking_enabled = false
+public_identity_enabled = false
 public_self_service_enabled = false
 public_chat_enabled = false
 reminders_enabled = false

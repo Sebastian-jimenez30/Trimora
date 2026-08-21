@@ -1,6 +1,7 @@
 export type PublicBookingFeatureFlags = Readonly<{
   catalog: boolean;
   booking: boolean;
+  identity: boolean;
   selfService: boolean;
   chat: boolean;
   reminders: boolean;

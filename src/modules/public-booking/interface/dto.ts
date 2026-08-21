@@ -25,3 +25,15 @@ export type PublicAvailabilityDto = Readonly<{
   }>;
   slots: readonly PublicAvailabilitySlotDto[];
 }>;
+
+export type PublicIdentityChallengeDto = Readonly<{
+  challengeId: string;
+  message: string;
+}>;
+
+export type CustomerSessionDto = Readonly<{
+  authenticated: true;
+  customer: Readonly<{
+    displayName: string;
+  }>;
+}>;

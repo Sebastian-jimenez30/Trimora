@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
+import Link from "next/link";
 import { toast } from "react-hot-toast";
 import {
   createAvailabilityBlock,
@@ -9,6 +10,7 @@ import {
   replaceStaffServices,
   replaceWeeklyAvailability,
   saveBookingPolicy,
+  setCustomerIdentityPilotEnabled,
 } from "@/modules/public-booking/server/availability-actions";
 
 type Policy = {
@@ -39,6 +41,7 @@ type Block = {
 };
 
 type Props = {
+  identityPilot: { enabled: boolean; slug: string };
   policy: Policy;
   staff: Staff[];
   services: Service[];
@@ -92,6 +95,7 @@ const inputClass =
   "w-full rounded-xl border border-white/10 bg-pitch px-3 py-2 text-white outline-none focus:border-cognac disabled:opacity-50";
 
 export default function AvailabilityManager({
+  identityPilot,
   policy: initialPolicy,
   staff,
   services,
@@ -135,6 +139,43 @@ export default function AvailabilityManager({
 
   return (
     <div className="grid gap-6 xl:grid-cols-2">
+      <section className={`${cardClass} xl:col-span-2`}>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-xl font-serif text-white">Acceso público piloto</h2>
+            <p className="mt-1 max-w-3xl text-sm text-charcoal">
+              Habilita únicamente la verificación sin contraseña. Las reservas y el autoservicio de
+              citas permanecen fuera de alcance hasta sus próximas etapas.
+            </p>
+            {identityPilot.enabled && identityPilot.slug && (
+              <Link
+                className="mt-2 inline-block text-sm text-[#e0a16d] underline-offset-4 hover:underline"
+                href={`/reservar/${identityPilot.slug}/acceso`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Abrir acceso piloto
+              </Link>
+            )}
+          </div>
+          <button
+            type="button"
+            disabled={isPending}
+            onClick={() =>
+              run(
+                () => setCustomerIdentityPilotEnabled(!identityPilot.enabled),
+                identityPilot.enabled ? "Acceso público deshabilitado" : "Acceso piloto habilitado",
+              )
+            }
+            className={`shrink-0 rounded-full px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50 ${
+              identityPilot.enabled ? "bg-red-700 hover:bg-red-600" : "bg-cognac hover:bg-[#a85d2a]"
+            }`}
+          >
+            {identityPilot.enabled ? "Deshabilitar acceso" : "Habilitar acceso piloto"}
+          </button>
+        </div>
+      </section>
+
       <section className={cardClass}>
         <h2 className="text-xl font-serif text-white">Política de reservas</h2>
         <p className="mt-1 text-sm text-charcoal">
